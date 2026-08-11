@@ -79,7 +79,7 @@ if (requireNamespace("decoupleR", quietly = TRUE)) {
     decoupleR::run_viper(
       mat = expression, network = measured, .source = "source", .target = "target",
       .mor = "mor", .likelihood = "likelihood", minsize = min_targets,
-      eset_filter = FALSE, pleiotropy = TRUE, verbose = FALSE
+      eset.filter = FALSE, pleiotropy = TRUE, verbose = FALSE
     ) %>% select(source, condition, score),
     error = function(error) {
       warnings <<- c(warnings, paste0("VIPER execution failed; used signed weighted target score: ", conditionMessage(error)))

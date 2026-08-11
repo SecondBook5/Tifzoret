@@ -15,6 +15,7 @@ dependencies:
   - bioconductor-keggrest
   - bioconductor-decoupler
   - bioconductor-dorothea
+  - bioconductor-viper
   - bioconductor-sva
   - r-wgcna
   - r-mediation
