@@ -50,6 +50,29 @@ def test_string_provider_caches_payload_and_receipt(tmp_path, monkeypatch):
     assert receipt["requested_identifier_count"] == 1
 
 
+def test_large_network_requests_cover_all_chunk_pairs_without_pruning(tmp_path, monkeypatch):
+    calls = []
+
+    def fake_cached_post(endpoint, parameters, *_args):
+        submitted = parameters["identifiers"].split("\r")
+        calls.append(submitted)
+        return (
+            "stringId_A\tstringId_B\tpreferredName_A\tpreferredName_B\tscore\n"
+            f"{submitted[0]}\t{submitted[-1]}\t{submitted[0]}\t{submitted[-1]}\t0.9\n"
+        )
+
+    monkeypatch.setattr(NETWORKS, "cached_post", fake_cached_post)
+    identifiers = [f"protein_{index}" for index in range(7)]
+    rows, api_calls = NETWORKS.fetch_induced_network(
+        identifiers, 10090, 700, tmp_path, False, False, batch_size=3
+    )
+
+    assert api_calls == 6  # three chunks: all i <= j combinations
+    assert all(len(call) <= 6 for call in calls)
+    assert set().union(*(set(call) for call in calls)) == set(identifiers)
+    assert rows
+
+
 @pytest.mark.skipif(os.environ.get("BULK_RNAFRAME_LIVE") != "1", reason="scheduled live-provider test")
 def test_live_string_mouse_mapping(tmp_path):
     response = NETWORKS.cached_post(

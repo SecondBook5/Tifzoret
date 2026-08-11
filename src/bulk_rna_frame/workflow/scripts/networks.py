@@ -28,6 +28,7 @@ from bulk_rna_frame.config import load_project  # noqa: E402
 
 
 API = "https://string-db.org/api/tsv"
+STRING_NETWORK_BATCH_SIZE = 900
 
 
 def write_tsv(path: Path, rows: list[dict[str, Any]], fields: list[str]) -> None:
@@ -89,6 +90,55 @@ def parse_response(text: str) -> list[dict[str, str]]:
     if not text.strip():
         return []
     return list(csv.DictReader(io.StringIO(text), delimiter="\t"))
+
+
+def fetch_induced_network(
+    identifiers: list[str],
+    taxonomy: int,
+    required_score: int,
+    cache_dir: Path,
+    offline: bool,
+    refresh: bool,
+    batch_size: int = STRING_NETWORK_BATCH_SIZE,
+) -> tuple[list[dict[str, str]], int]:
+    """Fetch every within- and between-batch edge for an arbitrarily large gene set.
+
+    STRING rejects very large induced-network requests. Pairing deterministic
+    chunks covers every possible identifier pair without selecting genes out of
+    the submitted set. Repeated within-chunk edges are deduplicated afterward.
+    """
+    unique = list(dict.fromkeys(identifier for identifier in identifiers if identifier))
+    if not unique:
+        return [], 0
+    chunks = [unique[index : index + batch_size] for index in range(0, len(unique), batch_size)]
+    retained: dict[tuple[str, str], dict[str, str]] = {}
+    calls = 0
+    for left_index, left in enumerate(chunks):
+        for right_index in range(left_index, len(chunks)):
+            submitted = left if right_index == left_index else left + chunks[right_index]
+            response = cached_post(
+                "network",
+                {
+                    "identifiers": "\r".join(submitted),
+                    "species": taxonomy,
+                    "required_score": required_score,
+                    "network_type": "functional",
+                },
+                cache_dir,
+                offline,
+                refresh,
+            )
+            calls += 1
+            for row in parse_response(response):
+                source = row.get("stringId_A") or row.get("preferredName_A", "")
+                target = row.get("stringId_B") or row.get("preferredName_B", "")
+                if not source or not target or source == target:
+                    continue
+                key = tuple(sorted((source, target)))
+                previous = retained.get(key)
+                if previous is None or float(row.get("score", 0)) > float(previous.get("score", 0)):
+                    retained[key] = row
+    return list(retained.values()), calls
 
 
 def empty_plot(path: Path, title: str, message: str) -> None:
@@ -165,11 +215,15 @@ def network_for_direction(
         row["string_id"] = mapped.get("stringId", "") if mapped else ""
         row["preferred_name"] = mapped.get("preferredName", "") if mapped else ""
 
-    raw_edges = parse_response(cached_post(
-        "network",
-        {"identifiers": "\r".join(symbols), "species": taxonomy, "required_score": required_score, "network_type": "functional"},
-        cache_dir, offline, refresh,
-    )) if symbols else []
+    mapped_identifiers = [str(row["string_id"]) for row in input_rows if row["mapped"]]
+    raw_edges, network_api_calls = fetch_induced_network(
+        mapped_identifiers,
+        taxonomy,
+        required_score,
+        cache_dir,
+        offline,
+        refresh,
+    )
     graph = nx.Graph()
     effect: dict[str, float] = {}
     for row in input_rows:
@@ -263,7 +317,8 @@ def network_for_direction(
         "direction": direction, "input_genes": len(input_rows), "mapped": len(input_rows) - len(unmapped),
         "unmapped": len(unmapped), "unconnected": len(unconnected), "nodes": graph.number_of_nodes(),
         "edges": graph.number_of_edges(), "communities": len(set(communities.values())),
-        "display_nodes": len(display_graph),
+        "display_nodes": len(display_graph), "network_api_calls": network_api_calls,
+        "network_batch_size": STRING_NETWORK_BATCH_SIZE,
     }
 
 
