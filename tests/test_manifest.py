@@ -69,6 +69,22 @@ def test_manifest_expands_environment_variables_in_input_paths(tmp_path):
     config_path.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
     results = tmp_path / "results"
     results.mkdir()
+    (results / "inputs").mkdir()
+    prepared_gtf_checksum = "a" * 64
+    (results / "inputs" / "input_manifest.json").write_text(
+        json.dumps(
+            {
+                "source": {
+                    "gtf": {
+                        "path": str(tmp_path / "genes.gtf"),
+                        "bytes": (tmp_path / "genes.gtf").stat().st_size,
+                        "sha256": prepared_gtf_checksum,
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
     (results / "result.tsv").write_text("value\n1\n", encoding="utf-8")
     output = results / "manifest.json"
 
@@ -94,3 +110,5 @@ def test_manifest_expands_environment_variables_in_input_paths(tmp_path):
     assert manifest["contrast_semantics"] == "all signed effects are numerator minus denominator"
     input_paths = {record["path"] for record in manifest["inputs"]}
     assert str(tmp_path / "genes.gtf") in input_paths
+    gtf_record = next(record for record in manifest["inputs"] if record["path"] == str(tmp_path / "genes.gtf"))
+    assert gtf_record["sha256"] == prepared_gtf_checksum

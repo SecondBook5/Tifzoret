@@ -29,12 +29,50 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def record(path: Path, relative_to: Path | None = None) -> dict[str, object]:
+def record(
+    path: Path,
+    relative_to: Path | None = None,
+    known: dict[str, object] | None = None,
+) -> dict[str, object]:
+    stat = path.stat()
+    reusable = (
+        known is not None
+        and known.get("sha256")
+        and known.get("bytes") == stat.st_size
+        and (known.get("mtime_ns") is None or known.get("mtime_ns") == stat.st_mtime_ns)
+    )
     return {
         "path": str(path.relative_to(relative_to) if relative_to else path),
-        "bytes": path.stat().st_size,
-        "sha256": sha256(path),
+        "bytes": stat.st_size,
+        "sha256": str(known["sha256"]) if reusable else sha256(path),
     }
+
+
+def prepared_checksums(results: Path) -> dict[str, dict[str, object]]:
+    """Index checksums already established by canonical input preparation."""
+    path = results / "inputs" / "input_manifest.json"
+    try:
+        manifest = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+    indexed: dict[str, dict[str, object]] = {}
+
+    def visit(value: object) -> None:
+        if isinstance(value, dict):
+            candidate = value.get("path")
+            if candidate and value.get("sha256") and value.get("bytes") is not None:
+                candidate_path = Path(str(candidate))
+                if candidate_path.is_absolute():
+                    indexed[str(candidate_path.resolve())] = value
+            for child in value.values():
+                visit(child)
+        elif isinstance(value, list):
+            for child in value:
+                visit(child)
+
+    visit(manifest)
+    return indexed
 
 
 def command_output(command: list[str]) -> str:
@@ -124,6 +162,7 @@ def main() -> None:
         if path is not None
     )
     unique_inputs = list(dict.fromkeys(path.resolve() for path in input_paths))
+    known_checksums = prepared_checksums(results)
     result_paths = sorted(
         path
         for path in results.rglob("*")
@@ -168,7 +207,7 @@ def main() -> None:
         },
         "resource_snapshots": collect_resource_receipts(results),
         "warnings": collect_warnings(results),
-        "inputs": [record(path) for path in unique_inputs],
+        "inputs": [record(path, known=known_checksums.get(str(path))) for path in unique_inputs],
         "results": [record(path, results) for path in result_paths],
     }
     output.parent.mkdir(parents=True, exist_ok=True)
