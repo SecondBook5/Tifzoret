@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Write a checksummed release manifest for one completed project."""
+"""Write a checksummed, auditable release manifest for one completed run."""
 
 from __future__ import annotations
 
@@ -9,10 +9,16 @@ import json
 import os
 import platform
 import subprocess
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
-import yaml
+SOURCE_ROOT = Path(__file__).resolve().parents[3]
+if str(SOURCE_ROOT) not in sys.path:
+    sys.path.insert(0, str(SOURCE_ROOT))
+
+from bulk_rna_frame.config import load_project  # noqa: E402
 
 
 def sha256(path: Path) -> str:
@@ -31,7 +37,7 @@ def record(path: Path, relative_to: Path | None = None) -> dict[str, object]:
     }
 
 
-def command_version(command: list[str]) -> str:
+def command_output(command: list[str]) -> str:
     try:
         result = subprocess.run(
             command,
@@ -47,9 +53,46 @@ def command_version(command: list[str]) -> str:
     return lines[0] if lines else "unavailable"
 
 
-def resolve(base: Path, value: str) -> Path:
-    path = Path(os.path.expandvars(value)).expanduser()
-    return (path if path.is_absolute() else base / path).resolve()
+def repository_revision(start: Path) -> dict[str, object]:
+    revision = command_output(["git", "-C", str(start), "rev-parse", "HEAD"])
+    status = command_output(["git", "-C", str(start), "status", "--porcelain"])
+    return {
+        "revision": revision,
+        "dirty": status not in {"", "unavailable"},
+    }
+
+
+def collect_warnings(results: Path) -> list[dict[str, str]]:
+    warnings: list[dict[str, str]] = []
+    for path in sorted(results.rglob("*.json")):
+        if path.name == "manifest.json":
+            continue
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        values = data.get("warnings", []) if isinstance(data, dict) else []
+        if isinstance(values, str):
+            values = [values]
+        for value in values:
+            warnings.append({"source": str(path.relative_to(results)), "message": str(value)})
+    return warnings
+
+
+def collect_resource_receipts(results: Path) -> list[dict[str, Any]]:
+    receipts: list[dict[str, Any]] = []
+    cache = results / ".cache" / "resources"
+    if not cache.is_dir():
+        return receipts
+    for path in sorted(cache.rglob("*.json")):
+        try:
+            receipt = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if isinstance(receipt, dict):
+            receipt = {**receipt, "receipt": str(path.relative_to(results))}
+            receipts.append(receipt)
+    return receipts
 
 
 def main() -> None:
@@ -59,45 +102,73 @@ def main() -> None:
     parser.add_argument("--output", required=True)
     args = parser.parse_args()
 
-    config_path = Path(args.project_config).resolve()
-    config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
-    base = config_path.parent
+    project = load_project(args.project_config)
     results = Path(args.results).resolve()
     output = Path(args.output).resolve()
     input_paths = [
-        config_path,
-        resolve(base, config["inputs"]["samples"]),
-        resolve(base, config["contrasts"]),
-        resolve(base, config["gene_sets"]["gmt"]),
+        project.config_path,
+        project.samples,
+        project.contrasts,
+        project.gmt,
+        *project.source_files,
     ]
-    if config["inputs"]["kind"] == "counts":
-        input_paths.extend(
-            [
-                resolve(base, config["inputs"]["counts"]),
-                resolve(base, config["inputs"]["annotation"]),
-            ]
+    input_paths.extend(
+        path
+        for path in (
+            project.hypotheses,
+            project.hypothesis_panels,
+            project.figure_recipe,
+            project.cell_state_signatures,
+            project.regulon_edges,
         )
-    else:
-        input_paths.append(resolve(base, config["inputs"]["gtf"]))
+        if path is not None
+    )
+    unique_inputs = list(dict.fromkeys(path.resolve() for path in input_paths))
     result_paths = sorted(
-        path for path in results.rglob("*")
+        path
+        for path in results.rglob("*")
         if path.is_file() and path != output and not path.name.endswith(".log")
     )
     manifest = {
-        "schema_version": 1,
+        "schema_version": 2,
         "generated_utc": datetime.now(timezone.utc).isoformat(),
-        "project": config["project"],
-        "configuration": config,
-        "contrast_direction": "all signed effects are numerator minus denominator",
+        "project": project.config["project"],
+        "analysis_set": project.analysis_set,
+        "profile": project.config["analysis"]["profile"],
+        "modules": list(project.modules),
+        "species": project.config["species"],
+        "reference": project.config["reference"],
+        "configuration": project.config,
+        "contrast_semantics": "all signed effects are numerator minus denominator",
+        "contrasts": [
+            {
+                "contrast_id": row["contrast_id"],
+                "factor": row["factor"],
+                "numerator": row["numerator"],
+                "denominator": row["denominator"],
+            }
+            for row in project.contrast_rows
+        ],
+        "random_seeds": {
+            "global": project.config["analysis"].get("random_seed", 1),
+            "pathways": project.config["figures"]["pathways"]["seed"],
+        },
         "platform": platform.platform(),
+        "repository": repository_revision(SOURCE_ROOT),
+        "environment": {
+            "conda_prefix": os.environ.get("CONDA_PREFIX"),
+            "container": os.environ.get("APPTAINER_CONTAINER") or os.environ.get("SINGULARITY_CONTAINER"),
+        },
         "tools": {
             "python": platform.python_version(),
-            "snakemake": command_version(["snakemake", "--version"]),
-            "R": command_version(["R", "--version"]),
-            "samtools": command_version(["samtools", "--version"]),
-            "featureCounts": command_version(["featureCounts", "-v"]),
+            "snakemake": command_output(["snakemake", "--version"]),
+            "R": command_output(["R", "--version"]),
+            "samtools": command_output(["samtools", "--version"]),
+            "featureCounts": command_output(["featureCounts", "-v"]),
         },
-        "inputs": [record(path) for path in input_paths],
+        "resource_snapshots": collect_resource_receipts(results),
+        "warnings": collect_warnings(results),
+        "inputs": [record(path) for path in unique_inputs],
         "results": [record(path, results) for path in result_paths],
     }
     output.parent.mkdir(parents=True, exist_ok=True)

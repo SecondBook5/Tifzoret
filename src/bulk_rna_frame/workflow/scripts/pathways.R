@@ -70,28 +70,42 @@ running_enrichment <- function(ranks, genes) {
 build_curve <- function(curve_table, pathway_row) {
   colour <- if (pathway_row$NES[[1]] >= 0) "#B55252" else "#39799C"
   title <- clean_term(pathway_row$pathway[[1]])
-  subtitle <- sprintf("NES %.2f   FDR %s", pathway_row$NES[[1]], formatC(pathway_row$padj[[1]], format = "g", digits = 2))
+  leading_count <- sum(curve_table$leading_edge)
+  subtitle <- sprintf("NES %.2f   FDR %s   leading edge %d genes", pathway_row$NES[[1]], formatC(pathway_row$padj[[1]], format = "g", digits = 2), leading_count)
+  peak_index <- if (pathway_row$NES[[1]] >= 0) which.max(curve_table$running_es) else which.min(curve_table$running_es)
+  peak_rank <- curve_table$rank[[peak_index]]
+  zero_candidates <- which(diff(sign(curve_table$metric)) != 0)
+  zero_rank <- if (length(zero_candidates)) curve_table$rank[[zero_candidates[[1]]]] else NA_integer_
   es_plot <- ggplot(curve_table, aes(rank, running_es)) +
     geom_hline(yintercept = 0, colour = "#AEB8BF", linewidth = 0.3) +
+    geom_vline(xintercept = peak_rank, colour = colour, linetype = 3, linewidth = 0.3) +
     geom_line(colour = colour, linewidth = 0.9) +
+    annotate("point", x = peak_rank, y = curve_table$running_es[[peak_index]], colour = colour, size = 1.8) +
     labs(title = title, subtitle = subtitle, x = NULL, y = "ES") +
     theme_publication(7.5) +
     theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(), panel.grid.major.x = element_blank())
-  hits_plot <- ggplot(curve_table %>% filter(hit), aes(rank, 0, xend = rank, yend = 1)) +
-    geom_segment(linewidth = 0.28, colour = NAVY) +
+  hits_plot <- ggplot(curve_table %>% filter(hit), aes(rank, 0, xend = rank, yend = 1, colour = leading_edge)) +
+    geom_segment(linewidth = 0.30) +
+    scale_colour_manual(values = c(`FALSE` = NAVY, `TRUE` = colour), guide = "none") +
     scale_y_continuous(NULL, breaks = NULL) +
     labs(x = NULL) +
     theme_void() +
     theme(plot.background = element_rect(fill = "white", colour = NA))
+  strip_plot <- ggplot(curve_table, aes(rank, 1, fill = metric)) +
+    geom_tile() +
+    scale_fill_gradient2(low = "#39799C", mid = "#F7F4EE", high = "#B55252", midpoint = 0, guide = "none") +
+    theme_void() + theme(plot.background = element_rect(fill = "white", colour = NA))
   metric_plot <- ggplot(curve_table, aes(rank, metric)) +
     geom_hline(yintercept = 0, colour = "#AEB8BF", linewidth = 0.25) +
     geom_area(data = curve_table %>% filter(metric >= 0), fill = "#F4A6A6", alpha = 0.8) +
     geom_area(data = curve_table %>% filter(metric < 0), fill = "#A6CEE3", alpha = 0.8) +
     geom_line(colour = MID_GREY, linewidth = 0.25) +
+    {if (is.finite(zero_rank)) geom_vline(xintercept = zero_rank, linetype = 3, colour = "#697783", linewidth = 0.3)} +
+    {if (is.finite(zero_rank)) annotate("text", x = zero_rank, y = 0, label = paste0(" zero cross: ", zero_rank), hjust = 0, vjust = -0.5, size = 2.1, colour = MID_GREY)} +
     labs(x = "Rank in ordered dataset", y = "Metric") +
     theme_publication(7.2) +
     theme(panel.grid.major.x = element_blank())
-  es_plot / hits_plot / metric_plot + patchwork::plot_layout(heights = c(2.0, 0.38, 1.0))
+  es_plot / hits_plot / strip_plot / metric_plot + patchwork::plot_layout(heights = c(2.0, 0.35, 0.20, 1.0))
 }
 
 args <- parse_cli(c("project-config", "samples", "annotation", "contrasts", "gmt", "contrast-id", "vst", "de", "outdir"))
@@ -274,6 +288,7 @@ for (index in seq_len(nrow(selected_gsea))) {
   pathway_row <- selected_gsea[index, , drop = FALSE]
   curve <- running_enrichment(ranks, gene_sets[[pathway_row$pathway[[1]]]]) %>%
     mutate(
+      leading_edge = gene_symbol %in% strsplit(pathway_row$leadingEdge[[1]], ";", fixed = TRUE)[[1]],
       pathway = pathway_row$pathway[[1]],
       NES = pathway_row$NES[[1]],
       adjusted_p_value = pathway_row$padj[[1]],

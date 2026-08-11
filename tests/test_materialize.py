@@ -5,6 +5,7 @@ import json
 import shutil
 import subprocess
 import sys
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -31,6 +32,8 @@ def test_count_adapter_materializes_the_canonical_contract(tmp_path):
             str(output / "samples.tsv"),
             "--annotation",
             str(output / "annotation.tsv"),
+            "--contrasts",
+            str(output / "contrasts.tsv"),
             "--manifest",
             str(output / "input_manifest.json"),
         ],
@@ -58,7 +61,7 @@ def test_count_adapter_materializes_the_canonical_contract(tmp_path):
     shutil.which("samtools") is None or shutil.which("featureCounts") is None,
     reason="BAM acceptance test requires samtools and featureCounts",
 )
-@pytest.mark.parametrize("kind", ["bam", "nfcore_rnaseq"])
+@pytest.mark.parametrize("kind", ["bam", "nfcore_rnaseq", "archive"])
 def test_bam_adapters_run_featurecounts(tmp_path, kind):
     bam_root = tmp_path / "upstream"
     bam_root.mkdir()
@@ -102,9 +105,19 @@ def test_bam_adapters_run_featurecounts(tmp_path, kind):
     }
     if kind == "bam":
         inputs["bam_root"] = "upstream"
-    else:
+    elif kind == "nfcore_rnaseq":
         inputs["root"] = "upstream"
         inputs["bam_pattern"] = "{sample_id}.sorted.bam"
+    else:
+        archive_path = tmp_path / "upstream.zip"
+        with zipfile.ZipFile(archive_path, "w") as archive:
+            for sample_id in ("control_1", "treated_1"):
+                archive.write(
+                    bam_root / f"{sample_id}.sorted.bam",
+                    arcname=f"pipeline/{sample_id}.sorted.bam",
+                )
+        inputs["archive"] = "upstream.zip"
+        inputs["member_root"] = "pipeline"
     config = {
         "version": 1,
         "project": {"id": "bam_fixture", "title": "BAM fixture"},
@@ -160,6 +173,8 @@ def test_bam_adapters_run_featurecounts(tmp_path, kind):
             str(output / "samples.tsv"),
             "--annotation",
             str(output / "annotation.tsv"),
+            "--contrasts",
+            str(output / "contrasts.tsv"),
             "--manifest",
             str(output / "input_manifest.json"),
         ],
@@ -171,3 +186,5 @@ def test_bam_adapters_run_featurecounts(tmp_path, kind):
     assert manifest["source"]["kind"] == kind
     assert manifest["source"]["counting"]["resolved_strand_mode"] in {0, 1, 2}
     assert manifest["source"]["bams"][0]["quickcheck"] is True
+    if kind == "archive":
+        assert manifest["source"]["archive"]["members"][0].startswith("pipeline/")

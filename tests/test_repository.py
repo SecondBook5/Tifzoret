@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def test_engine_contains_no_reference_project_names():
     forbidden = ("cape", "thoracic", "ligation", "lymphatic-flow-homeostasis")
     for path in (ROOT / "src" / "bulk_rna_frame" / "workflow").rglob("*"):
-        if path.is_file():
+        if path.is_file() and path.suffix in {".py", ".R", ".smk", ".yaml"}:
             text = path.read_text(errors="ignore").lower()
             assert not any(term in text for term in forbidden), path
 

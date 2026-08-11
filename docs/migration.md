@@ -1,46 +1,77 @@
-# Migration plan
+# Migration guide
 
-## Phase 0: reference preservation
+BulkRNAFrame v2 separates reusable workflow behavior from study biology. Keep
+sample metadata, hypotheses, gene programs, panel recipes, and golden-reference
+results in the study repository; keep analysis implementations in
+BulkRNAFrame.
 
-- Preserve the current lymphatic project and its successful result manifests.
-- Record numerical and figure-level acceptance fixtures.
-- Do not move project-specific biological annotations into the engine.
+## Convert a v1 project
 
-## Phase 1: neutral MVP
+```bash
+bulk-rna migrate-config old-project.yaml \
+  --output project.yaml \
+  --species mouse \
+  --genome-build GRCm39
+bulk-rna validate project.yaml
+bulk-rna dry-run project.yaml
+```
 
-- Strict configuration and input validation.
-- Delivered-BAM input with uniform featureCounts quantification.
-- nf-core/rnaseq result-directory adapter at the BAM boundary.
-- Count-matrix bypass and arbitrary covariates.
-- Multiple named contrasts.
-- QC, DE, custom-GMT ORA, fgsea, ssGSEA, and publication exports.
-- Synthetic end-to-end test project.
+Review the migrated file before execution. In particular, confirm the input
+adapter, reference release, explicit numerator and denominator for every
+contrast, analysis profile, and output root.
 
-## Phase 2: reusable manuscript figures
+## Preserve the old analysis during migration
 
-Promote the refined PCA/correlation, cell-state, DE heatmap variants, combined
-ORA, GSVA, GSEA, and consolidated program panels behind generic interfaces.
+Point v2 at a new output root. Run `bulk-rna prepare` first and compare the
+canonical counts, samples, annotation, contrasts, and input manifest. Then run
+the configured profile and compare it with the declared reference:
 
-## Phase 3: species adapters
+```bash
+bulk-rna prepare project.yaml
+bulk-rna verify project.yaml --reference /path/to/golden/results --scope counts
+bulk-rna run project.yaml
+bulk-rna verify project.yaml --reference /path/to/golden/results
+```
 
-Add explicit mouse and human providers for annotation, MSigDB, KEGG, STRING,
-and regulator resources. Reject unsupported combinations instead of silently
-falling back across species.
+Do not remove the established workflow until counts are exactly equal and the
+DE, enrichment, regulator, network, displayed-data, report, and figure gates
+required by the project have passed.
 
-## Phase 4: networks and regulators
+## Input-boundary changes
 
-Promote connected STRING networks, regulator activity, rectangular GRNs, and
-radial program-aware GRNs with complete node/edge audit tables.
+Choose one explicit input kind:
 
-## Phase 5: story recipes and assembly
+- `bam`: aligned BAM files matched from a directory;
+- `nfcore_rnaseq`: BAMs discovered beneath an nf-core/rnaseq result directory;
+- `archive`: validated BAMs extracted safely from ZIP or TAR input;
+- `counts`: an existing integer gene-by-sample matrix.
 
-Add declarative panel selection, dimensions, legend policy, alternative panel
-variants, and vector multi-panel assembly.
+FASTQ alignment remains upstream in nf-core/rnaseq. Every adapter materializes
+the same canonical downstream input contract.
 
-## Phase 6: release
+## Publication migration
 
-- Synthetic CI run.
-- Mouse and human fixtures.
-- Numerical regression against all configured lymphatic studies.
-- Locked environments or containers.
-- Versioned release and migration guide.
+Move curated claims to `hypotheses.yaml`, genes and biological programs to
+`hypothesis_panels.yaml`, and panel selection/layout to `figure_recipe.yaml`.
+The engine contains no study-specific group names, genes, colors, or panel
+letters. Every promoted panel has PDF and PNG output, displayed-data tables,
+and selection/layout metadata.
+
+## Resource and offline behavior
+
+The first online run downloads configured resources and records receipts under
+`.cache/resources`. Preserve that directory for reproducible offline reruns.
+An offline run fails clearly when a required snapshot is missing. Refresh is an
+explicit configuration choice and produces a new receipt and checksum.
+
+## Consumer acceptance sequence
+
+1. validate and materialize canonical inputs;
+2. establish exact count equality;
+3. compare DE estimates and significance/direction calls;
+4. compare tested pathway universes, enrichment direction, leading edges, and
+   displayed selections;
+5. compare regulator and network node/edge audit tables;
+6. compare displayed data before applying bounded visual-regression checks;
+7. inspect the release manifest, warnings, resource receipts, and report;
+8. retire duplicated workflow code only after all required gates pass.

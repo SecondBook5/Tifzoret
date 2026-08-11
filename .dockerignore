@@ -1,0 +1,8 @@
+.git
+.snakemake
+.pytest_cache
+__pycache__
+results
+build
+dist
+

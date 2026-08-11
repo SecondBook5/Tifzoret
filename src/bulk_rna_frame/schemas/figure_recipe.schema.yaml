@@ -1,0 +1,37 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+type: object
+additionalProperties: false
+required: [figure_sets]
+properties:
+  figure_sets:
+    type: object
+    minProperties: 1
+    additionalProperties:
+      type: object
+      additionalProperties: false
+      required: [width, height, panels]
+      properties:
+        width: {type: number, exclusiveMinimum: 0}
+        height: {type: number, exclusiveMinimum: 0}
+        units: {enum: [in, mm, cm]}
+        columns: {type: integer, minimum: 1}
+        shared_legends: {type: boolean}
+        panels:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, source]
+            properties:
+              id: {type: string, pattern: "^[A-Za-z][A-Za-z0-9_-]*$"}
+              source: {type: string, minLength: 1}
+              variant: {type: string}
+              row: {type: integer, minimum: 1}
+              column: {type: integer, minimum: 1}
+              row_span: {type: integer, minimum: 1}
+              column_span: {type: integer, minimum: 1}
+              width: {type: number, exclusiveMinimum: 0}
+              height: {type: number, exclusiveMinimum: 0}
+              show_legend: {type: boolean}
+

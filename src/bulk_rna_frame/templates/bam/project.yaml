@@ -1,7 +1,14 @@
-version: 1
+version: 2
 project:
   id: bam_project
   title: Bulk RNA-seq BAM project
+species:
+  provider: mouse
+  scientific_name: Mus musculus
+  taxonomy_id: 10090
+reference:
+  genome_build: GRCm39
+  annotation_release: 107
 inputs:
   kind: bam
   bam_root: "${BULK_RNA_BAM_ROOT}"
@@ -18,17 +25,18 @@ counting:
   strandedness: infer
   strand_test_modes: [1, 2]
   strand_min_dominance: 0.80
-design:
-  formula: "~ condition"
-contrasts: contrasts.tsv
-gene_sets:
-  gmt: gene_sets.gmt
-  min_size: 2
-  max_size: 500
-modules:
-  qc: true
-  de: true
-  pathways: true
+analysis:
+  design: "~ condition"
+  contrasts: contrasts.tsv
+  profile: standard
+resources:
+  cache: ~/.cache/bulk-rna-frame/resources
+  offline: false
+  refresh: false
+  gene_sets:
+    gmt: gene_sets.gmt
+    min_size: 2
+    max_size: 500
 figures:
   group: condition
   palette:

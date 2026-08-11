@@ -1,0 +1,9 @@
+name: bulk-rna-frame-network
+channels: [conda-forge]
+dependencies:
+  - python=3.12
+  - pyyaml=6.0
+  - jsonschema=4.23
+  - networkx=3.4
+  - matplotlib=3.10
+

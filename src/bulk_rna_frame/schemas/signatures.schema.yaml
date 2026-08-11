@@ -1,0 +1,23 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+type: object
+additionalProperties: false
+required: [signatures]
+properties:
+  signatures:
+    type: array
+    minItems: 1
+    items:
+      type: object
+      additionalProperties: false
+      required: [id, label, category, genes]
+      properties:
+        id: {type: string, pattern: "^[a-z0-9][a-z0-9_-]*$"}
+        label: {type: string, minLength: 1}
+        category: {type: string, minLength: 1}
+        description: {type: string}
+        genes:
+          type: array
+          minItems: 2
+          uniqueItems: true
+          items: {type: string, minLength: 1}
+

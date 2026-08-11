@@ -1,23 +1,31 @@
-version: 1
+version: 2
 project:
   id: synthetic_demo
   title: Synthetic three-condition demonstration
+species:
+  provider: custom
+  scientific_name: synthetic
+  taxonomy_id: null
+reference:
+  genome_build: synthetic
+  annotation_release: null
 inputs:
   kind: counts
   counts: counts.tsv
   samples: samples.tsv
   annotation: annotation.tsv
-design:
-  formula: "~ batch + condition"
-contrasts: contrasts.tsv
-gene_sets:
-  gmt: gene_sets.gmt
-  min_size: 4
-  max_size: 100
-modules:
-  qc: true
-  de: true
-  pathways: true
+analysis:
+  design: "~ batch + condition"
+  contrasts: contrasts.tsv
+  profile: standard
+resources:
+  cache: ~/.cache/bulk-rna-frame/resources
+  offline: false
+  refresh: false
+  gene_sets:
+    gmt: gene_sets.gmt
+    min_size: 4
+    max_size: 100
 figures:
   group: condition
   palette:
@@ -39,4 +47,3 @@ figures:
     seed: 1
 output:
   root: results
-

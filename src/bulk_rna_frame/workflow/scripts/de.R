@@ -136,6 +136,37 @@ volcano_plot <- ggplot(volcano_table, aes(log2_fold_change, negative_log10_p, co
   theme(legend.position = "top")
 save_plot_pair(volcano_plot, file.path(dirs$figures, "volcano"), 6.4, 5.4)
 
+ma_table <- result_table %>%
+  select(gene_id, gene_symbol, base_mean, log2_fold_change, adjusted_p_value, direction, contrast_id)
+readr::write_tsv(ma_table, file.path(dirs$tables, "ma_displayed.tsv"), na = "NA")
+ma_plot <- ggplot(ma_table, aes(base_mean, log2_fold_change, colour = direction)) +
+  geom_hline(yintercept = 0, colour = "#8B979F", linewidth = 0.35) +
+  geom_point(size = 1.05, alpha = 0.72) +
+  scale_x_log10(labels = scales::label_number()) +
+  scale_colour_manual(values = direction_colors, guide = "none") +
+  labs(title = "MA plot", subtitle = "Shrunken effects versus mean normalized abundance", x = "Mean normalized count", y = "Shrunken log2 fold-change") +
+  theme_publication(8.8)
+save_plot_pair(ma_plot, file.path(dirs$figures, "ma"), 6.2, 4.9)
+
+histogram_table <- function(values, bins = 40L) {
+  values <- values[is.finite(values)]
+  estimate <- graphics::hist(values, breaks = bins, plot = FALSE)
+  data.frame(bin_left = head(estimate$breaks, -1), bin_right = tail(estimate$breaks, -1), bin_midpoint = estimate$mids, count = estimate$counts)
+}
+pvalue_histogram <- histogram_table(result_table$p_value, 40L)
+lfc_histogram <- histogram_table(result_table$log2_fold_change, 50L)
+readr::write_tsv(pvalue_histogram, file.path(dirs$tables, "pvalue_distribution_displayed.tsv"))
+readr::write_tsv(lfc_histogram, file.path(dirs$tables, "lfc_distribution_displayed.tsv"))
+pvalue_plot <- ggplot(pvalue_histogram, aes(bin_midpoint, count)) +
+  geom_col(width = stats::median(pvalue_histogram$bin_right - pvalue_histogram$bin_left), fill = "#6C92AE", colour = "white", linewidth = 0.15) +
+  labs(title = "P-value distribution", x = "Raw p-value", y = "Genes") + theme_publication(8.8)
+lfc_plot <- ggplot(lfc_histogram, aes(bin_midpoint, count, fill = bin_midpoint >= 0)) +
+  geom_col(width = stats::median(lfc_histogram$bin_right - lfc_histogram$bin_left), colour = "white", linewidth = 0.12) +
+  scale_fill_manual(values = c(`FALSE` = "#7EAFCB", `TRUE` = "#D98282"), guide = "none") +
+  labs(title = "Effect-size distribution", x = "Shrunken log2 fold-change", y = "Genes") + theme_publication(8.8)
+save_plot_pair(pvalue_plot, file.path(dirs$figures, "pvalue_distribution"), 5.8, 4.5)
+save_plot_pair(lfc_plot, file.path(dirs$figures, "lfc_distribution"), 5.8, 4.5)
+
 selected_genes <- result_table %>%
   filter(!is.na(adjusted_p_value), is.finite(log2_fold_change)) %>%
   arrange(adjusted_p_value, desc(abs(log2_fold_change))) %>%
@@ -149,6 +180,22 @@ vst_contrast <- if (dispersion_fit == "parametric") {
 }
 expression <- SummarizedExperiment::assay(vst_contrast)
 display_samples <- metadata[[factor_name]] %in% c(denominator, numerator)
+de_pca <- stats::prcomp(t(expression[, display_samples, drop = FALSE]), center = TRUE, scale. = FALSE)
+de_pca_variance <- 100 * de_pca$sdev^2 / sum(de_pca$sdev^2)
+de_pca_table <- as.data.frame(de_pca$x[, 1:2, drop = FALSE]) %>%
+  tibble::rownames_to_column("sample_id") %>%
+  left_join(metadata %>% tibble::rownames_to_column("metadata_row") %>% select(-metadata_row), by = "sample_id")
+de_pca_ellipses <- ellipse_coordinates(de_pca_table, factor_name, cfg$figures$pca$ellipse_level)
+readr::write_tsv(de_pca_table, file.path(dirs$tables, "de_pca_coordinates.tsv"))
+readr::write_tsv(de_pca_ellipses, file.path(dirs$tables, "de_pca_ellipses.tsv"))
+de_pca_plot <- ggplot(de_pca_table, aes(PC1, PC2, colour = .data[[factor_name]])) +
+  {if (nrow(de_pca_ellipses)) geom_path(data = de_pca_ellipses, aes(PC1, PC2, colour = ellipse_group, group = ellipse_group), inherit.aes = FALSE, linewidth = 0.8)} +
+  geom_point(size = 3.1) +
+  ggrepel::geom_text_repel(aes(label = sample_id), size = 2.5, show.legend = FALSE, max.overlaps = Inf) +
+  scale_colour_manual(values = condition_palette(cfg, c(denominator, numerator)), drop = FALSE) +
+  labs(title = "Contrast PCA", subtitle = paste(numerator, "and", denominator, "samples"), x = sprintf("PC1 (%.1f%%)", de_pca_variance[[1]]), y = sprintf("PC2 (%.1f%%)", de_pca_variance[[2]]), colour = NULL) +
+  theme_publication(8.8) + theme(legend.position = "top")
+save_plot_pair(de_pca_plot, file.path(dirs$figures, "de_pca"), 6.1, 5.0)
 expression <- expression[selected_genes$gene_id, display_samples, drop = FALSE]
 rownames(expression) <- selected_genes$gene_symbol[match(rownames(expression), selected_genes$gene_id)]
 z <- row_zscore(expression, cfg$figures$de$z_limit)
@@ -180,6 +227,10 @@ heatmap$plot <- heatmap$plot +
   )
 combined_heatmap <- annotation_plot / heatmap$plot + patchwork::plot_layout(heights = c(0.07, 1))
 save_plot_pair(combined_heatmap, file.path(dirs$figures, "de_heatmap"), 7.3, max(6.0, 0.18 * nrow(z) + 2.2))
+
+de_overview <- (volcano_plot | ma_plot) / (pvalue_plot | lfc_plot) +
+  patchwork::plot_annotation(title = paste0("Differential-expression overview: ", numerator, " versus ", denominator))
+save_plot_pair(de_overview, file.path(dirs$figures, "de_overview"), 12.6, 9.6)
 
 write_json_file(
   list(

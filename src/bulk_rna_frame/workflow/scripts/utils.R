@@ -36,6 +36,24 @@ read_project <- function(path) {
   path <- normalizePath(path, mustWork = TRUE)
   cfg <- yaml::read_yaml(path)
   base <- dirname(path)
+  if (identical(as.integer(cfg$version), 2L)) {
+    # Downstream scripts consume one stable internal shape while public v2
+    # keeps analysis and resource policy grouped explicitly.
+    cfg$design <- list(formula = cfg$analysis$design)
+    cfg$contrasts <- cfg$analysis$contrasts
+    cfg$gene_sets <- cfg$resources$gene_sets
+  } else {
+    cfg$analysis <- list(profile = "standard", random_seed = cfg$figures$pathways$seed)
+    cfg$resources <- list(
+      cache = "~/.cache/bulk-rna-frame/resources",
+      offline = FALSE,
+      refresh = FALSE,
+      gene_sets = cfg$gene_sets,
+      providers = list()
+    )
+    cfg$species <- list(provider = "custom", scientific_name = "unspecified", taxonomy_id = NULL)
+    cfg$reference <- list(genome_build = "unspecified", annotation_release = NULL)
+  }
   cfg$.config_path <- path
   cfg$.base <- base
   cfg$.samples <- resolve_path(base, cfg$inputs$samples)

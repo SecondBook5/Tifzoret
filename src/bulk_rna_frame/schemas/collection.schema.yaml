@@ -1,0 +1,38 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+type: object
+additionalProperties: false
+required: [version, collection, studies, output]
+properties:
+  version: {const: 1}
+  collection:
+    type: object
+    additionalProperties: false
+    required: [id, title]
+    properties:
+      id: {type: string, pattern: "^[a-z0-9][a-z0-9_-]*$"}
+      title: {type: string, minLength: 1}
+  studies:
+    type: array
+    minItems: 2
+    items:
+      type: object
+      additionalProperties: false
+      required: [id, project, contrast]
+      properties:
+        id: {type: string, pattern: "^[a-z0-9][a-z0-9_-]*$"}
+        project: {type: string, minLength: 1}
+        contrast: {type: string, minLength: 1}
+        weight: {type: number, exclusiveMinimum: 0}
+  methods:
+    type: object
+    additionalProperties: false
+    properties:
+      stouffer: {type: boolean}
+      leave_one_out: {type: boolean}
+      bh_correction: {type: boolean}
+  output:
+    type: object
+    additionalProperties: false
+    required: [root]
+    properties:
+      root: {type: string, minLength: 1}

@@ -16,6 +16,7 @@ jobs:
       - run: pytest -q
       - run: bulk-rna validate src/bulk_rna_frame/templates/minimal/project.yaml
       - run: bulk-rna dry-run src/bulk_rna_frame/templates/minimal/project.yaml --no-conda
+      - run: python -m build
 
   r-syntax:
     runs-on: ubuntu-latest

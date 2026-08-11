@@ -8,6 +8,18 @@ dependencies:
   - bioconductor-gsva=2.4.4
   - bioconductor-limma=3.66.0
   - bioconductor-biocparallel=1.44.0
+  - bioconductor-annotationdbi
+  - bioconductor-org.mm.eg.db
+  - bioconductor-org.hs.eg.db
+  - bioconductor-go.db
+  - bioconductor-keggrest
+  - bioconductor-decoupler
+  - bioconductor-dorothea
+  - bioconductor-sva
+  - r-wgcna
+  - r-mediation
+  - r-msigdbr
+  - r-digest
   - r-ggplot2=4.0.3
   - r-ggrepel=0.9.8
   - r-patchwork=1.3.2

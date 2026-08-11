@@ -8,15 +8,20 @@ version = "0.1.0.dev0"
 description = "Configuration-driven bulk RNA-seq analysis and publication figure workflow"
 readme = "README.md"
 requires-python = ">=3.11"
-license = {file = "LICENSE"}
+license = "MIT"
 dependencies = [
   "PyYAML>=6.0",
   "jsonschema>=4.20",
+  "Pillow>=10",
+  "pypdf>=4",
+  "reportlab>=4",
+  "networkx>=3.3",
+  "matplotlib>=3.9",
 ]
 
 [project.optional-dependencies]
 workflow = ["snakemake>=8,<10"]
-test = ["pytest>=8"]
+test = ["pytest>=8", "build>=1.2"]
 
 [project.scripts]
 bulk-rna = "bulk_rna_frame.cli:main"
@@ -29,6 +34,7 @@ bulk_rna_frame = [
   "schemas/*.yaml",
   "templates/*/*",
   "workflow/Snakefile",
+  "workflow/rules/*.smk",
   "workflow/envs/*.yaml",
   "workflow/scripts/*.R",
   "workflow/scripts/*.py",

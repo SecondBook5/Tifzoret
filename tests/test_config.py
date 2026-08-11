@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -64,7 +65,7 @@ def test_palette_must_cover_display_groups(tmp_path):
 def test_pathways_requires_qc_and_de(tmp_path):
     config = project_copy(tmp_path)
     data = yaml.safe_load(config.read_text())
-    data["modules"]["qc"] = False
+    data["analysis"].setdefault("modules", {})["qc"] = False
     config.write_text(yaml.safe_dump(data, sort_keys=False))
     with pytest.raises(ProjectValidationError, match="requires modules.qc"):
         load_project(config)
@@ -153,7 +154,7 @@ def test_analysis_set_selects_a_subset_of_count_columns(tmp_path):
         writer.writerows(rows)
     data = yaml.safe_load(config.read_text())
     data["inputs"]["analysis_set"] = "primary"
-    data["contrasts"] = "primary_contrast.tsv"
+    data["analysis"]["contrasts"] = "primary_contrast.tsv"
     (config.parent / "primary_contrast.tsv").write_text(
         "contrast_id\tfactor\tnumerator\tdenominator\n"
         "treatment_a_vs_control\tcondition\ttreatment_a\tcontrol\n"
@@ -162,3 +163,113 @@ def test_analysis_set_selects_a_subset_of_count_columns(tmp_path):
     project = load_project(config)
     assert len(project.sample_rows) == 6
     assert {row["condition"] for row in project.sample_rows} == {"control", "treatment_a"}
+
+
+def test_publication_profile_validates_cross_file_contracts(tmp_path):
+    config = project_copy(tmp_path)
+    data = yaml.safe_load(config.read_text())
+    data["species"] = {"provider": "mouse", "scientific_name": "Mus musculus", "taxonomy_id": 10090}
+    data["reference"] = {"genome_build": "GRCm39", "annotation_release": 107}
+    data["analysis"]["profile"] = "publication"
+    data["analysis"]["random_seed"] = 1
+    data["analysis"]["settings"] = {
+        "composition": {"min_genes": 2},
+        "regulators": {"min_targets": 2, "top_regulators": 5},
+        "networks": {"required_score": 700, "max_nodes": 40, "seed": 1},
+    }
+    data["resources"]["cell_state_signatures"] = "signatures.yaml"
+    data["resources"]["providers"] = {"dorothea": True, "string": True}
+    data["hypotheses"] = {"claims": "hypotheses.yaml", "panels": "panels.yaml"}
+    data["publication"] = {"recipe": "figure_recipe.yaml"}
+    config.write_text(yaml.safe_dump(data, sort_keys=False))
+    (config.parent / "signatures.yaml").write_text(
+        "signatures:\n  - id: contractile\n    label: Contractile\n    category: mural\n"
+        "    genes: [ACTA2, CNN1, MYH11]\n"
+    )
+    (config.parent / "hypotheses.yaml").write_text(
+        "hypotheses:\n  - id: response\n    statement: Treatment changes contractile state.\n"
+        "    contrast: treatment_a_vs_control\n    expected_direction: increased\n"
+        "    gene_panels: [contractile]\n    pathway_panels: [response]\n"
+    )
+    (config.parent / "panels.yaml").write_text(
+        "gene_panels:\n  contractile:\n    description: Contractile genes.\n"
+        "    groups:\n      contractile: [ACTA2, CNN1, MYH11]\n"
+        "pathway_panels:\n  response:\n    description: Response pathways.\n"
+        "    pathways:\n      - {collection: custom, pathway: CONTRACTILE_PROGRAM}\n"
+    )
+    (config.parent / "figure_recipe.yaml").write_text(
+        "figure_sets:\n  primary:\n    width: 12\n    height: 6\n    columns: 2\n"
+        "    panels:\n      - {id: A, source: qc/figures/pca_correlation}\n"
+        "      - {id: B, source: contrasts/treatment_a_vs_control/analyses/composition/figures/cell_state_signatures}\n"
+    )
+    project = load_project(config)
+    assert project.config["analysis"]["profile"] == "publication"
+    assert {"composition", "regulators", "networks", "hypotheses", "publication"}.issubset(project.modules)
+    assert project.recipe_config["figure_sets"]["primary"]["panels"][0]["id"] == "A"
+    subprocess.run(
+        [
+            "snakemake", "--snakefile", str(ROOT / "src" / "bulk_rna_frame" / "workflow" / "Snakefile"),
+            "--configfile", str(config), "--cores", "1", "--dry-run",
+        ],
+        cwd=config.parent,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    data["analysis"]["profile"] = "full"
+    data["analysis"]["settings"].update({
+        "sva": {"minimum_recommended_samples": 10},
+        "wgcna": {
+            "top_variable_genes": 100,
+            "minimum_module_size": 5,
+            "minimum_recommended_samples": 15,
+        },
+        "mediation": {
+            "mediator_pathway": "CONTRACTILE_PROGRAM",
+            "outcome_pathways": ["IMMUNE_PROGRAM"],
+            "simulations": 100,
+            "minimum_recommended_samples": 20,
+        },
+    })
+    config.write_text(yaml.safe_dump(data, sort_keys=False))
+    full = load_project(config)
+    assert {"sva", "wgcna", "mediation", "multilayer"}.issubset(full.modules)
+    subprocess.run(
+        [
+            "snakemake", "--snakefile", str(ROOT / "src" / "bulk_rna_frame" / "workflow" / "Snakefile"),
+            "--configfile", str(config), "--cores", "1", "--dry-run",
+        ],
+        cwd=config.parent,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+
+def test_human_provider_contract_uses_same_module_interfaces(tmp_path):
+    config = project_copy(tmp_path)
+    data = yaml.safe_load(config.read_text())
+    data["species"] = {"provider": "human", "scientific_name": "Homo sapiens", "taxonomy_id": 9606}
+    data["reference"] = {"genome_build": "GRCh38", "annotation_release": 110}
+    config.write_text(yaml.safe_dump(data, sort_keys=False))
+    project = load_project(config)
+    assert project.config["species"]["taxonomy_id"] == 9606
+    assert project.modules == tuple(sorted(project.modules))
+
+
+def test_gtrd_provider_requires_an_explicit_snapshot(tmp_path):
+    config = project_copy(tmp_path)
+    data = yaml.safe_load(config.read_text())
+    data["species"] = {"provider": "mouse", "scientific_name": "Mus musculus", "taxonomy_id": 10090}
+    data["reference"] = {"genome_build": "GRCm39"}
+    data["analysis"]["modules"] = {"regulators": True}
+    data["resources"]["providers"] = {"gtrd": True}
+    config.write_text(yaml.safe_dump(data, sort_keys=False))
+    with pytest.raises(ProjectValidationError, match="exported GTRD-derived"):
+        load_project(config)
+
+    (config.parent / "gtrd_edges.tsv").write_text("source\ttarget\nTF1\tGene1\n")
+    data["resources"]["regulon_edges"] = "gtrd_edges.tsv"
+    config.write_text(yaml.safe_dump(data, sort_keys=False))
+    project = load_project(config)
+    assert project.regulon_edges == config.parent / "gtrd_edges.tsv"

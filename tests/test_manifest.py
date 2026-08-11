@@ -14,18 +14,56 @@ SCRIPT = ROOT / "src" / "bulk_rna_frame" / "workflow" / "scripts" / "manifest.py
 
 
 def test_manifest_expands_environment_variables_in_input_paths(tmp_path):
-    for name in ("samples.tsv", "contrasts.tsv", "sets.gmt", "genes.gtf"):
-        (tmp_path / name).write_text(f"fixture {name}\n", encoding="utf-8")
+    (tmp_path / "samples.tsv").write_text(
+        "sample_id\tbam\tcondition\ncontrol_1\tcontrol.bam\tcontrol\n"
+        "treated_1\ttreated.bam\ttreated\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "contrasts.tsv").write_text(
+        "contrast_id\tfactor\tnumerator\tdenominator\n"
+        "treated_vs_control\tcondition\ttreated\tcontrol\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "sets.gmt").write_text("fixture\tfixture\tGene1\tGene2\n", encoding="utf-8")
+    (tmp_path / "genes.gtf").write_text(
+        'chr1\ttest\texon\t1\t10\t.\t+\t.\tgene_id "gene1"; gene_name "Gene1";\n',
+        encoding="utf-8",
+    )
+    (tmp_path / "control.bam").touch()
+    (tmp_path / "treated.bam").touch()
 
     config = {
+        "version": 2,
         "project": {"id": "manifest_fixture", "title": "Manifest fixture"},
+        "species": {"provider": "mouse", "scientific_name": "Mus musculus", "taxonomy_id": 10090},
+        "reference": {"genome_build": "GRCm39", "annotation_release": 107},
         "inputs": {
             "kind": "bam",
+            "bam_root": ".",
             "samples": "samples.tsv",
             "gtf": "${BULK_RNA_FRAME_TEST_GTF}",
         },
-        "contrasts": "contrasts.tsv",
-        "gene_sets": {"gmt": "sets.gmt"},
+        "counting": {
+            "threads": 1, "feature_type": "exon", "attribute": "gene_id",
+            "paired_end": False, "count_read_pairs": False,
+            "require_both_ends_aligned": False, "exclude_chimeric_fragments": False,
+            "strandedness": "unstranded", "strand_test_modes": [0],
+            "strand_min_dominance": 0.8,
+        },
+        "analysis": {
+            "design": "~ condition", "contrasts": "contrasts.tsv", "profile": "standard",
+            "modules": {"de": False, "pathways": False, "ontology": False, "report": False},
+        },
+        "resources": {
+            "gene_sets": {"gmt": "sets.gmt", "min_size": 2, "max_size": 100},
+        },
+        "figures": {
+            "group": "condition", "palette": {"control": "#A6CEE3", "treated": "#F4A6A6"},
+            "pca": {"ellipse_level": 0.8},
+            "de": {"fdr": 0.05, "abs_log2fc": 1, "top_labels": 5, "top_heatmap_genes": 10, "z_limit": 1.5},
+            "pathways": {"top_ora_terms": 5, "top_gsva_terms": 5, "gsea_curves_per_direction": 1, "seed": 1},
+        },
+        "output": {"root": "results"},
     }
     config_path = tmp_path / "project.yaml"
     config_path.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
@@ -52,5 +90,7 @@ def test_manifest_expands_environment_variables_in_input_paths(tmp_path):
     )
 
     manifest = json.loads(output.read_text(encoding="utf-8"))
+    assert manifest["schema_version"] == 2
+    assert manifest["contrast_semantics"] == "all signed effects are numerator minus denominator"
     input_paths = {record["path"] for record in manifest["inputs"]}
     assert str(tmp_path / "genes.gtf") in input_paths

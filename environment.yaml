@@ -1,0 +1,47 @@
+name: bulk-rna-frame
+channels: [conda-forge, bioconda]
+dependencies:
+  - python=3.12
+  - snakemake=9.23
+  - pyyaml=6.0
+  - jsonschema=4.23
+  - pillow=11
+  - pypdf=5
+  - reportlab=4
+  - networkx=3.4
+  - matplotlib=3.10
+  - samtools=1.22
+  - subread=2.0
+  - r-base=4.5
+  - bioconductor-deseq2
+  - bioconductor-apeglm
+  - bioconductor-fgsea
+  - bioconductor-gsva
+  - bioconductor-limma
+  - bioconductor-biocparallel
+  - bioconductor-annotationdbi
+  - bioconductor-org.mm.eg.db
+  - bioconductor-org.hs.eg.db
+  - bioconductor-go.db
+  - bioconductor-keggrest
+  - bioconductor-decoupler
+  - bioconductor-dorothea
+  - bioconductor-sva
+  - r-wgcna
+  - r-mediation
+  - r-msigdbr
+  - r-digest
+  - r-ggplot2
+  - r-ggrepel
+  - r-patchwork
+  - r-readr
+  - r-dplyr
+  - r-tidyr
+  - r-tibble
+  - r-scales
+  - r-stringr
+  - r-yaml
+  - r-jsonlite
+  - pip
+  - pip:
+      - -e .

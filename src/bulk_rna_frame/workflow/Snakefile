@@ -1,5 +1,6 @@
 from pathlib import Path
 import csv
+import shlex
 
 from snakemake.utils import min_version
 from bulk_rna_frame.config import load_project
@@ -14,9 +15,10 @@ def resolve_project_path(value):
     path = Path(value).expanduser()
     return str((path if path.is_absolute() else PROJECT_ROOT / path).resolve())
 
-PROJECT_ID = config["project"]["id"]
-RESULTS = Path(resolve_project_path(config["output"]["root"])) / PROJECT_ID
 PROJECT = load_project(CONFIG_PATH)
+CONFIG = PROJECT.config
+PROJECT_ID = PROJECT.project_id
+RESULTS = PROJECT.result_root
 SOURCE_FILES = [str(path) for path in PROJECT.source_files]
 SOURCE_SAMPLES = str(PROJECT.samples)
 INPUTS = RESULTS / "inputs"
@@ -24,16 +26,29 @@ COUNTS = str(INPUTS / "counts.tsv")
 SAMPLES = str(INPUTS / "samples.tsv")
 ANNOTATION = str(INPUTS / "annotation.tsv")
 INPUT_MANIFEST = str(INPUTS / "input_manifest.json")
-CONTRASTS = resolve_project_path(config["contrasts"])
-GMT = resolve_project_path(config["gene_sets"]["gmt"])
-MODULES = config["modules"]
+SOURCE_CONTRASTS = str(PROJECT.contrasts)
+CONTRASTS = str(INPUTS / "contrasts.tsv")
+CUSTOM_GMT = str(PROJECT.gmt)
+RESOURCE_CACHE = RESULTS / ".cache" / "resources"
+GMT = str(RESOURCE_CACHE / "gene_sets.gmt")
+RESOURCE_TABLE = str(RESOURCE_CACHE / "gene_sets.tsv")
+RESOURCE_RECEIPT = str(RESOURCE_CACHE / "gene_sets.receipt.json")
+MODULES = {
+    name: name in PROJECT.modules
+    for name in (
+        "qc", "de", "pathways", "ontology", "composition", "regulators",
+        "networks", "hypotheses", "publication", "report", "sva", "wgcna",
+        "mediation", "multilayer",
+    )
+}
 
-with open(CONTRASTS, newline="") as handle:
+with open(SOURCE_CONTRASTS, newline="") as handle:
     CONTRAST_ROWS = list(csv.DictReader(handle, delimiter="\t"))
 CONTRAST_IDS = [row["contrast_id"] for row in CONTRAST_ROWS]
 
 R_ENV = str(WORKFLOW_ROOT / "envs" / "r.yaml")
 CORE_ENV = str(WORKFLOW_ROOT / "envs" / "core.yaml")
+NETWORK_ENV = str(WORKFLOW_ROOT / "envs" / "network.yaml")
 UTILS_R = str(WORKFLOW_ROOT / "scripts" / "utils.R")
 
 def qc(path):
@@ -42,192 +57,230 @@ def qc(path):
 def contrast(path):
     return str(RESULTS / "contrasts" / "{contrast_id}" / path)
 
+def analysis(module, path):
+    return contrast(str(Path("analyses") / module / path))
+
 QC_OUTPUTS = [
     qc("objects/vst.rds"),
     qc("tables/vst_expression.tsv"),
     qc("tables/pca_coordinates.tsv"),
     qc("tables/pca_variance.tsv"),
     qc("tables/sample_correlation.tsv"),
+    qc("tables/library_metrics.tsv"),
+    qc("tables/expression_density_displayed.tsv"),
+    qc("tables/sample_distance.tsv"),
+    qc("tables/variable_gene_heatmap_displayed.tsv"),
+    qc("tables/pca_correlation_layout.json"),
     qc("figures/pca.pdf"),
     qc("figures/pca.png"),
     qc("figures/sample_correlation.pdf"),
     qc("figures/sample_correlation.png"),
+    qc("figures/pca_correlation.pdf"),
+    qc("figures/pca_correlation.png"),
+    qc("figures/library_metrics.pdf"),
+    qc("figures/library_metrics.png"),
+    qc("figures/expression_density.pdf"),
+    qc("figures/expression_density.png"),
+    qc("figures/sample_distance.pdf"),
+    qc("figures/sample_distance.png"),
+    qc("figures/variable_gene_heatmap.pdf"),
+    qc("figures/variable_gene_heatmap.png"),
+    qc("figures/qc_overview.pdf"),
+    qc("figures/qc_overview.png"),
     qc("qc_summary.json"),
 ]
 
 DE_PATTERNS = [
-    contrast("objects/deseq2.rds"),
-    contrast("tables/de_results.tsv"),
-    contrast("tables/volcano_displayed.tsv"),
-    contrast("tables/de_heatmap_displayed.tsv"),
-    contrast("figures/volcano.pdf"),
-    contrast("figures/volcano.png"),
-    contrast("figures/de_heatmap.pdf"),
-    contrast("figures/de_heatmap.png"),
-    contrast("de_summary.json"),
+    analysis("de", "objects/deseq2.rds"),
+    analysis("de", "tables/de_results.tsv"),
+    analysis("de", "tables/volcano_displayed.tsv"),
+    analysis("de", "tables/de_heatmap_displayed.tsv"),
+    analysis("de", "tables/ma_displayed.tsv"),
+    analysis("de", "tables/pvalue_distribution_displayed.tsv"),
+    analysis("de", "tables/lfc_distribution_displayed.tsv"),
+    analysis("de", "tables/de_pca_coordinates.tsv"),
+    analysis("de", "tables/de_pca_ellipses.tsv"),
+    analysis("de", "figures/volcano.pdf"),
+    analysis("de", "figures/volcano.png"),
+    analysis("de", "figures/de_heatmap.pdf"),
+    analysis("de", "figures/de_heatmap.png"),
+    analysis("de", "figures/ma.pdf"),
+    analysis("de", "figures/ma.png"),
+    analysis("de", "figures/pvalue_distribution.pdf"),
+    analysis("de", "figures/pvalue_distribution.png"),
+    analysis("de", "figures/lfc_distribution.pdf"),
+    analysis("de", "figures/lfc_distribution.png"),
+    analysis("de", "figures/de_pca.pdf"),
+    analysis("de", "figures/de_pca.png"),
+    analysis("de", "figures/de_overview.pdf"),
+    analysis("de", "figures/de_overview.png"),
+    analysis("de", "de_summary.json"),
 ]
 
 PATHWAY_PATTERNS = [
-    contrast("tables/fgsea.tsv"),
-    contrast("tables/ora.tsv"),
-    contrast("tables/ora_displayed.tsv"),
-    contrast("tables/gsva_scores.tsv"),
-    contrast("tables/gsva_differential.tsv"),
-    contrast("tables/gsva_heatmap_displayed.tsv"),
-    contrast("tables/gsea_curves_displayed.tsv"),
-    contrast("figures/ora_bidirectional.pdf"),
-    contrast("figures/ora_bidirectional.png"),
-    contrast("figures/gsva_heatmap.pdf"),
-    contrast("figures/gsva_heatmap.png"),
-    contrast("figures/gsea_curves.pdf"),
-    contrast("figures/gsea_curves.png"),
-    contrast("pathways_summary.json"),
+    analysis("pathways", "tables/fgsea.tsv"),
+    analysis("pathways", "tables/ora.tsv"),
+    analysis("pathways", "tables/ora_displayed.tsv"),
+    analysis("pathways", "tables/gsva_scores.tsv"),
+    analysis("pathways", "tables/gsva_differential.tsv"),
+    analysis("pathways", "tables/gsva_heatmap_displayed.tsv"),
+    analysis("pathways", "tables/gsea_curves_displayed.tsv"),
+    analysis("pathways", "figures/ora_bidirectional.pdf"),
+    analysis("pathways", "figures/ora_bidirectional.png"),
+    analysis("pathways", "figures/gsva_heatmap.pdf"),
+    analysis("pathways", "figures/gsva_heatmap.png"),
+    analysis("pathways", "figures/gsea_curves.pdf"),
+    analysis("pathways", "figures/gsea_curves.png"),
+    analysis("pathways", "pathways_summary.json"),
 ]
 
-CANONICAL_INPUTS = [COUNTS, SAMPLES, ANNOTATION, INPUT_MANIFEST]
+ONTOLOGY_PATTERNS = [
+    analysis("ontology", "tables/ontology.tsv"),
+    analysis("ontology", "tables/ontology_displayed.tsv"),
+    analysis("ontology", "figures/ontology_bidirectional.pdf"),
+    analysis("ontology", "figures/ontology_bidirectional.png"),
+    analysis("ontology", "ontology_summary.json"),
+]
+
+COMPOSITION_PATTERNS = [
+    analysis("composition", "tables/cell_state_scores.tsv"),
+    analysis("composition", "tables/cell_state_differential.tsv"),
+    analysis("composition", "tables/cell_state_displayed.tsv"),
+    analysis("composition", "figures/cell_state_signatures.pdf"),
+    analysis("composition", "figures/cell_state_signatures.png"),
+    analysis("composition", "composition_summary.json"),
+]
+
+REGULATOR_PATTERNS = [
+    analysis("regulators", "tables/regulon_edges.tsv"),
+    analysis("regulators", "tables/dorothea_activity_scores.tsv"),
+    analysis("regulators", "tables/regulator_target_program_scores.tsv"),
+    analysis("regulators", "tables/regulator_differential.tsv"),
+    analysis("regulators", "tables/regulator_activity_displayed.tsv"),
+    analysis("regulators", "figures/regulator_activity.pdf"),
+    analysis("regulators", "figures/regulator_activity.png"),
+    analysis("regulators", "regulators_summary.json"),
+    analysis("regulators", "tables/grn_nodes_displayed.tsv"),
+    analysis("regulators", "tables/grn_edges_displayed.tsv"),
+    analysis("regulators", "tables/grn_program_separation_test.tsv"),
+    analysis("regulators", "tables/grn_sector_summary.tsv"),
+    analysis("regulators", "figures/grn_rectangular.pdf"),
+    analysis("regulators", "figures/grn_rectangular.png"),
+    analysis("regulators", "figures/grn_radial.pdf"),
+    analysis("regulators", "figures/grn_radial.png"),
+    analysis("regulators", "grn_summary.json"),
+]
+
+NETWORK_PATTERNS = [
+    *[
+        analysis("networks", f"tables/string_{direction}_{suffix}.tsv")
+        for direction in ("up", "down")
+        for suffix in ("input_genes", "unmapped_genes", "unconnected_genes", "nodes", "edges", "nodes_displayed", "edges_displayed")
+    ],
+    analysis("networks", "tables/string_enrichment.tsv"),
+    analysis("networks", "tables/string_enrichment_displayed.tsv"),
+    analysis("networks", "figures/string_up_network.pdf"),
+    analysis("networks", "figures/string_up_network.png"),
+    analysis("networks", "figures/string_down_network.pdf"),
+    analysis("networks", "figures/string_down_network.png"),
+    analysis("networks", "figures/string_enrichment.pdf"),
+    analysis("networks", "figures/string_enrichment.png"),
+    analysis("networks", "networks_summary.json"),
+]
+
+HYPOTHESIS_PATTERNS = [
+    analysis("hypotheses", "tables/hypothesis_evidence.tsv"),
+    analysis("hypotheses", "tables/hypothesis_summary.tsv"),
+    analysis("hypotheses", "hypotheses_summary.json"),
+    analysis("hypotheses", "hypotheses_report.html"),
+]
+
+PUBLICATION_PATTERNS = [
+    analysis("publication", "tables/de_gene_program_assignments.tsv"),
+    analysis("publication", "tables/de_heatmap_global_displayed.tsv"),
+    analysis("publication", "tables/de_heatmap_program_grouped_displayed.tsv"),
+    analysis("publication", "tables/de_heatmap_compact_displayed.tsv"),
+    analysis("publication", "tables/program_integrated_displayed.tsv"),
+    analysis("publication", "tables/program_violins_displayed.tsv"),
+    analysis("publication", "tables/program_violins_tests.tsv"),
+    *[
+        analysis("publication", f"figures/{name}.{extension}")
+        for name in ("de_heatmap_global", "de_heatmap_program_grouped", "de_heatmap_compact", "program_integrated", "program_violins")
+        for extension in ("pdf", "png")
+    ],
+    analysis("publication", "publication_summary.json"),
+]
+
+SVA_PATTERNS = [analysis("advanced/sva", "tables/surrogate_variables.tsv"), analysis("advanced/sva", "tables/sva_de_sensitivity.tsv"), analysis("advanced/sva", "sva_summary.json")]
+WGCNA_PATTERNS = [analysis("advanced/wgcna", "tables/wgcna_module_trait.tsv"), analysis("advanced/wgcna", "tables/wgcna_membership.tsv"), analysis("advanced/wgcna", "tables/wgcna_hubs.tsv"), analysis("advanced/wgcna", "figures/wgcna_module_trait.pdf"), analysis("advanced/wgcna", "figures/wgcna_module_trait.png"), analysis("advanced/wgcna", "wgcna_summary.json")]
+MEDIATION_PATTERNS = [analysis("advanced/mediation", "tables/mediation_inputs.tsv"), analysis("advanced/mediation", "tables/mediation_results.tsv"), analysis("advanced/mediation", "mediation_summary.json"), analysis("advanced/mediation", "tables/mediation_power.tsv"), analysis("advanced/mediation", "mediation_power_summary.json")]
+MULTILAYER_PATTERNS = [analysis("advanced/multilayer", "tables/multilayer_nodes.tsv"), analysis("advanced/multilayer", "tables/multilayer_triangulated.tsv"), analysis("advanced/multilayer", "tables/multilayer_edges.tsv"), analysis("advanced/multilayer", "figures/multilayer_network.pdf"), analysis("advanced/multilayer", "figures/multilayer_network.png"), analysis("advanced/multilayer", "multilayer_summary.json")]
+
+CANONICAL_INPUTS = [COUNTS, SAMPLES, ANNOTATION, CONTRASTS, INPUT_MANIFEST]
 FINAL_OUTPUTS = list(CANONICAL_INPUTS)
+if MODULES["pathways"] or MODULES["ontology"]:
+    FINAL_OUTPUTS.extend([GMT, RESOURCE_TABLE, RESOURCE_RECEIPT])
 if MODULES["qc"]:
     FINAL_OUTPUTS.extend(QC_OUTPUTS)
 if MODULES["de"]:
     FINAL_OUTPUTS.extend(expand(DE_PATTERNS, contrast_id=CONTRAST_IDS))
 if MODULES["pathways"]:
     FINAL_OUTPUTS.extend(expand(PATHWAY_PATTERNS, contrast_id=CONTRAST_IDS))
+if MODULES["ontology"]:
+    FINAL_OUTPUTS.extend(expand(ONTOLOGY_PATTERNS, contrast_id=CONTRAST_IDS))
+if MODULES["composition"]:
+    FINAL_OUTPUTS.extend(expand(COMPOSITION_PATTERNS, contrast_id=CONTRAST_IDS))
+if MODULES["regulators"]:
+    FINAL_OUTPUTS.extend(expand(REGULATOR_PATTERNS, contrast_id=CONTRAST_IDS))
+if MODULES["networks"]:
+    FINAL_OUTPUTS.extend(expand(NETWORK_PATTERNS, contrast_id=CONTRAST_IDS))
+if MODULES["hypotheses"]:
+    FINAL_OUTPUTS.extend(expand(HYPOTHESIS_PATTERNS, contrast_id=CONTRAST_IDS))
+if MODULES["publication"]:
+    FINAL_OUTPUTS.extend(expand(PUBLICATION_PATTERNS, contrast_id=CONTRAST_IDS))
+if MODULES["sva"]:
+    FINAL_OUTPUTS.extend(expand(SVA_PATTERNS, contrast_id=CONTRAST_IDS))
+if MODULES["wgcna"]:
+    FINAL_OUTPUTS.extend(expand(WGCNA_PATTERNS, contrast_id=CONTRAST_IDS))
+if MODULES["mediation"]:
+    FINAL_OUTPUTS.extend(expand(MEDIATION_PATTERNS, contrast_id=CONTRAST_IDS))
+if MODULES["multilayer"]:
+    FINAL_OUTPUTS.extend(expand(MULTILAYER_PATTERNS, contrast_id=CONTRAST_IDS))
 
-localrules: all
+FIGURE_SET_IDS = list((PROJECT.recipe_config or {}).get("figure_sets", {}))
+ASSEMBLY_PATTERNS = [
+    str(RESULTS / "publication" / "{figure_set}" / "assembled" / "{figure_set}.pdf"),
+    str(RESULTS / "publication" / "{figure_set}" / "assembled" / "{figure_set}.png"),
+    str(RESULTS / "publication" / "{figure_set}" / "assembled" / "assembly.json"),
+]
+ASSEMBLY_OUTPUTS = expand(ASSEMBLY_PATTERNS, figure_set=FIGURE_SET_IDS)
+if MODULES["publication"]:
+    FINAL_OUTPUTS.extend(ASSEMBLY_OUTPUTS)
 
-rule all:
-    input:
-        str(RESULTS / "manifest.json")
+ANALYSIS_OUTPUTS = list(FINAL_OUTPUTS)
+FRONT_DOOR_OUTPUTS = [
+    str(RESULTS / "figures" / "index.json"),
+    str(RESULTS / "tables" / "index.json"),
+]
+FINAL_OUTPUTS.extend(FRONT_DOOR_OUTPUTS)
+REPORT_INPUTS = list(FINAL_OUTPUTS)
+REPORT = str(RESULTS / "REPORT.html")
+if MODULES["report"]:
+    FINAL_OUTPUTS.append(REPORT)
 
-rule materialize_inputs:
-    input:
-        sources=SOURCE_FILES,
-        samples=SOURCE_SAMPLES,
-        config=str(CONFIG_PATH),
-        script=str(WORKFLOW_ROOT / "scripts" / "materialize_inputs.py")
-    output:
-        counts=COUNTS,
-        samples=SAMPLES,
-        annotation=ANNOTATION,
-        manifest=INPUT_MANIFEST
-    log:
-        str(INPUTS / "materialize.log")
-    threads:
-        config.get("counting", {}).get("threads", 1)
-    conda:
-        CORE_ENV
-    shell:
-        "python {input.script} --project-config {input.config:q} --counts {output.counts:q} "
-        "--samples {output.samples:q} --annotation {output.annotation:q} "
-        "--manifest {output.manifest:q} --threads {threads} > {log:q} 2>&1"
+def figure_panel_inputs(wildcards):
+    recipe = PROJECT.recipe_config["figure_sets"][wildcards.figure_set]
+    paths = []
+    for panel in recipe["panels"]:
+        source = Path(panel["source"]).expanduser()
+        source = source if source.is_absolute() else RESULTS / source
+        stem = source.with_suffix("") if source.suffix.lower() in {".pdf", ".png"} else source
+        paths.extend([str(stem.with_suffix(".pdf")), str(stem.with_suffix(".png"))])
+    return paths
 
-rule study_qc:
-    input:
-        counts=COUNTS,
-        samples=SAMPLES,
-        annotation=ANNOTATION,
-        config=str(CONFIG_PATH),
-        script=str(WORKFLOW_ROOT / "scripts" / "qc.R"),
-        utils=UTILS_R
-    output:
-        vst=qc("objects/vst.rds"),
-        expression=qc("tables/vst_expression.tsv"),
-        pca_coordinates=qc("tables/pca_coordinates.tsv"),
-        pca_variance=qc("tables/pca_variance.tsv"),
-        correlation=qc("tables/sample_correlation.tsv"),
-        pca_pdf=qc("figures/pca.pdf"),
-        pca_png=qc("figures/pca.png"),
-        correlation_pdf=qc("figures/sample_correlation.pdf"),
-        correlation_png=qc("figures/sample_correlation.png"),
-        summary=qc("qc_summary.json")
-    log:
-        qc("logs/qc.log")
-    conda:
-        R_ENV
-    shell:
-        "Rscript --vanilla {input.script} --project-config {input.config:q} "
-        "--counts {input.counts:q} --samples {input.samples:q} --annotation {input.annotation:q} "
-        "--outdir {RESULTS}/qc > {log:q} 2>&1"
-
-rule contrast_de:
-    input:
-        counts=COUNTS,
-        samples=SAMPLES,
-        annotation=ANNOTATION,
-        contrasts=CONTRASTS,
-        config=str(CONFIG_PATH),
-        script=str(WORKFLOW_ROOT / "scripts" / "de.R"),
-        utils=UTILS_R
-    output:
-        dds=contrast("objects/deseq2.rds"),
-        results=contrast("tables/de_results.tsv"),
-        volcano_table=contrast("tables/volcano_displayed.tsv"),
-        heatmap_table=contrast("tables/de_heatmap_displayed.tsv"),
-        volcano_pdf=contrast("figures/volcano.pdf"),
-        volcano_png=contrast("figures/volcano.png"),
-        heatmap_pdf=contrast("figures/de_heatmap.pdf"),
-        heatmap_png=contrast("figures/de_heatmap.png"),
-        summary=contrast("de_summary.json")
-    log:
-        contrast("logs/de.log")
-    conda:
-        R_ENV
-    shell:
-        "Rscript --vanilla {input.script} --project-config {input.config:q} "
-        "--counts {input.counts:q} --samples {input.samples:q} --annotation {input.annotation:q} "
-        "--contrasts {input.contrasts:q} "
-        "--contrast-id {wildcards.contrast_id:q} "
-        "--outdir {RESULTS}/contrasts/{wildcards.contrast_id} > {log:q} 2>&1"
-
-rule contrast_pathways:
-    input:
-        de=contrast("tables/de_results.tsv"),
-        vst=qc("objects/vst.rds"),
-        samples=SAMPLES,
-        annotation=ANNOTATION,
-        gmt=GMT,
-        config=str(CONFIG_PATH),
-        contrasts=CONTRASTS,
-        script=str(WORKFLOW_ROOT / "scripts" / "pathways.R"),
-        utils=UTILS_R
-    output:
-        fgsea=contrast("tables/fgsea.tsv"),
-        ora=contrast("tables/ora.tsv"),
-        ora_displayed=contrast("tables/ora_displayed.tsv"),
-        gsva_scores=contrast("tables/gsva_scores.tsv"),
-        gsva_differential=contrast("tables/gsva_differential.tsv"),
-        gsva_displayed=contrast("tables/gsva_heatmap_displayed.tsv"),
-        gsea_displayed=contrast("tables/gsea_curves_displayed.tsv"),
-        ora_pdf=contrast("figures/ora_bidirectional.pdf"),
-        ora_png=contrast("figures/ora_bidirectional.png"),
-        gsva_pdf=contrast("figures/gsva_heatmap.pdf"),
-        gsva_png=contrast("figures/gsva_heatmap.png"),
-        gsea_pdf=contrast("figures/gsea_curves.pdf"),
-        gsea_png=contrast("figures/gsea_curves.png"),
-        summary=contrast("pathways_summary.json")
-    log:
-        contrast("logs/pathways.log")
-    conda:
-        R_ENV
-    shell:
-        "Rscript --vanilla {input.script} --project-config {input.config:q} "
-        "--samples {input.samples:q} --annotation {input.annotation:q} "
-        "--contrasts {input.contrasts:q} --gmt {input.gmt:q} "
-        "--contrast-id {wildcards.contrast_id:q} --vst {input.vst:q} --de {input.de:q} "
-        "--outdir {RESULTS}/contrasts/{wildcards.contrast_id} > {log:q} 2>&1"
-
-rule release_manifest:
-    input:
-        artifacts=FINAL_OUTPUTS,
-        config=str(CONFIG_PATH),
-        script=str(WORKFLOW_ROOT / "scripts" / "manifest.py")
-    output:
-        str(RESULTS / "manifest.json")
-    log:
-        str(RESULTS / "manifest.log")
-    params:
-        results=str(RESULTS)
-    conda:
-        CORE_ENV
-    shell:
-        "python {input.script} --project-config {input.config:q} --results {params.results:q} --output {output:q} > {log:q} 2>&1"
+include: "rules/core.smk"
+include: "rules/providers.smk"
+include: "rules/modules.smk"
+include: "rules/advanced.smk"
+include: "rules/publication.smk"
+include: "rules/report.smk"

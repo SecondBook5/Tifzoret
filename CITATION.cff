@@ -1,0 +1,7 @@
+cff-version: 1.2.0
+title: BulkRNAFrame
+message: If you use BulkRNAFrame, cite the software release and the upstream methods/databases used by enabled modules.
+type: software
+license: MIT
+version: 0.1.0
+date-released: 2026-08-10

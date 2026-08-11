@@ -5,13 +5,19 @@ from __future__ import annotations
 
 import argparse
 import csv
+from contextlib import contextmanager
+from dataclasses import replace
 import hashlib
 import json
 import re
 import subprocess
 import sys
+import tarfile
 import tempfile
+import zipfile
 from pathlib import Path
+from pathlib import PurePosixPath
+from typing import Iterator
 
 SOURCE_ROOT = Path(__file__).resolve().parents[3]
 if str(SOURCE_ROOT) not in sys.path:
@@ -21,6 +27,79 @@ from bulk_rna_frame.config import ResolvedProject, load_project  # noqa: E402
 
 
 STRAND_MODES = {"unstranded": 0, "forward": 1, "reverse": 2}
+
+
+def safe_archive_member(value: str) -> PurePosixPath:
+    """Normalize one archive member and reject traversal or ambiguous paths."""
+    normalized = value.replace("\\", "/")
+    member = PurePosixPath(normalized)
+    if (
+        not normalized
+        or member.is_absolute()
+        or any(part in {"", ".", ".."} for part in member.parts)
+        or normalized.endswith("/")
+    ):
+        raise RuntimeError(f"unsafe BAM archive member path: {value!r}")
+    return member
+
+
+@contextmanager
+def extracted_archive_bams(project: ResolvedProject) -> Iterator[tuple[Path, ...]]:
+    """Extract only declared BAM members into an isolated temporary directory."""
+    assert project.archive is not None
+    member_root = project.config["inputs"].get("member_root", "").strip("/\\")
+    declared = [
+        safe_archive_member(
+            f"{member_root}/{row['bam'].strip()}" if member_root else row["bam"].strip()
+        )
+        for row in project.sample_rows
+    ]
+    if len(declared) != len(set(declared)):
+        raise RuntimeError("archive BAM member paths must be unique")
+
+    with tempfile.TemporaryDirectory(prefix="bulk-rna-frame-archive-") as directory:
+        root = Path(directory)
+        extracted: list[Path] = []
+        if zipfile.is_zipfile(project.archive):
+            with zipfile.ZipFile(project.archive) as archive:
+                available = set(archive.namelist())
+                for member in declared:
+                    name = member.as_posix()
+                    if name not in available:
+                        raise RuntimeError(f"declared BAM is absent from archive: {name}")
+                    info = archive.getinfo(name)
+                    if info.is_dir():
+                        raise RuntimeError(f"declared BAM archive member is a directory: {name}")
+                    destination = root.joinpath(*member.parts)
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    with archive.open(info) as source, destination.open("wb") as target:
+                        for block in iter(lambda: source.read(1024 * 1024), b""):
+                            target.write(block)
+                    extracted.append(destination)
+        elif tarfile.is_tarfile(project.archive):
+            with tarfile.open(project.archive, mode="r:*") as archive:
+                available = {item.name: item for item in archive.getmembers()}
+                for member in declared:
+                    name = member.as_posix()
+                    info = available.get(name)
+                    if info is None:
+                        raise RuntimeError(f"declared BAM is absent from archive: {name}")
+                    if not info.isfile() or info.issym() or info.islnk():
+                        raise RuntimeError(f"declared BAM archive member is not a regular file: {name}")
+                    source = archive.extractfile(info)
+                    if source is None:
+                        raise RuntimeError(f"could not read BAM archive member: {name}")
+                    destination = root.joinpath(*member.parts)
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    with source, destination.open("wb") as target:
+                        for block in iter(lambda: source.read(1024 * 1024), b""):
+                            target.write(block)
+                    extracted.append(destination)
+        else:
+            raise RuntimeError(
+                f"unsupported archive format for {project.archive}; expected ZIP or TAR"
+            )
+        yield tuple(extracted)
 
 
 def sha256(path: Path) -> str:
@@ -55,6 +134,11 @@ def read_tsv(path: Path, *, comments: bool = False) -> tuple[list[str], list[dic
 def materialize_samples(project: ResolvedProject, output: Path) -> None:
     header, _ = read_tsv(project.samples)
     write_tsv(output, header, [dict(row) for row in project.sample_rows])
+
+
+def materialize_contrasts(project: ResolvedProject, output: Path) -> None:
+    header, _ = read_tsv(project.contrasts)
+    write_tsv(output, header, [dict(row) for row in project.contrast_rows])
 
 
 def materialize_count_matrix(
@@ -204,8 +288,8 @@ def parse_featurecounts(
     return [str(row["gene_id"]) for row in canonical]
 
 
-def gtf_symbols(gtf: Path) -> dict[str, str]:
-    symbols: dict[str, str] = {}
+def gtf_annotations(gtf: Path) -> dict[str, dict[str, object]]:
+    annotations: dict[str, dict[str, object]] = {}
     with gtf.open(encoding="utf-8") as handle:
         for line in handle:
             if not line or line.startswith("#"):
@@ -220,21 +304,38 @@ def gtf_symbols(gtf: Path) -> dict[str, str]:
             gene_id = gene_match.group(1)
             name_match = re.search(r'(?:^|;\s*)gene_name "([^"]+)"', attributes)
             symbol = name_match.group(1) if name_match else re.sub(r"\.\d+$", "", gene_id)
-            symbols.setdefault(gene_id, symbol)
-            symbols.setdefault(re.sub(r"\.\d+$", "", gene_id), symbol)
-    return symbols
+            biotype_match = re.search(r'(?:^|;\s*)gene_(?:bio)?type "([^"]+)"', attributes)
+            record = annotations.setdefault(
+                gene_id,
+                {
+                    "gene_symbol": symbol,
+                    "seqname": fields[0],
+                    "start": int(fields[3]),
+                    "end": int(fields[4]),
+                    "strand": fields[6],
+                    "gene_biotype": biotype_match.group(1) if biotype_match else "",
+                },
+            )
+            record["start"] = min(int(record["start"]), int(fields[3]))
+            record["end"] = max(int(record["end"]), int(fields[4]))
+    return annotations
 
 
 def write_annotation(gtf: Path, gene_ids: list[str], output: Path) -> None:
-    symbols = gtf_symbols(gtf)
-    rows = [
-        {
+    annotations = gtf_annotations(gtf)
+    rows = []
+    for gene_id in gene_ids:
+        record = annotations.get(gene_id, annotations.get(re.sub(r"\.\d+$", "", gene_id), {}))
+        rows.append({
             "gene_id": gene_id,
-            "gene_symbol": symbols.get(gene_id, symbols.get(re.sub(r"\.\d+$", "", gene_id), gene_id)),
-        }
-        for gene_id in gene_ids
-    ]
-    write_tsv(output, ["gene_id", "gene_symbol"], rows)
+            "gene_symbol": record.get("gene_symbol", gene_id),
+            "seqname": record.get("seqname", ""),
+            "start": record.get("start", ""),
+            "end": record.get("end", ""),
+            "strand": record.get("strand", ""),
+            "gene_biotype": record.get("gene_biotype", ""),
+        })
+    write_tsv(output, ["gene_id", "gene_symbol", "seqname", "start", "end", "strand", "gene_biotype"], rows)
 
 
 def bam_record(sample_id: str, path: Path) -> dict[str, object]:
@@ -258,6 +359,7 @@ def bam_record(sample_id: str, path: Path) -> dict[str, object]:
         "mtime_ns": stat.st_mtime_ns,
         "sort_order": sort_order,
         "header_sha256": hashlib.sha256(header.encode()).hexdigest(),
+        "sha256": sha256(path),
         "quickcheck": True,
     }
 
@@ -319,12 +421,38 @@ def materialize_bams(
     }
 
 
+def materialize_archive(
+    project: ResolvedProject, counts_output: Path, annotation_output: Path
+) -> dict[str, object]:
+    assert project.archive is not None
+    member_root = project.config["inputs"].get("member_root", "").strip("/\\")
+    member_names = [
+        f"{member_root}/{row['bam'].strip()}" if member_root else row["bam"].strip()
+        for row in project.sample_rows
+    ]
+    with extracted_archive_bams(project) as bams:
+        extracted_project = replace(project, source_root=bams[0].parent, bam_paths=bams)
+        provenance = materialize_bams(extracted_project, counts_output, annotation_output)
+    provenance["kind"] = "archive"
+    provenance["upstream"] = "archive containing aligned BAM files"
+    provenance["archive"] = {
+        "path": str(project.archive),
+        "bytes": project.archive.stat().st_size,
+        "sha256": sha256(project.archive),
+        "members": member_names,
+    }
+    for record, member in zip(provenance["bams"], member_names, strict=True):
+        record["path"] = f"archive://{project.archive.name}/{member}"
+    return provenance
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--project-config", required=True)
     parser.add_argument("--counts", required=True)
     parser.add_argument("--samples", required=True)
     parser.add_argument("--annotation", required=True)
+    parser.add_argument("--contrasts", required=True)
     parser.add_argument("--manifest", required=True)
     parser.add_argument("--threads", type=int)
     args = parser.parse_args()
@@ -337,23 +465,32 @@ def main() -> None:
     counts_output = Path(args.counts).resolve()
     samples_output = Path(args.samples).resolve()
     annotation_output = Path(args.annotation).resolve()
+    contrasts_output = Path(args.contrasts).resolve()
     manifest_output = Path(args.manifest).resolve()
-    for output in (counts_output, samples_output, annotation_output, manifest_output):
+    for output in (counts_output, samples_output, annotation_output, contrasts_output, manifest_output):
         output.parent.mkdir(parents=True, exist_ok=True)
 
     materialize_samples(project, samples_output)
+    materialize_contrasts(project, contrasts_output)
     if project.source_kind == "counts":
         provenance = materialize_count_matrix(project, counts_output, annotation_output)
+    elif project.source_kind == "archive":
+        provenance = materialize_archive(project, counts_output, annotation_output)
     else:
         provenance = materialize_bams(project, counts_output, annotation_output)
     manifest = {
-        "schema_version": 1,
+        "schema_version": 2,
         "project_id": project.project_id,
+        "analysis_set": project.analysis_set,
+        "species": project.config["species"],
+        "reference": project.config["reference"],
+        "contrast_semantics": "positive effects are numerator minus denominator",
         "source": provenance,
         "canonical": {
             "counts": {"path": str(counts_output), "sha256": sha256(counts_output)},
             "samples": {"path": str(samples_output), "sha256": sha256(samples_output)},
             "annotation": {"path": str(annotation_output), "sha256": sha256(annotation_output)},
+            "contrasts": {"path": str(contrasts_output), "sha256": sha256(contrasts_output)},
         },
     }
     manifest_output.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")

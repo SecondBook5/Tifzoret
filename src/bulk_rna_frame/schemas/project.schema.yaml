@@ -1,10 +1,19 @@
 $schema: "https://json-schema.org/draft/2020-12/schema"
 type: object
 additionalProperties: false
-required: [version, project, inputs, design, contrasts, gene_sets, modules, figures, output]
+required:
+  - version
+  - project
+  - species
+  - reference
+  - inputs
+  - analysis
+  - resources
+  - figures
+  - output
 properties:
   version:
-    const: 1
+    const: 2
   project:
     type: object
     additionalProperties: false
@@ -12,38 +21,150 @@ properties:
     properties:
       id: {type: string, pattern: "^[a-z0-9][a-z0-9_-]*$"}
       title: {type: string, minLength: 1}
+      description: {type: string}
+  species:
+    type: object
+    additionalProperties: false
+    required: [provider, scientific_name]
+    properties:
+      provider: {enum: [mouse, human, custom]}
+      scientific_name: {type: string, minLength: 1}
+      taxonomy_id: {type: [integer, "null"], minimum: 1}
+  reference:
+    type: object
+    additionalProperties: false
+    required: [genome_build]
+    properties:
+      genome_build: {type: string, minLength: 1}
+      annotation_release: {type: [string, integer, "null"]}
+      expected_contigs: {type: [integer, "null"], minimum: 1}
   inputs:
     oneOf:
-      - $ref: "#/$defs/countInputs"
-      - $ref: "#/$defs/bamInputs"
-      - $ref: "#/$defs/nfcoreInputs"
+      - {$ref: "#/$defs/countInputs"}
+      - {$ref: "#/$defs/bamInputs"}
+      - {$ref: "#/$defs/nfcoreInputs"}
+      - {$ref: "#/$defs/archiveInputs"}
   counting:
     $ref: "#/$defs/counting"
-  design:
+  analysis:
     type: object
     additionalProperties: false
-    required: [formula]
+    required: [design, contrasts, profile]
     properties:
-      formula: {type: string, pattern: "^~"}
-  contrasts:
-    type: string
-    minLength: 1
-  gene_sets:
+      design: {type: string, pattern: "^~"}
+      contrasts: {type: string, minLength: 1}
+      profile: {enum: [standard, publication, full]}
+      random_seed: {type: integer, minimum: 0}
+      modules:
+        type: object
+        additionalProperties: false
+        properties:
+          qc: {type: boolean}
+          de: {type: boolean}
+          pathways: {type: boolean}
+          ontology: {type: boolean}
+          composition: {type: boolean}
+          regulators: {type: boolean}
+          networks: {type: boolean}
+          hypotheses: {type: boolean}
+          publication: {type: boolean}
+          report: {type: boolean}
+          sva: {type: boolean}
+          wgcna: {type: boolean}
+          mediation: {type: boolean}
+          multilayer: {type: boolean}
+      settings:
+        type: object
+        additionalProperties: false
+        properties:
+          composition:
+            type: object
+            additionalProperties: false
+            properties:
+              min_genes: {type: integer, minimum: 2}
+          regulators:
+            type: object
+            additionalProperties: false
+            properties:
+              confidence: {type: array, uniqueItems: true, items: {enum: [A, B, C, D, E]}}
+              min_targets: {type: integer, minimum: 2}
+              top_regulators: {type: integer, minimum: 2}
+          networks:
+            type: object
+            additionalProperties: false
+            properties:
+              required_score: {type: integer, minimum: 0, maximum: 1000}
+              max_nodes: {type: integer, minimum: 10}
+              seed: {type: integer, minimum: 0}
+          sva:
+            type: object
+            additionalProperties: false
+            properties:
+              minimum_recommended_samples: {type: integer, minimum: 2}
+          wgcna:
+            type: object
+            additionalProperties: false
+            properties:
+              top_variable_genes: {type: integer, minimum: 100}
+              minimum_module_size: {type: integer, minimum: 5}
+              minimum_recommended_samples: {type: integer, minimum: 2}
+          mediation:
+            type: object
+            additionalProperties: false
+            properties:
+              mediator_pathway: {type: string, minLength: 1}
+              outcome_pathways:
+                type: array
+                minItems: 1
+                uniqueItems: true
+                items: {type: string, minLength: 1}
+              simulations: {type: integer, minimum: 100}
+              minimum_recommended_samples: {type: integer, minimum: 2}
+  resources:
     type: object
     additionalProperties: false
-    required: [gmt, min_size, max_size]
+    required: [gene_sets]
     properties:
-      gmt: {type: string, minLength: 1}
-      min_size: {type: integer, minimum: 2}
-      max_size: {type: integer, minimum: 2}
-  modules:
+      cache: {type: string, minLength: 1}
+      offline: {type: boolean}
+      refresh: {type: boolean}
+      gene_sets:
+        type: object
+        additionalProperties: false
+        required: [gmt, min_size, max_size]
+        properties:
+          gmt: {type: string, minLength: 1}
+          min_size: {type: integer, minimum: 2}
+          max_size: {type: integer, minimum: 2}
+          collections:
+            type: array
+            uniqueItems: true
+            items: {type: string, minLength: 1}
+      cell_state_signatures: {type: string, minLength: 1}
+      regulon_edges: {type: string, minLength: 1}
+      providers:
+        type: object
+        additionalProperties: false
+        properties:
+          msigdb: {type: boolean}
+          go: {type: boolean}
+          kegg: {type: boolean}
+          string: {type: boolean}
+          gtrd: {type: boolean}
+          dorothea: {type: boolean}
+  hypotheses:
     type: object
     additionalProperties: false
-    required: [qc, de, pathways]
+    required: [claims, panels]
     properties:
-      qc: {type: boolean}
-      de: {type: boolean}
-      pathways: {type: boolean}
+      claims: {type: string, minLength: 1}
+      panels: {type: string, minLength: 1}
+  publication:
+    type: object
+    additionalProperties: false
+    required: [recipe]
+    properties:
+      recipe: {type: string, minLength: 1}
   figures:
     type: object
     additionalProperties: false
@@ -53,15 +174,18 @@ properties:
       palette:
         type: object
         minProperties: 2
-        additionalProperties:
-          type: string
-          pattern: "^#[0-9A-Fa-f]{6}$"
+        additionalProperties: {type: string, pattern: "^#[0-9A-Fa-f]{6}$"}
       pca:
         type: object
         additionalProperties: false
         required: [ellipse_level]
         properties:
           ellipse_level: {type: number, exclusiveMinimum: 0, exclusiveMaximum: 1}
+      qc:
+        type: object
+        additionalProperties: false
+        properties:
+          top_variable_genes: {type: integer, minimum: 2}
       de:
         type: object
         additionalProperties: false
@@ -92,7 +216,7 @@ allOf:
       properties:
         inputs:
           properties:
-            kind: {enum: [bam, nfcore_rnaseq]}
+            kind: {enum: [bam, nfcore_rnaseq, archive]}
     then:
       required: [counting]
 $defs:
@@ -132,6 +256,17 @@ $defs:
       gtf: {type: string, minLength: 1}
       bam_pattern: {type: string, minLength: 1}
       analysis_set: {type: string, minLength: 1}
+  archiveInputs:
+    type: object
+    additionalProperties: false
+    required: [kind, archive, samples, gtf]
+    properties:
+      kind: {const: archive}
+      archive: {type: string, minLength: 1}
+      member_root: {type: string}
+      samples: {type: string, minLength: 1}
+      gtf: {type: string, minLength: 1}
+      analysis_set: {type: string, minLength: 1}
   counting:
     type: object
     additionalProperties: false
@@ -160,7 +295,4 @@ $defs:
         minItems: 1
         uniqueItems: true
         items: {type: integer, minimum: 0, maximum: 2}
-      strand_min_dominance:
-        type: number
-        minimum: 0.5
-        maximum: 1
+      strand_min_dominance: {type: number, minimum: 0.5, maximum: 1}
