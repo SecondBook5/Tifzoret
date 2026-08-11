@@ -18,5 +18,17 @@ jobs:
           tags: bulk-rna-frame:test
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      - run: docker run --rm bulk-rna-frame:test --help
-
+      - name: Run container acceptance workflow
+        run: |
+          docker run --rm \
+            --entrypoint /usr/local/bin/_entrypoint.sh \
+            bulk-rna-frame:test \
+            bash -lc '
+              set -euo pipefail
+              study_dir="$(mktemp -d)"
+              bulk-rna init "$study_dir" --input counts
+              bulk-rna run "$study_dir/project.yaml" --cores 2 --no-conda
+              test -s "$study_dir/results/synthetic_demo/all/REPORT.html"
+              test -s "$study_dir/results/synthetic_demo/all/manifest.json"
+              test -s "$study_dir/results/synthetic_demo/all/figures/index.json"
+            '

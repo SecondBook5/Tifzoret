@@ -27,3 +27,24 @@ jobs:
           for script in src/bulk_rna_frame/workflow/scripts/*.R; do
             Rscript -e "parse(file='$script')"
           done
+
+  synthetic-conda:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          activate-environment: bulk-rna-frame
+          environment-file: environment.yaml
+          miniforge-version: latest
+          use-mamba: true
+      - name: Run fresh-project acceptance workflow
+        shell: bash -el {0}
+        run: |
+          study_dir="$(mktemp -d)"
+          bulk-rna init "$study_dir" --input counts
+          bulk-rna validate "$study_dir/project.yaml"
+          bulk-rna run "$study_dir/project.yaml" --cores 2 --no-conda
+          test -s "$study_dir/results/synthetic_demo/all/REPORT.html"
+          test -s "$study_dir/results/synthetic_demo/all/manifest.json"
+          test -s "$study_dir/results/synthetic_demo/all/figures/index.json"
