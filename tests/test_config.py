@@ -206,16 +206,19 @@ def test_publication_profile_validates_cross_file_contracts(tmp_path):
     assert project.config["analysis"]["profile"] == "publication"
     assert {"composition", "regulators", "networks", "hypotheses", "publication"}.issubset(project.modules)
     assert project.recipe_config["figure_sets"]["primary"]["panels"][0]["id"] == "A"
-    subprocess.run(
+    publication_dry_run = subprocess.run(
         [
             "snakemake", "--snakefile", str(ROOT / "src" / "bulk_rna_frame" / "workflow" / "Snakefile"),
             "--configfile", str(config), "--cores", "1", "--dry-run",
+            str(project.result_root / "manifest.json"),
         ],
         cwd=config.parent,
         check=True,
         capture_output=True,
         text=True,
     )
+    assert "contrast_publication" in publication_dry_run.stdout
+    assert "assemble_figure" in publication_dry_run.stdout
     data["analysis"]["profile"] = "full"
     data["analysis"]["settings"].update({
         "sva": {"minimum_recommended_samples": 10},
@@ -234,16 +237,19 @@ def test_publication_profile_validates_cross_file_contracts(tmp_path):
     config.write_text(yaml.safe_dump(data, sort_keys=False))
     full = load_project(config)
     assert {"sva", "wgcna", "mediation", "multilayer"}.issubset(full.modules)
-    subprocess.run(
+    full_dry_run = subprocess.run(
         [
             "snakemake", "--snakefile", str(ROOT / "src" / "bulk_rna_frame" / "workflow" / "Snakefile"),
             "--configfile", str(config), "--cores", "1", "--dry-run",
+            str(full.result_root / "manifest.json"),
         ],
         cwd=config.parent,
         check=True,
         capture_output=True,
         text=True,
     )
+    for rule in ("contrast_sva", "contrast_wgcna", "contrast_mediation", "contrast_multilayer"):
+        assert rule in full_dry_run.stdout
 
 
 def test_human_provider_contract_uses_same_module_interfaces(tmp_path):

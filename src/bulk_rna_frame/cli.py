@@ -59,6 +59,8 @@ def _snakemake(
     args: argparse.Namespace, dry_run: bool, targets: tuple[str, ...] = ()
 ) -> int:
     project = load_project(args.project)
+    if not targets:
+        targets = (str(project.result_root / "manifest.json"),)
     snakefile = resources.files("bulk_rna_frame").joinpath("workflow/Snakefile")
     command = [
         args.snakemake,

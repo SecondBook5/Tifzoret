@@ -50,6 +50,20 @@ def test_prepare_targets_only_the_canonical_input_manifest(tmp_path, monkeypatch
     assert "--dry-run" not in observed["command"]
 
 
+def test_run_explicitly_targets_the_release_manifest(tmp_path, monkeypatch):
+    destination = tmp_path / "project"
+    assert main(["init", str(destination)]) == 0
+    observed = {}
+
+    def fake_run(command, **kwargs):
+        observed["command"] = command
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr("bulk_rna_frame.cli.subprocess.run", fake_run)
+    assert main(["run", str(destination / "project.yaml"), "--no-conda"]) == 0
+    assert observed["command"][-1].endswith("results/synthetic_demo/all/manifest.json")
+
+
 def test_migrate_config_writes_valid_v2(tmp_path):
     destination = tmp_path / "project"
     assert main(["init", str(destination)]) == 0
