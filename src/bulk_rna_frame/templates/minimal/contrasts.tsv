@@ -1,0 +1,4 @@
+contrast_id	factor	numerator	denominator
+treatment_a_vs_control	condition	treatment_a	control
+treatment_b_vs_control	condition	treatment_b	control
+

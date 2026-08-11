@@ -1,0 +1,7 @@
+sample_id	bam	condition
+control_1	control_1.sorted.bam	control
+control_2	control_2.sorted.bam	control
+control_3	control_3.sorted.bam	control
+treated_1	treated_1.sorted.bam	treated
+treated_2	treated_2.sorted.bam	treated
+treated_3	treated_3.sorted.bam	treated

@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bulk-rna-frame"
+version = "0.1.0.dev0"
+description = "Configuration-driven bulk RNA-seq analysis and publication figure workflow"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {file = "LICENSE"}
+dependencies = [
+  "PyYAML>=6.0",
+  "jsonschema>=4.20",
+]
+
+[project.optional-dependencies]
+workflow = ["snakemake>=8,<10"]
+test = ["pytest>=8"]
+
+[project.scripts]
+bulk-rna = "bulk_rna_frame.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+bulk_rna_frame = [
+  "schemas/*.yaml",
+  "templates/*/*",
+  "workflow/Snakefile",
+  "workflow/envs/*.yaml",
+  "workflow/scripts/*.R",
+  "workflow/scripts/*.py",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

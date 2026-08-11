@@ -1,0 +1,52 @@
+version: 1
+project:
+  id: nfcore_project
+  title: Bulk RNA-seq project downstream of nf-core/rnaseq
+inputs:
+  kind: nfcore_rnaseq
+  root: "${NFCORE_RNASEQ_ROOT}"
+  samples: samples.tsv
+  gtf: "${BULK_RNA_GTF}"
+  bam_pattern: "{sample_id}.markdup.sorted.bam"
+counting:
+  threads: 8
+  feature_type: exon
+  attribute: gene_id
+  paired_end: true
+  count_read_pairs: true
+  require_both_ends_aligned: true
+  exclude_chimeric_fragments: true
+  strandedness: infer
+  strand_test_modes: [1, 2]
+  strand_min_dominance: 0.80
+design:
+  formula: "~ condition"
+contrasts: contrasts.tsv
+gene_sets:
+  gmt: gene_sets.gmt
+  min_size: 2
+  max_size: 500
+modules:
+  qc: true
+  de: true
+  pathways: true
+figures:
+  group: condition
+  palette:
+    control: "#A6CEE3"
+    treated: "#F4A6A6"
+  pca:
+    ellipse_level: 0.80
+  de:
+    fdr: 0.05
+    abs_log2fc: 1.0
+    top_labels: 12
+    top_heatmap_genes: 40
+    z_limit: 1.5
+  pathways:
+    top_ora_terms: 8
+    top_gsva_terms: 12
+    gsea_curves_per_direction: 2
+    seed: 1
+output:
+  root: results

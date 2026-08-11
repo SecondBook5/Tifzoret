@@ -1,0 +1,166 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+type: object
+additionalProperties: false
+required: [version, project, inputs, design, contrasts, gene_sets, modules, figures, output]
+properties:
+  version:
+    const: 1
+  project:
+    type: object
+    additionalProperties: false
+    required: [id, title]
+    properties:
+      id: {type: string, pattern: "^[a-z0-9][a-z0-9_-]*$"}
+      title: {type: string, minLength: 1}
+  inputs:
+    oneOf:
+      - $ref: "#/$defs/countInputs"
+      - $ref: "#/$defs/bamInputs"
+      - $ref: "#/$defs/nfcoreInputs"
+  counting:
+    $ref: "#/$defs/counting"
+  design:
+    type: object
+    additionalProperties: false
+    required: [formula]
+    properties:
+      formula: {type: string, pattern: "^~"}
+  contrasts:
+    type: string
+    minLength: 1
+  gene_sets:
+    type: object
+    additionalProperties: false
+    required: [gmt, min_size, max_size]
+    properties:
+      gmt: {type: string, minLength: 1}
+      min_size: {type: integer, minimum: 2}
+      max_size: {type: integer, minimum: 2}
+  modules:
+    type: object
+    additionalProperties: false
+    required: [qc, de, pathways]
+    properties:
+      qc: {type: boolean}
+      de: {type: boolean}
+      pathways: {type: boolean}
+  figures:
+    type: object
+    additionalProperties: false
+    required: [group, palette, pca, de, pathways]
+    properties:
+      group: {type: string, minLength: 1}
+      palette:
+        type: object
+        minProperties: 2
+        additionalProperties:
+          type: string
+          pattern: "^#[0-9A-Fa-f]{6}$"
+      pca:
+        type: object
+        additionalProperties: false
+        required: [ellipse_level]
+        properties:
+          ellipse_level: {type: number, exclusiveMinimum: 0, exclusiveMaximum: 1}
+      de:
+        type: object
+        additionalProperties: false
+        required: [fdr, abs_log2fc, top_labels, top_heatmap_genes, z_limit]
+        properties:
+          fdr: {type: number, exclusiveMinimum: 0, exclusiveMaximum: 1}
+          abs_log2fc: {type: number, minimum: 0}
+          top_labels: {type: integer, minimum: 0}
+          top_heatmap_genes: {type: integer, minimum: 2}
+          z_limit: {type: number, exclusiveMinimum: 0}
+      pathways:
+        type: object
+        additionalProperties: false
+        required: [top_ora_terms, top_gsva_terms, gsea_curves_per_direction, seed]
+        properties:
+          top_ora_terms: {type: integer, minimum: 1}
+          top_gsva_terms: {type: integer, minimum: 2}
+          gsea_curves_per_direction: {type: integer, minimum: 1}
+          seed: {type: integer, minimum: 0}
+  output:
+    type: object
+    additionalProperties: false
+    required: [root]
+    properties:
+      root: {type: string, minLength: 1}
+allOf:
+  - if:
+      properties:
+        inputs:
+          properties:
+            kind: {enum: [bam, nfcore_rnaseq]}
+    then:
+      required: [counting]
+$defs:
+  sharedInputs:
+    type: object
+    properties:
+      samples: {type: string, minLength: 1}
+      analysis_set: {type: string, minLength: 1}
+  countInputs:
+    type: object
+    additionalProperties: false
+    required: [kind, counts, samples, annotation]
+    properties:
+      kind: {const: counts}
+      counts: {type: string, minLength: 1}
+      samples: {type: string, minLength: 1}
+      annotation: {type: string, minLength: 1}
+      analysis_set: {type: string, minLength: 1}
+  bamInputs:
+    type: object
+    additionalProperties: false
+    required: [kind, bam_root, samples, gtf]
+    properties:
+      kind: {const: bam}
+      bam_root: {type: string, minLength: 1}
+      samples: {type: string, minLength: 1}
+      gtf: {type: string, minLength: 1}
+      analysis_set: {type: string, minLength: 1}
+  nfcoreInputs:
+    type: object
+    additionalProperties: false
+    required: [kind, root, samples, gtf, bam_pattern]
+    properties:
+      kind: {const: nfcore_rnaseq}
+      root: {type: string, minLength: 1}
+      samples: {type: string, minLength: 1}
+      gtf: {type: string, minLength: 1}
+      bam_pattern: {type: string, minLength: 1}
+      analysis_set: {type: string, minLength: 1}
+  counting:
+    type: object
+    additionalProperties: false
+    required:
+      - threads
+      - feature_type
+      - attribute
+      - paired_end
+      - count_read_pairs
+      - require_both_ends_aligned
+      - exclude_chimeric_fragments
+      - strandedness
+      - strand_test_modes
+      - strand_min_dominance
+    properties:
+      threads: {type: integer, minimum: 1}
+      feature_type: {type: string, minLength: 1}
+      attribute: {type: string, minLength: 1}
+      paired_end: {type: boolean}
+      count_read_pairs: {type: boolean}
+      require_both_ends_aligned: {type: boolean}
+      exclude_chimeric_fragments: {type: boolean}
+      strandedness: {enum: [infer, unstranded, forward, reverse]}
+      strand_test_modes:
+        type: array
+        minItems: 1
+        uniqueItems: true
+        items: {type: integer, minimum: 0, maximum: 2}
+      strand_min_dominance:
+        type: number
+        minimum: 0.5
+        maximum: 1

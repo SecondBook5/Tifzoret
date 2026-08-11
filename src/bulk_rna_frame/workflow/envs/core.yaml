@@ -1,0 +1,8 @@
+name: bulk-rna-frame-core
+channels: [conda-forge, bioconda]
+dependencies:
+  - python=3.12
+  - pyyaml=6.0
+  - jsonschema=4.23
+  - samtools=1.22.1
+  - subread=2.0.8

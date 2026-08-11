@@ -1,0 +1,11 @@
+sample_id	condition	batch
+control_1	control	batch_1
+control_2	control	batch_2
+control_3	control	batch_3
+treatment_a_1	treatment_a	batch_1
+treatment_a_2	treatment_a	batch_2
+treatment_a_3	treatment_a	batch_3
+treatment_b_1	treatment_b	batch_1
+treatment_b_2	treatment_b	batch_2
+treatment_b_3	treatment_b	batch_3
+
