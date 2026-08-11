@@ -22,7 +22,9 @@ display_samples <- metadata[[factor_name]] %in% c(denominator, numerator)
 expression <- expression[, display_samples, drop = FALSE]
 symbol_lookup <- setNames(rownames(expression), toupper(rownames(expression)))
 
-panel_rows <- list(); panel_colors <- c()
+OTHER_PROGRAM <- "Other / poorly characterized"
+OTHER_PROGRAM_COLOR <- "#969696"
+panel_rows <- list(); panel_colors <- c(`Other / poorly characterized` = OTHER_PROGRAM_COLOR)
 default_colors <- c("#D97706", "#E9A300", "#0F9D78", "#C76C9E", "#167BB5", "#53A7D8", "#7A5195", "#8C8C8C")
 panel_index <- 0L
 for (panel_id in names(panel_cfg$gene_panels)) {
@@ -57,14 +59,13 @@ heatmap_definitions <- heatmap_definitions %>%
 panel_definitions <- panel_definitions %>%
   mutate(configured_gene_symbol = gene_symbol, gene_symbol = unname(symbol_lookup[toupper(gene_symbol)])) %>%
   filter(!is.na(gene_symbol)) %>% distinct(gene_symbol, .keep_all = TRUE)
-if (is.null(panel_colors[["Other / poorly characterized"]])) {
-  panel_colors[["Other / poorly characterized"]] <- "#969696"
-}
-
 top <- de %>% filter(!is.na(adjusted_p_value), gene_symbol %in% rownames(expression)) %>% arrange(adjusted_p_value, desc(abs(log2_fold_change))) %>% distinct(gene_symbol, .keep_all = TRUE) %>% slice_head(n = cfg$figures$de$top_heatmap_genes)
 assignments <- top %>% select(gene_symbol, gene_id, log2_fold_change, adjusted_p_value) %>%
   left_join(heatmap_definitions, by = "gene_symbol") %>%
-  mutate(program = ifelse(is.na(program), "Other / poorly characterized", program), program_color = ifelse(is.na(program_color), panel_colors[["Other / poorly characterized"]], program_color))
+  mutate(
+    program = ifelse(is.na(program), OTHER_PROGRAM, program),
+    program_color = dplyr::coalesce(as.character(program_color), OTHER_PROGRAM_COLOR)
+  )
 readr::write_tsv(assignments, file.path(dirs$tables, "de_gene_program_assignments.tsv"), na = "NA")
 z <- row_zscore(expression[assignments$gene_symbol, , drop = FALSE], cfg$figures$de$z_limit)
 column_order <- colnames(z)[stats::hclust(stats::as.dist(1 - stats::cor(z)), method = "average")$order]
@@ -98,7 +99,10 @@ heatmap_variant <- function(row_order, stem, title, direct_labels = FALSE) {
     theme(panel.grid = element_blank(), axis.text.x = element_blank(), axis.ticks = element_blank(), legend.position = "right")
   strip_data <- assignments %>% filter(gene_symbol %in% row_order) %>% mutate(gene_symbol = factor(gene_symbol, levels = rev(row_order)))
   if (direct_labels) {
-    label_data <- strip_data %>% mutate(row_number = match(as.character(gene_symbol), levels(gene_symbol))) %>% group_by(program) %>% summarize(mid = mean(row_number), color = first(program_color), .groups = "drop")
+    label_data <- strip_data %>%
+      mutate(row_number = match(as.character(gene_symbol), levels(gene_symbol))) %>%
+      group_by(program) %>%
+      summarize(mid = mean(row_number), color = as.character(program_color[[1]]), .groups = "drop")
     left <- ggplot(label_data, aes(1, mid, label = stringr::str_replace_all(program, "_", " "), colour = program)) + geom_text(hjust = 1, fontface = "bold", size = 3) +
       scale_colour_manual(values = setNames(label_data$color, label_data$program), guide = "none") + scale_y_continuous(limits = c(0.5, length(row_order) + 0.5)) + coord_cartesian(clip = "off") + theme_void() + theme(plot.margin = margin(0, 8, 0, 0))
   } else {
