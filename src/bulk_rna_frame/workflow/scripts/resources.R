@@ -26,6 +26,7 @@ if (enabled("gtrd")) {
 
 cache_root <- path.expand(if (is.null(cfg$resources$cache)) "~/.cache/bulk-rna-frame/resources" else cfg$resources$cache)
 cache_key <- digest::digest(list(
+  cache_schema_version = 2L,
   species = cfg$species,
   reference = cfg$reference,
   providers = providers,
@@ -67,9 +68,14 @@ provider_versions <- list(custom = list(source = normalizePath(args[["custom-gmt
 
 if (enabled("msigdb")) {
   if (!requireNamespace("msigdbr", quietly = TRUE)) stop("MSigDB provider requires the msigdbr package", call. = FALSE)
-  msig <- msigdbr::msigdbr(species = cfg$species$scientific_name)
+  database_species <- if (cfg$species$provider == "mouse") "MM" else "HS"
+  msig <- msigdbr::msigdbr(db_species = database_species, species = cfg$species$scientific_name)
   collection_key <- ifelse(is.na(msig$gs_subcollection) | msig$gs_subcollection == "", msig$gs_collection, paste(msig$gs_collection, msig$gs_subcollection, sep = ":"))
   requested <- unlist(cfg$resources$gene_sets$collections)
+  if (cfg$species$provider == "mouse") {
+    requested <- sub("^H$", "MH", requested)
+    requested <- sub("^C([0-9])", "M\\1", requested)
+  }
   if (length(requested)) msig <- msig[collection_key %in% requested, , drop = FALSE]
   sets <- bind_rows(sets, data.frame(term = msig$gs_name, description = msig$gs_description, gene_symbol = msig$gene_symbol, provider = "msigdb"))
   provider_versions$msigdb <- list(package = as.character(utils::packageVersion("msigdbr")), database_release = unique(msig$db_version))
@@ -100,8 +106,9 @@ if (enabled("kegg")) {
   link_table <- data.frame(entrez = sub(paste0("^", organism, ":"), "", names(links)), pathway = sub("^path:", "", unname(links)))
   symbols <- AnnotationDbi::mapIds(orgdb, keys = unique(link_table$entrez), column = "SYMBOL", keytype = "ENTREZID", multiVals = "first")
   names_table <- KEGGREST::keggList("pathway", organism)
+  names(names_table) <- sub("^path:", "", names(names_table))
   link_table$gene_symbol <- unname(symbols[link_table$entrez])
-  link_table$description <- unname(names_table[paste0("path:", link_table$pathway)])
+  link_table$description <- unname(names_table[link_table$pathway])
   link_table <- link_table[!is.na(link_table$gene_symbol), , drop = FALSE]
   sets <- bind_rows(sets, data.frame(term = paste0("KEGG_", link_table$pathway), description = link_table$description, gene_symbol = link_table$gene_symbol, provider = "kegg"))
   provider_versions$kegg <- list(package = as.character(utils::packageVersion("KEGGREST")), organism = organism, retrieval = "live KEGG REST")

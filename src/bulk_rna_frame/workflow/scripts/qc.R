@@ -21,6 +21,10 @@ metadata <- readr::read_tsv(cfg$.samples, show_col_types = FALSE, progress = FAL
 annotation <- read_annotation_contract(cfg$.annotation)
 metadata <- metadata[match(colnames(counts), metadata$sample_id), , drop = FALSE]
 rownames(metadata) <- metadata$sample_id
+display_group <- cfg$figures$group
+configured_group_order <- names(unlist(cfg$figures$palette, use.names = TRUE))
+observed_group_order <- configured_group_order[configured_group_order %in% as.character(metadata[[display_group]])]
+metadata[[display_group]] <- factor(metadata[[display_group]], levels = observed_group_order)
 
 design_formula <- stats::as.formula(cfg$design$formula)
 for (field in all.vars(design_formula)) metadata[[field]] <- factor(metadata[[field]])
@@ -73,7 +77,7 @@ readr::write_tsv(pca_table, file.path(dirs$tables, "pca_coordinates.tsv"))
 readr::write_tsv(variance_table, file.path(dirs$tables, "pca_variance.tsv"))
 
 group_col <- cfg$figures$group
-groups <- unique(as.character(pca_table[[group_col]]))
+groups <- levels(droplevels(pca_table[[group_col]]))
 palette <- condition_palette(cfg, groups)
 ellipse_table <- ellipse_coordinates(pca_table, group_col, cfg$figures$pca$ellipse_level)
 
@@ -131,14 +135,20 @@ correlation_plot <- ggplot(correlation_long, aes(sample_id, sample_id_y, fill = 
   theme(panel.grid = element_blank(), axis.text.x = element_text(angle = 45, hjust = 1), axis.ticks = element_blank())
 combined_correlation <- annotation_plot / correlation_plot + patchwork::plot_layout(heights = c(0.055, 1))
 save_plot_pair(combined_correlation, file.path(dirs$figures, "sample_correlation"), 6.2, 5.7)
-combined_pca_correlation <- (pca_plot | combined_correlation) + patchwork::plot_layout(guides = "collect") & theme(legend.position = "top")
+combined_pca_correlation <- pca_plot | combined_correlation
 save_plot_pair(combined_pca_correlation, file.path(dirs$figures, "pca_correlation"), 12.4, 5.8)
 write_json_file(list(
   panels = list(
-    list(id = "PCA", displayed_data = "tables/pca_coordinates.tsv", ellipses = unique(ellipse_table$ellipse_group)),
+    list(
+      id = "PCA",
+      displayed_data = "tables/pca_coordinates.tsv",
+      ellipses = unique(ellipse_table$ellipse_group),
+      ellipse_method = "covariance ellipse with a 0.20 minimum minor-to-major axis ratio"
+    ),
     list(id = "correlation", displayed_data = "tables/sample_correlation.tsv", clustering = "average linkage on 1 - Pearson correlation")
   ),
-  shared_group_legend = TRUE
+  shared_group_legend = TRUE,
+  correlation_condition_legend = FALSE
 ), file.path(dirs$tables, "pca_correlation_layout.json"))
 
 metrics_long <- library_metrics %>%
@@ -202,7 +212,8 @@ write_json_file(
     median_detected_genes = stats::median(library_metrics$detected_genes),
     pca_variance_pc1 = variance[[1]],
     pca_variance_pc2 = variance[[2]],
-    ellipse_groups_drawn = unique(ellipse_table$ellipse_group)
+    ellipse_groups_drawn = unique(ellipse_table$ellipse_group),
+    ellipse_minimum_minor_major_ratio = 0.20
   ),
   file.path(args$outdir, "qc_summary.json")
 )

@@ -38,6 +38,13 @@ if (!is.null(cfg$resources$regulon_edges)) {
   regulon <- get(object_name, envir = environment()) %>% as.data.frame()
   regulon$provider <- "dorothea"
 }
+if (!"source" %in% names(regulon) && "tf" %in% names(regulon)) regulon$source <- regulon$tf
+if (!all(c("source", "target") %in% names(regulon))) {
+  stop("Regulon edges require source (or tf) and target columns", call. = FALSE)
+}
+if (!"mor" %in% names(regulon)) regulon$mor <- 1
+if (!"confidence" %in% names(regulon)) regulon$confidence <- "custom"
+if (!"likelihood" %in% names(regulon)) regulon$likelihood <- 1
 regulon$configured_target <- regulon$target
 regulon$target <- unname(symbol_lookup[toupper(regulon$target)])
 confidence <- cfg$analysis$settings$regulators$confidence

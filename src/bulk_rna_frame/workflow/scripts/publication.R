@@ -34,39 +34,56 @@ for (panel_id in names(panel_cfg$gene_panels)) {
     panel_rows[[length(panel_rows) + 1L]] <- data.frame(panel = panel_id, program = group, gene_symbol = unlist(panel$groups[[group]]), program_color = color)
   }
 }
-program_definitions <- bind_rows(panel_rows) %>% distinct(gene_symbol, .keep_all = TRUE)
+panel_definitions <- bind_rows(panel_rows) %>% distinct(gene_symbol, .keep_all = TRUE)
+if (!is.null(panel_cfg$program_colors)) {
+  configured_program_colors <- unlist(panel_cfg$program_colors, use.names = TRUE)
+  panel_colors[names(configured_program_colors)] <- configured_program_colors
+}
+panel_definitions <- panel_definitions %>%
+  mutate(program_color = ifelse(program %in% names(panel_colors), unname(panel_colors[program]), program_color))
+heatmap_definitions <- panel_definitions
 if (!is.null(panel_cfg$program_annotations)) {
   annotations <- data.frame(gene_symbol = names(panel_cfg$program_annotations), program = unlist(panel_cfg$program_annotations), stringsAsFactors = FALSE)
   missing_colors <- setdiff(unique(annotations$program), names(panel_colors))
   if (length(missing_colors)) panel_colors[missing_colors] <- scales::hue_pal()(length(missing_colors))
-  program_definitions <- bind_rows(
+  heatmap_definitions <- bind_rows(
     annotations %>% mutate(panel = "program_annotations", program_color = unname(panel_colors[program])),
-    program_definitions %>% filter(!gene_symbol %in% annotations$gene_symbol)
+    panel_definitions %>% filter(!gene_symbol %in% annotations$gene_symbol)
   )
 }
-program_definitions <- program_definitions %>%
+heatmap_definitions <- heatmap_definitions %>%
   mutate(configured_gene_symbol = gene_symbol, gene_symbol = unname(symbol_lookup[toupper(gene_symbol)])) %>%
   filter(!is.na(gene_symbol)) %>% distinct(gene_symbol, .keep_all = TRUE)
-panel_colors[["Other / poorly characterized"]] <- "#969696"
+panel_definitions <- panel_definitions %>%
+  mutate(configured_gene_symbol = gene_symbol, gene_symbol = unname(symbol_lookup[toupper(gene_symbol)])) %>%
+  filter(!is.na(gene_symbol)) %>% distinct(gene_symbol, .keep_all = TRUE)
+if (is.null(panel_colors[["Other / poorly characterized"]])) {
+  panel_colors[["Other / poorly characterized"]] <- "#969696"
+}
 
 top <- de %>% filter(!is.na(adjusted_p_value), gene_symbol %in% rownames(expression)) %>% arrange(adjusted_p_value, desc(abs(log2_fold_change))) %>% distinct(gene_symbol, .keep_all = TRUE) %>% slice_head(n = cfg$figures$de$top_heatmap_genes)
 assignments <- top %>% select(gene_symbol, gene_id, log2_fold_change, adjusted_p_value) %>%
-  left_join(program_definitions, by = "gene_symbol") %>%
+  left_join(heatmap_definitions, by = "gene_symbol") %>%
   mutate(program = ifelse(is.na(program), "Other / poorly characterized", program), program_color = ifelse(is.na(program_color), panel_colors[["Other / poorly characterized"]], program_color))
 readr::write_tsv(assignments, file.path(dirs$tables, "de_gene_program_assignments.tsv"), na = "NA")
 z <- row_zscore(expression[assignments$gene_symbol, , drop = FALSE], cfg$figures$de$z_limit)
 column_order <- colnames(z)[stats::hclust(stats::as.dist(1 - stats::cor(z)), method = "average")$order]
 global_order <- rownames(z)[stats::hclust(stats::dist(z), method = "complete")$order]
-program_levels <- unique(assignments$program)
+program_levels <- if (is.null(panel_cfg$program_order)) unique(assignments$program) else {
+  c(intersect(panel_cfg$program_order, unique(assignments$program)), setdiff(unique(assignments$program), panel_cfg$program_order))
+}
 program_order <- unlist(lapply(program_levels, function(program) {
   genes <- assignments$gene_symbol[assignments$program == program]
   if (length(genes) < 2L) genes else genes[stats::hclust(stats::dist(z[genes, , drop = FALSE]), method = "complete")$order]
 }))
 
-condition_plot <- data.frame(sample_id = factor(column_order, levels = column_order), condition = metadata[column_order, factor_name]) %>%
+condition_plot <- data.frame(
+  sample_id = factor(column_order, levels = column_order),
+  condition = factor(metadata[column_order, factor_name], levels = c(denominator, numerator))
+) %>%
   ggplot(aes(sample_id, 1, fill = condition)) + geom_tile() +
   geom_text(aes(label = sample_id), angle = 45, hjust = 0, nudge_y = -0.06, size = 2.5, colour = NAVY) +
-  scale_fill_manual(values = condition_palette(cfg, c(denominator, numerator)), drop = FALSE) +
+  scale_fill_manual(values = condition_palette(cfg, c(denominator, numerator)), breaks = c(denominator, numerator), drop = FALSE) +
   coord_cartesian(clip = "off") + theme_void() + theme(legend.position = "top", plot.margin = margin(2, 25, 25, 0))
 
 heatmap_variant <- function(row_order, stem, title, direct_labels = FALSE) {
@@ -101,9 +118,9 @@ heatmap_variant(global_order, "de_heatmap_global", "Top DE genes with global hie
 heatmap_variant(program_order, "de_heatmap_program_grouped", "Top DE genes grouped by biological program")
 heatmap_variant(program_order, "de_heatmap_compact", "Top DE genes grouped by biological program", TRUE)
 
-configured_genes <- unique(program_definitions$gene_symbol)
+configured_genes <- unique(panel_definitions$gene_symbol)
 configured_genes <- configured_genes[configured_genes %in% rownames(expression)]
-program_data <- program_definitions %>% filter(gene_symbol %in% configured_genes) %>% distinct(gene_symbol, .keep_all = TRUE)
+program_data <- panel_definitions %>% filter(gene_symbol %in% configured_genes) %>% distinct(gene_symbol, .keep_all = TRUE)
 program_order_genes <- unlist(lapply(unique(program_data$program), function(program) program_data$gene_symbol[program_data$program == program]))
 program_z <- row_zscore(expression[program_order_genes, column_order, drop = FALSE], cfg$figures$de$z_limit)
 program_long <- as.data.frame(program_z, check.names = FALSE) %>% tibble::rownames_to_column("gene_symbol") %>% pivot_longer(-gene_symbol, names_to = "sample_id", values_to = "row_z_score") %>%
@@ -138,7 +155,7 @@ violin_plot <- ggplot(violin, aes(condition, expression, fill = condition)) +
   geom_segment(data = tests, aes(x = x1, xend = x1, y = y, yend = y - 0.03), inherit.aes = FALSE, colour = NAVY, linewidth = 0.35) +
   geom_segment(data = tests, aes(x = x2, xend = x2, y = y, yend = y - 0.03), inherit.aes = FALSE, colour = NAVY, linewidth = 0.35) +
   geom_text(data = tests, aes(x = 1.5, y = y, label = significance), inherit.aes = FALSE, vjust = -0.25, colour = NAVY, size = 2.8) +
-  facet_wrap(~ gene_symbol, scales = "free_y", ncol = 5) + scale_fill_manual(values = condition_palette(cfg, c(denominator, numerator)), drop = FALSE) +
+  facet_wrap(~ gene_symbol, scales = "free_y", ncol = 5) + scale_fill_manual(values = condition_palette(cfg, c(denominator, numerator)), breaks = c(denominator, numerator), drop = FALSE) +
   labs(title = "Configured program genes", subtitle = "Wilcoxon tests with BH correction; program colors are shown as light facet shading", x = NULL, y = "Variance-stabilized expression", fill = NULL) +
   theme_publication(7.4) + theme(legend.position = "top", strip.background = element_rect(fill = "#F3F6F8", colour = NA), axis.text.x = element_text(angle = 35, hjust = 1))
 save_plot_pair(violin_plot, file.path(dirs$figures, "program_violins"), 13.0, max(7.2, 2.25 * ceiling(length(program_order_genes) / 5)))

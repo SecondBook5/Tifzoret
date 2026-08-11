@@ -9,6 +9,7 @@ import hashlib
 import io
 import json
 import math
+import re
 import sys
 import urllib.parse
 import urllib.request
@@ -98,6 +99,42 @@ def empty_plot(path: Path, title: str, message: str) -> None:
     figure.savefig(path.with_suffix(".pdf"), bbox_inches="tight")
     figure.savefig(path.with_suffix(".png"), dpi=300, bbox_inches="tight")
     plt.close(figure)
+
+
+def repelled_label_positions(
+    positions: dict[str, tuple[float, float]], labels: list[str], iterations: int = 240
+) -> dict[str, tuple[float, float]]:
+    """Deterministically separate a small set of network labels in data space."""
+    result = {node: [float(positions[node][0]), float(positions[node][1])] for node in labels}
+    if len(result) < 2:
+        return {node: tuple(value) for node, value in result.items()}
+    xs = [float(value[0]) for value in positions.values()]
+    ys = [float(value[1]) for value in positions.values()]
+    minimum_x = max(max(xs) - min(xs), 1.0) * 0.075
+    minimum_y = max(max(ys) - min(ys), 1.0) * 0.050
+    for _ in range(iterations):
+        movement = {node: [0.0, 0.0] for node in labels}
+        for index, left in enumerate(labels):
+            for right in labels[index + 1 :]:
+                dx = result[left][0] - result[right][0]
+                dy = result[left][1] - result[right][1]
+                if abs(dx) >= minimum_x or abs(dy) >= minimum_y:
+                    continue
+                if abs(dx) < 1e-9 and abs(dy) < 1e-9:
+                    dx = 1.0 if left < right else -1.0
+                    dy = 0.5
+                push_x = 0.08 * (minimum_x - abs(dx)) * (1 if dx >= 0 else -1)
+                push_y = 0.08 * (minimum_y - abs(dy)) * (1 if dy >= 0 else -1)
+                movement[left][0] += push_x
+                movement[left][1] += push_y
+                movement[right][0] -= push_x
+                movement[right][1] -= push_y
+        for node in labels:
+            movement[node][0] += 0.008 * (float(positions[node][0]) - result[node][0])
+            movement[node][1] += 0.008 * (float(positions[node][1]) - result[node][1])
+            result[node][0] += movement[node][0]
+            result[node][1] += movement[node][1]
+    return {node: tuple(value) for node, value in result.items()}
 
 
 def network_for_direction(
@@ -196,12 +233,29 @@ def network_for_direction(
         figure, axis = plt.subplots(figsize=(8.2, 7.0))
         nx.draw_networkx_edges(display_graph, positions, width=[0.4 + 2.6 * display_graph.edges[edge]["score"] for edge in display_graph.edges], alpha=0.32, edge_color="#6C92AE", ax=axis)
         nodes = nx.draw_networkx_nodes(display_graph, positions, node_color=values, cmap="coolwarm", vmin=-limit, vmax=limit, node_size=[80 + 24 * display_graph.degree(node) for node in display_graph], edgecolors="white", linewidths=0.6, ax=axis)
-        labels = sorted(display_graph, key=lambda node: (-display_graph.degree(node), node))[: min(30, len(display_graph))]
-        nx.draw_networkx_labels(display_graph, positions, labels={node: node for node in labels}, font_size=6.5, font_color="#183B56", ax=axis)
+        labels = sorted(display_graph, key=lambda node: (-display_graph.degree(node), node))[: min(15, len(display_graph))]
+        label_positions = repelled_label_positions(positions, labels)
+        for node in labels:
+            axis.annotate(
+                node, xy=positions[node], xytext=label_positions[node], fontsize=6.5,
+                color="#183B56", ha="center", va="center",
+                arrowprops={"arrowstyle": "-", "color": "#9FB4C3", "lw": 0.35, "alpha": 0.7},
+                zorder=5,
+            )
         figure.colorbar(nodes, ax=axis, shrink=0.55, label="log2 fold-change")
-        axis.set_title(f"STRING {prefix}regulated interaction network", loc="left", weight="bold", color="#183B56")
-        axis.text(0, 1.01, f"Full graph: {graph.number_of_nodes()} nodes, {graph.number_of_edges()} edges; display: {display_graph.number_of_nodes()} nodes", transform=axis.transAxes, color="#697783", fontsize=8)
+        figure.suptitle(
+            f"STRING {prefix}regulated interaction network", x=0.08, y=0.975,
+            ha="left", weight="bold", color="#183B56", fontsize=15,
+        )
+        figure.text(
+            0.08, 0.935,
+            f"Full graph: {graph.number_of_nodes()} nodes, {graph.number_of_edges()} edges; "
+            f"display: {display_graph.number_of_nodes()} nodes; 15 highest-degree labels",
+            ha="left", color="#697783", fontsize=8,
+        )
+        axis.margins(0.14)
         axis.axis("off")
+        figure.subplots_adjust(top=0.90)
         figure.savefig(stem.with_suffix(".pdf"), bbox_inches="tight")
         figure.savefig(stem.with_suffix(".png"), dpi=300, bbox_inches="tight")
         plt.close(figure)
@@ -234,8 +288,30 @@ def enrichment_panel(genes: list[str], taxonomy: int, cache_dir: Path, offline: 
     by_category: dict[str, list[dict[str, Any]]] = {}
     for row in normalized:
         by_category.setdefault(row["category"], []).append(row)
+    # Preserve every returned term in the audit table. The figure uses a
+    # deterministic, category-balanced, de-duplicated view so broad STRING
+    # ontologies cannot expand a panel into dozens of redundant labels.
+    seen_descriptions: set[str] = set()
+    category_candidates: dict[str, list[dict[str, Any]]] = {}
     for category, values in by_category.items():
-        displayed.extend(values[:6])
+        category_candidates[category] = []
+        for row in values:
+            description_key = re.sub(r"[^a-z0-9]+", " ", row["description"].strip().casefold()).strip()
+            if not description_key or description_key in seen_descriptions:
+                continue
+            seen_descriptions.add(description_key)
+            category_candidates[category].append(row)
+    categories = sorted(category_candidates)
+    for rank in range(3):
+        for category in categories:
+            values = category_candidates[category]
+            if rank < len(values):
+                displayed.append(values[rank])
+            if len(displayed) == 24:
+                break
+        if len(displayed) == 24:
+            break
+    displayed.sort(key=lambda row: (row["category"], row["fdr"]))
     fields = ["category", "term", "description", "gene_count", "background_count", "fdr", "negative_log10_fdr", "input_genes"]
     write_tsv(tables / "string_enrichment.tsv", normalized, fields)
     write_tsv(tables / "string_enrichment_displayed.tsv", displayed, fields)
@@ -243,10 +319,10 @@ def enrichment_panel(genes: list[str], taxonomy: int, cache_dir: Path, offline: 
     if not displayed:
         empty_plot(stem, "STRING enrichment", "No STRING enrichment terms returned")
     else:
-        labels = [row["description"][:62] for row in displayed]
+        labels = [f"[{row['category']}] {row['description'][:56]}" for row in displayed]
         values = [row["negative_log10_fdr"] for row in displayed]
         sizes = [20 + 12 * float(row["gene_count"] or 0) for row in displayed]
-        figure, axis = plt.subplots(figsize=(8.5, max(4.8, 0.32 * len(displayed) + 1.8)))
+        figure, axis = plt.subplots(figsize=(8.5, max(4.8, 0.34 * len(displayed) + 1.8)))
         y = list(range(len(displayed)))
         scatter = axis.scatter(values, y, s=sizes, c=values, cmap="magma", edgecolors="white", linewidths=0.5)
         axis.set_yticks(y, labels)
@@ -293,6 +369,7 @@ def main() -> None:
         "schema_version": 1, "contrast_id": args.contrast_id, "taxonomy_id": taxonomy,
         "required_score": required_score, "display_node_limit": max_nodes,
         "selection_policy": "all significant genes are submitted and retained in audit tables; max_nodes limits visualization only",
+        "enrichment_display_policy": "up to 24 unique descriptions, selected round-robin across STRING categories with at most three ranks per category; all terms remain in string_enrichment.tsv",
         "directions": summaries, "enrichment_terms": enrichment_terms,
         "random_seed": seed,
         "warnings": ["STRING edges represent functional/physical association evidence and are not regulatory or causal edges."],

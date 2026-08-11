@@ -69,7 +69,7 @@ running_enrichment <- function(ranks, genes) {
 
 build_curve <- function(curve_table, pathway_row) {
   colour <- if (pathway_row$NES[[1]] >= 0) "#B55252" else "#39799C"
-  title <- clean_term(pathway_row$pathway[[1]])
+  title <- stringr::str_wrap(pathway_row$pathway_label[[1]], width = 46)
   leading_count <- sum(curve_table$leading_edge)
   subtitle <- sprintf("NES %.2f   FDR %s   leading edge %d genes", pathway_row$NES[[1]], formatC(pathway_row$padj[[1]], format = "g", digits = 2), leading_count)
   peak_index <- if (pathway_row$NES[[1]] >= 0) which.max(curve_table$running_es) else which.min(curve_table$running_es)
@@ -108,7 +108,7 @@ build_curve <- function(curve_table, pathway_row) {
   es_plot / hits_plot / strip_plot / metric_plot + patchwork::plot_layout(heights = c(2.0, 0.35, 0.20, 1.0))
 }
 
-args <- parse_cli(c("project-config", "samples", "annotation", "contrasts", "gmt", "contrast-id", "vst", "de", "outdir"))
+args <- parse_cli(c("project-config", "samples", "annotation", "contrasts", "gmt", "resource-table", "contrast-id", "vst", "de", "outdir"))
 cfg <- read_project(args[["project-config"]])
 cfg$.samples <- normalizePath(args$samples, mustWork = TRUE)
 cfg$.annotation <- normalizePath(args$annotation, mustWork = TRUE)
@@ -133,10 +133,61 @@ expression <- matrix_to_symbols(expression, annotation)
 metadata <- metadata[match(colnames(expression), metadata$sample_id), , drop = FALSE]
 rownames(metadata) <- metadata$sample_id
 
+resource_catalog <- readr::read_tsv(args[["resource-table"]], show_col_types = FALSE, progress = FALSE) %>%
+  filter(!is.na(term), term != "") %>%
+  mutate(
+    description = ifelse(
+      is.na(description) | description == "" | grepl("^MSigDB mouse-native via msigdbr", description),
+      clean_term(term),
+      description
+    ),
+    .provider_priority = ifelse(provider == "custom", 2L, 1L)
+  ) %>%
+  arrange(term, .provider_priority) %>%
+  distinct(term, .keep_all = TRUE)
+gene_set_labels <- setNames(resource_catalog$description, resource_catalog$term)
+gene_set_sources <- setNames(resource_catalog$provider, resource_catalog$term)
+
 gene_sets <- read_gmt(cfg$.gmt)
 gene_sets <- lapply(gene_sets, intersect, y = rownames(expression))
 gene_sets <- gene_sets[lengths(gene_sets) >= cfg$gene_sets$min_size & lengths(gene_sets) <= cfg$gene_sets$max_size]
+
+configured_curve_ids <- character()
+if (!is.null(args$panels) && nzchar(args$panels)) {
+  panel_cfg <- yaml::read_yaml(args$panels)
+  requested_programs <- panel_cfg$gsea_programs
+  symbol_lookup <- setNames(rownames(expression), toupper(rownames(expression)))
+  if (length(requested_programs)) {
+    for (panel_id in requested_programs) {
+      panel <- panel_cfg$gene_panels[[panel_id]]
+      configured_id <- paste0("CONFIGURED_PROGRAM_", toupper(gsub("[^A-Za-z0-9]+", "_", panel_id)))
+      configured_genes <- unique(unname(symbol_lookup[toupper(unlist(panel$groups, use.names = FALSE))]))
+      configured_genes <- configured_genes[!is.na(configured_genes)]
+      if (length(configured_genes) < 3L) {
+        warning("Configured GSEA program '", panel_id, "' has fewer than three measured genes and will be omitted.")
+        next
+      }
+      gene_sets[[configured_id]] <- configured_genes
+      gene_set_labels[[configured_id]] <- clean_term(panel_id)
+      gene_set_sources[[configured_id]] <- "configured_gene_program"
+      configured_curve_ids <- c(configured_curve_ids, configured_id)
+    }
+  }
+}
 if (!length(gene_sets)) stop("No gene sets remain after measurement and size filtering.", call. = FALSE)
+
+label_gene_set <- function(ids) {
+  labels <- unname(gene_set_labels[ids])
+  missing <- is.na(labels) | labels == ""
+  labels[missing] <- clean_term(ids[missing])
+  labels
+}
+source_gene_set <- function(ids) {
+  sources <- unname(gene_set_sources[ids])
+  sources[is.na(sources) | sources == ""] <- "gmt"
+  sources
+}
+effective_min_size <- if (length(configured_curve_ids)) 3L else cfg$gene_sets$min_size
 
 rank_table <- de %>%
   filter(!is.na(statistic), is.finite(statistic), !is.na(gene_symbol), gene_symbol != "") %>%
@@ -149,7 +200,7 @@ ranks <- sort(ranks, decreasing = TRUE)
 fgsea_table <- suppressWarnings(fgsea::fgseaMultilevel(
   pathways = gene_sets,
   stats = ranks,
-  minSize = cfg$gene_sets$min_size,
+  minSize = effective_min_size,
   maxSize = cfg$gene_sets$max_size,
   eps = 0,
   BPPARAM = BiocParallel::SerialParam()
@@ -157,6 +208,8 @@ fgsea_table <- suppressWarnings(fgsea::fgseaMultilevel(
   as.data.frame() %>%
   mutate(
     leadingEdge = vapply(leadingEdge, paste, character(1), collapse = ";"),
+    pathway_label = label_gene_set(pathway),
+    gene_set_source = source_gene_set(pathway),
     direction = ifelse(NES >= 0, "up_in_numerator", "down_in_numerator"),
     contrast_id = args[["contrast-id"]]
   ) %>%
@@ -173,6 +226,8 @@ ora_table <- bind_rows(
   mutate(
     adjusted_p_value = p.adjust(p_value, method = "BH"),
     negative_log10_adjusted_p = -log10(pmax(adjusted_p_value, .Machine$double.xmin)),
+    pathway_label = label_gene_set(pathway),
+    gene_set_source = source_gene_set(pathway),
     contrast_id = args[["contrast-id"]]
   ) %>%
   arrange(direction, adjusted_p_value, desc(fold_enrichment))
@@ -188,7 +243,7 @@ ora_displayed <- ora_table %>%
       paste0("Up in ", numerator),
       paste0("Down in ", numerator)
     ),
-    pathway_label = clean_term(pathway)
+    pathway_label = stringr::str_wrap(pathway_label, width = 44)
   )
 readr::write_tsv(ora_displayed, file.path(dirs$tables, "ora_displayed.tsv"))
 
@@ -217,7 +272,7 @@ save_plot_pair(ora_plot, file.path(dirs$figures, "ora_bidirectional"), 8.1, max(
 ssgsea_parameter <- GSVA::ssgseaParam(
   exprData = expression,
   geneSets = gene_sets,
-  minSize = cfg$gene_sets$min_size,
+  minSize = effective_min_size,
   maxSize = cfg$gene_sets$max_size,
   normalize = TRUE
 )
@@ -237,6 +292,8 @@ gsva_fit <- limma::eBayes(limma::lmFit(gsva_matrix, gsva_design))
 gsva_diff <- limma::topTable(gsva_fit, coef = gsva_coefficient, number = Inf, sort.by = "P") %>%
   tibble::rownames_to_column("pathway") %>%
   mutate(
+    pathway_label = label_gene_set(pathway),
+    gene_set_source = source_gene_set(pathway),
     direction = ifelse(logFC >= 0, "up_in_numerator", "down_in_numerator"),
     contrast_id = args[["contrast-id"]],
     numerator = numerator,
@@ -253,11 +310,14 @@ gsva_display <- gsva_matrix[selected_pathways, display_samples, drop = FALSE]
 gsva_z <- row_zscore(gsva_display, 2)
 row_order <- rownames(gsva_z)[stats::hclust(stats::dist(gsva_z), method = "complete")$order]
 column_order <- colnames(gsva_z)[stats::hclust(stats::as.dist(1 - stats::cor(gsva_z)), method = "average")$order]
-rownames(gsva_z) <- clean_term(rownames(gsva_z))
-row_order_clean <- clean_term(row_order)
+display_labels <- setNames(make.unique(label_gene_set(rownames(gsva_z))), rownames(gsva_z))
+rownames(gsva_z) <- unname(display_labels[rownames(gsva_z)])
+row_order_clean <- unname(display_labels[row_order])
 gsva_heatmap <- tile_heatmap(gsva_z, row_order_clean, column_order, legend_title = "Row-scaled\nssGSEA score", base_size = 7.7)
+gsva_heatmap$plot <- gsva_heatmap$plot + scale_y_discrete(labels = function(value) stringr::str_wrap(value, width = 43))
 gsva_displayed <- gsva_heatmap$table %>%
   mutate(
+    pathway_id = names(display_labels)[match(as.character(feature), display_labels)],
     condition = metadata[as.character(sample_id), factor_name],
     contrast_id = args[["contrast-id"]]
   )
@@ -269,7 +329,7 @@ annotation_plot <- data.frame(
 ) %>%
   ggplot(aes(sample_id, 1, fill = condition)) +
   geom_tile() +
-  scale_fill_manual(values = palette, drop = FALSE) +
+  scale_fill_manual(values = palette, breaks = c(denominator, numerator), drop = FALSE) +
   theme_void() +
   theme(legend.position = "top", plot.margin = margin(0, 55, 0, 35))
 gsva_heatmap$plot <- gsva_heatmap$plot +
@@ -278,10 +338,18 @@ combined_gsva <- annotation_plot / gsva_heatmap$plot + patchwork::plot_layout(he
 save_plot_pair(combined_gsva, file.path(dirs$figures, "gsva_heatmap"), 7.7, max(5.2, 0.30 * nrow(gsva_z) + 2.2))
 
 curve_n <- cfg$figures$pathways$gsea_curves_per_direction
-selected_gsea <- bind_rows(
-  fgsea_table %>% filter(NES >= 0) %>% slice_head(n = curve_n),
-  fgsea_table %>% filter(NES < 0) %>% slice_head(n = curve_n)
-) %>% distinct(pathway, .keep_all = TRUE)
+if (length(configured_curve_ids)) {
+  selected_gsea <- fgsea_table %>%
+    filter(pathway %in% configured_curve_ids) %>%
+    mutate(.configured_order = match(pathway, configured_curve_ids)) %>%
+    arrange(.configured_order) %>%
+    select(-.configured_order)
+} else {
+  selected_gsea <- bind_rows(
+    fgsea_table %>% filter(NES >= 0) %>% slice_head(n = curve_n),
+    fgsea_table %>% filter(NES < 0) %>% slice_head(n = curve_n)
+  ) %>% distinct(pathway, .keep_all = TRUE)
+}
 curve_tables <- list()
 curve_plots <- list()
 for (index in seq_len(nrow(selected_gsea))) {
@@ -290,6 +358,8 @@ for (index in seq_len(nrow(selected_gsea))) {
     mutate(
       leading_edge = gene_symbol %in% strsplit(pathway_row$leadingEdge[[1]], ";", fixed = TRUE)[[1]],
       pathway = pathway_row$pathway[[1]],
+      pathway_label = pathway_row$pathway_label[[1]],
+      gene_set_source = pathway_row$gene_set_source[[1]],
       NES = pathway_row$NES[[1]],
       adjusted_p_value = pathway_row$padj[[1]],
       contrast_id = args[["contrast-id"]]
@@ -321,7 +391,9 @@ write_json_file(
     fgsea_significant = sum(fgsea_table$padj < cfg$figures$de$fdr, na.rm = TRUE),
     ora_terms = nrow(ora_table),
     gsva_programs = nrow(gsva_diff),
-    gsea_curves = nrow(selected_gsea)
+    gsea_curves = nrow(selected_gsea),
+    configured_gsea_programs_requested = length(configured_curve_ids),
+    configured_gsea_programs_displayed = sum(selected_gsea$gene_set_source == "configured_gene_program")
   ),
   file.path(args$outdir, "pathways_summary.json")
 )

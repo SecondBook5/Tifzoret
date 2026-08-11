@@ -5,6 +5,8 @@ rule contrast_pathways:
         samples=SAMPLES,
         annotation=ANNOTATION,
         gmt=GMT,
+        resources=RESOURCE_TABLE,
+        panels=str(PROJECT.hypothesis_panels) if PROJECT.hypothesis_panels else [],
         config=str(CONFIG_PATH),
         contrasts=CONTRASTS,
         script=str(WORKFLOW_ROOT / "scripts" / "pathways.R"),
@@ -26,12 +28,14 @@ rule contrast_pathways:
         summary=analysis("pathways", "pathways_summary.json")
     log:
         analysis("pathways", "logs/pathways.log")
+    params:
+        panels_option=("--panels " + shlex.quote(str(PROJECT.hypothesis_panels))) if PROJECT.hypothesis_panels else ""
     conda:
         R_ENV
     shell:
         "Rscript --vanilla {input.script} --project-config {input.config:q} "
         "--samples {input.samples:q} --annotation {input.annotation:q} "
-        "--contrasts {input.contrasts:q} --gmt {input.gmt:q} "
+        "--contrasts {input.contrasts:q} --gmt {input.gmt:q} --resource-table {input.resources:q} {params.panels_option} "
         "--contrast-id {wildcards.contrast_id:q} --vst {input.vst:q} --de {input.de:q} "
         "--outdir {RESULTS}/contrasts/{wildcards.contrast_id}/analyses/pathways > {log:q} 2>&1"
 

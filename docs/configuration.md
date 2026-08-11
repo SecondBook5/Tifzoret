@@ -89,7 +89,13 @@ Publication/full projects declare:
 
 - `hypotheses.claims`: statements, expected directions, and evidence panels;
 - `hypotheses.panels`: genes grouped into biological programs and selected
-  pathways;
+  pathways. Optional `program_annotations` assigns a mutually exclusive
+  display program to each top-DE heatmap gene, while `program_colors` and
+  `program_order` control its study-owned legend and grouped layout.
+  Optional `gsea_programs` is an ordered list of gene-panel identifiers; each
+  referenced panel is tested as a user-configured preranked gene program and
+  receives a focused multi-track GSEA curve. Database pathways remain the
+  automatic fallback when this list is absent;
 - `publication.recipe`: panel sources, letters, grid positions, dimensions,
   variants, and legend policy.
 

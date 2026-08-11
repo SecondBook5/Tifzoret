@@ -42,10 +42,21 @@ properties:
   program_annotations:
     type: object
     additionalProperties: {type: string}
+  program_colors:
+    type: object
+    additionalProperties: {type: string, pattern: "^#[0-9A-Fa-f]{6}$"}
+  program_order:
+    type: array
+    uniqueItems: true
+    items: {type: string, minLength: 1}
+  gsea_programs:
+    description: Ordered gene-panel identifiers to test and display as focused preranked GSEA curves.
+    type: array
+    uniqueItems: true
+    items: {type: string, minLength: 1}
   figure_order:
     type: object
     additionalProperties: false
     properties:
       gene_panels: {type: array, uniqueItems: true, items: {type: string}}
       pathway_panels: {type: array, uniqueItems: true, items: {type: string}}
-

@@ -139,13 +139,23 @@ ellipse_coordinates <- function(data, group_col, level = 0.80, points = 120L) {
     group <- groups[[group_name]]
     if (nrow(group) < 3L) return(NULL)
     covariance <- stats::cov(group[, c("PC1", "PC2")])
-    if (any(!is.finite(covariance)) || det(covariance) <= 1e-12) return(NULL)
+    if (any(!is.finite(covariance))) return(NULL)
     eig <- eigen(covariance, symmetric = TRUE)
+    if (max(eig$values) <= 1e-12) return(NULL)
+    # Three-point groups can yield an almost rank-one covariance estimate. A
+    # literal ellipse then renders as a line and no longer communicates a
+    # group envelope. Preserve its orientation and major axis while enforcing
+    # a small, documented visual minor axis.
+    minimum_eigenvalue <- max(eig$values) * 0.04
+    stabilized_values <- pmax(eig$values, minimum_eigenvalue)
     theta <- seq(0, 2 * pi, length.out = points)
-    radius <- sqrt(stats::qchisq(level, df = 2))
+    centered <- sweep(as.matrix(group[, c("PC1", "PC2")]), 2, c(mean(group$PC1), mean(group$PC2)))
+    rotated <- centered %*% eig$vectors
+    observed_radius <- max(sqrt(rowSums(sweep(rotated^2, 2, stabilized_values, "/"))))
+    radius <- max(sqrt(stats::qchisq(level, df = 2)), observed_radius * 1.08)
     circle <- rbind(cos(theta), sin(theta))
     coords <- t(matrix(c(mean(group$PC1), mean(group$PC2)), nrow = 2, ncol = points) +
-      radius * eig$vectors %*% diag(sqrt(pmax(eig$values, 0)), 2) %*% circle)
+      radius * eig$vectors %*% diag(sqrt(stabilized_values), 2) %*% circle)
     data.frame(PC1 = coords[, 1], PC2 = coords[, 2], ellipse_group = group_name)
   })
   dplyr::bind_rows(rows)

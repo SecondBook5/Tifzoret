@@ -11,6 +11,7 @@ def test_init_creates_valid_project(tmp_path):
     destination = tmp_path / "new_project"
     assert main(["init", str(destination)]) == 0
     assert (destination / "project.yaml").is_file()
+    assert not (destination / ".snakemake").exists()
     assert main(["validate", str(destination / "project.yaml")]) == 0
 
 

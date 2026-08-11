@@ -582,6 +582,9 @@ def load_project(config_path: str | Path) -> ResolvedProject:
         for panel in order.get("pathway_panels", []):
             if panel not in panel_config["pathway_panels"]:
                 errors.append(f"figure_order references unknown pathway panel {panel!r}")
+        for panel in panel_config.get("gsea_programs", []):
+            if panel not in panel_config["gene_panels"]:
+                errors.append(f"gsea_programs references unknown gene panel {panel!r}")
     if recipe_config is not None:
         for figure_set, recipe in recipe_config["figure_sets"].items():
             panel_ids = [panel["id"] for panel in recipe["panels"]]

@@ -194,6 +194,10 @@ def test_publication_profile_validates_cross_file_contracts(tmp_path):
     (config.parent / "panels.yaml").write_text(
         "gene_panels:\n  contractile:\n    description: Contractile genes.\n"
         "    groups:\n      contractile: [ACTA2, CNN1, MYH11]\n"
+        "program_annotations:\n  ACTA2: Contractile / cytoskeletal\n"
+        "program_colors:\n  Contractile / cytoskeletal: '#D55E00'\n"
+        "program_order: [Contractile / cytoskeletal]\n"
+        "gsea_programs: [contractile]\n"
         "pathway_panels:\n  response:\n    description: Response pathways.\n"
         "    pathways:\n      - {collection: custom, pathway: CONTRACTILE_PROGRAM}\n"
     )
@@ -206,6 +210,8 @@ def test_publication_profile_validates_cross_file_contracts(tmp_path):
     assert project.config["analysis"]["profile"] == "publication"
     assert {"composition", "regulators", "networks", "hypotheses", "publication"}.issubset(project.modules)
     assert project.recipe_config["figure_sets"]["primary"]["panels"][0]["id"] == "A"
+    assert project.panel_config["program_colors"]["Contractile / cytoskeletal"] == "#D55E00"
+    assert project.panel_config["gsea_programs"] == ["contractile"]
     publication_dry_run = subprocess.run(
         [
             "snakemake", "--snakefile", str(ROOT / "src" / "bulk_rna_frame" / "workflow" / "Snakefile"),
