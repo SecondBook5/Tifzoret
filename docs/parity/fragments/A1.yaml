@@ -217,7 +217,7 @@
     - {file: workflow/stages/core/deseq2.R, line: 37}
   frame:
     - {file: src/bulk_rna_frame/workflow/scripts/de.R, line: 78}
-  evidence: run
+  evidence: code-only
   target: stats
   status: open
   commit: null

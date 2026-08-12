@@ -207,7 +207,7 @@ All four findings share a single root cause: FRAME applies BH multiple-testing c
 **Applied inline (status `fixed-inline`, commit `2e0c662`).** Four trivial/obvious defects were corrected during the serial inline pass; all tests remain green:
 
 - **A5-002** (S2, BEST-PRACTICE): `sva.R` had no `set.seed` before `sva::num.sv(method="be")`, so the surrogate-variable count — and the whole SV-adjusted DE sensitivity result — was nondeterministic. Fixed by seeding from `cfg$analysis$random_seed` (matching `mediation.R`).
-- **A5-014** (S4, REGRESSION): `utils.R::read_counts_contract` lacked REF's 2³¹ overflow guard, so counts ≥ 2³¹ would silently coerce to `NA`. Fixed by erroring on all-NA matrices and on values ≥ 2147483647 before integer coercion.
+- **A5-014** (S4, REGRESSION): `utils.R::read_counts_contract` lacked REF's 2³¹ overflow guard, so counts ≥ 2³¹ would silently coerce to `NA`. Fixed by erroring on all-NA matrices and on values exceeding 2147483647 (2³¹−1, the max valid R integer) before integer coercion.
 - **B2-012** (S3, REGRESSION): the volcano drew a horizontal `geom_hline` at `-log10(FDR)` on a raw-p axis, implying a raw-p cutoff that does not exist; REF deliberately omits it. Line removed.
 - **B3-007** (S5, REGRESSION): GSVA row z-scores were clamped to ±2 vs the gold legend's ±1.5. Restored to ±1.5 (`row_zscore`'s own default).
 

@@ -22,6 +22,27 @@ def _normalize_for_panel(s: str) -> str:
     return re.sub(r'[^a-z0-9]', '', s.lower())
 
 
+def _stem(token: str) -> str:
+    """Collapse a single trailing plural 's' so 'networks' stems to 'network'."""
+    return token[:-1] if len(token) > 1 and token.endswith("s") else token
+
+
+def _area_tokens(area: str) -> set[str]:
+    """
+    Split an area label into stemmed alphanumeric tokens for EXACT matching.
+
+    Stage coverage is decided by whole-token equality, not substring
+    containment. Substring matching produced silent false passes: 'sva' was
+    satisfied by any 'gsva' finding, and the 2-letter 'de' was satisfied by
+    'node', 'dendrograms', 'config-defaults', 'seed-determinism', etc. Under
+    token matching those never match (gsva != sva; dendrogram != de), so the
+    gate flips a genuinely-missing stage to missing. The plural stem keeps the
+    real labels matching ('networks' -> network, 'pathways' -> pathway,
+    'regulators' -> regulator).
+    """
+    return {_stem(tok) for tok in re.split(r'[^a-z0-9]+', area.lower()) if tok}
+
+
 def merge_fragments(fragment_dir: str) -> list[dict]:
     """
     Merge all .yaml fragments in fragment_dir into a single ranked register.
@@ -75,17 +96,23 @@ def coverage_report(fragment_dir: str) -> dict:
 
     for entry in entries:
         area = entry["area"]
-        area_lower = area.lower()
         area_normalized = _normalize_for_panel(area)
+        tokens = _area_tokens(area)
 
-        # Check stages: normalized area contains stage token as substring
+        # Check stages: a stage is covered when its stemmed name equals a
+        # stemmed whole token of the area (exact, not substring — see
+        # _area_tokens for why substring matching produced false passes).
         for stage in EXPECTED_STAGES:
-            if stage in area_lower:
+            if _stem(stage) in tokens:
                 stages_seen.add(stage)
 
-        # Check panels: normalized area starts with normalized panel prefix
-        # Special case: D1/D2/D3 all share prefix "set2d", so any area starting
-        # with "set2d" satisfies all three
+        # Check panels: normalized area starts with normalized panel prefix.
+        # Known limitation: the auditor labels the three DE-clustering variants
+        # collectively as "Set2-D" (never Set2-D1/D2/D3 individually), so any
+        # "set2d" area satisfies all three ids at once. Per-variant coverage is
+        # therefore NOT independently detectable here; it is asserted instead by
+        # the B2 findings that audit all three options (global / program-grouped
+        # / direct-labels). Treat the D-trio as one panel for gate purposes.
         if area_normalized.startswith("set2d"):
             panels_seen.update(["Set2-D1", "Set2-D2", "Set2-D3"])
 
