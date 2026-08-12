@@ -1,0 +1,17 @@
+- id: "A1-001"
+  track: "A"
+  area: "de"
+  verdict: "REGRESSION"
+  severity: "S1"
+  summary: "apeglm shrinkage not applied"
+  detail: "frame uses normal shrinkage; reference uses apeglm"
+  reference:
+    - file: "workflow/stages/de/stage.R"
+      line: 42
+  frame:
+    - file: "src/bulk_rna_frame/workflow/scripts/de.R"
+      line: 88
+  evidence: "run"
+  target: "stats"
+  status: "open"
+  commit: null
