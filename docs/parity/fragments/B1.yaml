@@ -1,0 +1,357 @@
+# Cluster B1 — Figure Set 1, panels A–E (STRING enrichment, STRING networks,
+# regulator activity, DoRothEA radial GRN). Track B (figure fidelity).
+#
+# Architecture note: the FRAME files named in the brief (figures.py,
+# publication.R, assemble.py) do NOT plot panels A–E. figures.py only *registers*
+# the constructors (PANEL_REGISTRY) and resolves output paths; assemble.py merely
+# merges pre-rendered per-panel PDFs; publication.R plots only DE-heatmap/program
+# panels. The actual A–E constructors live in workflow/scripts/networks.py
+# (A, B, C), regulators.R (D), and grn.py (E). Citations below point to the real
+# implementing code plus the registry declaration.
+
+- id: B1-001
+  track: B
+  area: "Set1-A STRING functional enrichment — directional faceting"
+  verdict: FIDELITY-GAP
+  severity: S3
+  summary: "FRAME pools all genes into one enrichment; REF facets Down / GSEA leading-edge / Up seed sets."
+  detail: >
+    REF prepare_string_enrichment_bubble binds three separate seed-set enrichment
+    tables (string_down_enr, string_le_enr, string_up_enr) and facet_wraps them into
+    the three columns seen in the gold PDF ("Downregulated in CAPE", "GSEA leading
+    edge", "Upregulated in CAPE"), 8 nonredundant terms each. FRAME enrichment_panel
+    runs a SINGLE STRING enrichment call over the pooled up+down gene list (all_genes)
+    with no directional split and no faceting, so the entire GSEA-leading-edge seed
+    set and the directional separation are absent from the panel. Best practice for a
+    directional contrast figure is to preserve the direction, so REF's faceting is
+    correct and FRAME is missing it.
+  reference:
+    - {file: analysis/cape_xizhao_edits/publication_figure_functions.R, line: 1168}
+    - {file: analysis/cape_xizhao_edits/publication_figure_functions.R, line: 1199}
+  frame:
+    - {file: src/bulk_rna_frame/workflow/scripts/networks.py, line: 422}
+    - {file: src/bulk_rna_frame/workflow/scripts/networks.py, line: 325}
+  evidence: code-only
+  target: figures
+  status: open
+  commit: null
+
+- id: B1-002
+  track: B
+  area: "Set1-A STRING functional enrichment — shape = STRING category"
+  verdict: FIDELITY-GAP
+  severity: S3
+  summary: "REF encodes STRING category as point shape (Process/Function/Component); FRAME encodes it only as a text prefix."
+  detail: >
+    REF make_string_enrichment_bubble maps shape = category via scale_shape_manual
+    (Process=21 circle, Function=22 square, Component=24 triangle) with a "STRING
+    category" legend, matching the gold PDF glyphs. FRAME draws a single scatter with
+    one marker for all points and folds the category into the y-axis label text
+    ("[Component] ..."). The categorical shape channel and its legend are therefore
+    missing.
+  reference:
+    - {file: analysis/cape_xizhao_edits/publication_figure_functions.R, line: 1225}
+  frame:
+    - {file: src/bulk_rna_frame/workflow/scripts/networks.py, line: 377}
+    - {file: src/bulk_rna_frame/workflow/scripts/networks.py, line: 382}
+  evidence: code-only
+  target: figures
+  status: open
+  commit: null
+
+- id: B1-003
+  track: B
+  area: "Set1-A STRING functional enrichment — colour = -log10(FDR)"
+  verdict: OK
+  severity: S5
+  summary: "Both map fill/colour to -log10(FDR) on a magma scale."
+  detail: >
+    REF fills points by score = -log10(FDR) with scale_fill_viridis_c(option='magma',
+    breaks 4/10/30/50/80). FRAME colours the scatter by negative_log10_fdr with
+    cmap='magma' and a matching colourbar. The colour channel is faithful; only cosmetic
+    differences (fixed limits/breaks, begin/end trimming) remain, hence S5.
+  reference:
+    - {file: analysis/cape_xizhao_edits/publication_figure_functions.R, line: 1205}
+  frame:
+    - {file: src/bulk_rna_frame/workflow/scripts/networks.py, line: 382}
+  evidence: code-only
+  target: figures
+  status: open
+  commit: null
+
+- id: B1-004
+  track: B
+  area: "Set1-A STRING functional enrichment — size = mapped genes"
+  verdict: FIDELITY-GAP
+  severity: S5
+  summary: "Point size maps to gene count in both, but FRAME emits no size legend / area scaling."
+  detail: >
+    REF maps size = mapped_genes (number_of_genes) with scale_size_area(max_size=8.2,
+    breaks 10/30/50) and a "Mapped genes" legend. FRAME sets marker s = 20 + 12*gene_count
+    (linear diameter, not area) via matplotlib scatter with no size legend, so readers
+    cannot decode the size channel. Encoding is present but the legend and area scaling
+    are missing — polish-level fidelity gap.
+  reference:
+    - {file: analysis/cape_xizhao_edits/publication_figure_functions.R, line: 1219}
+  frame:
+    - {file: src/bulk_rna_frame/workflow/scripts/networks.py, line: 379}
+  evidence: code-only
+  target: figures
+  status: open
+  commit: null
+
+- id: B1-005
+  track: B
+  area: "Set1-B Upregulated STRING network — topology community rendering"
+  verdict: FIDELITY-GAP
+  severity: S3
+  summary: "FRAME computes Louvain communities but never draws them; REF shows named community hulls + node-outline colour + legend."
+  detail: >
+    REF prepare_string_up_network runs weighted Louvain (seed 241) on the main connected
+    component, curates biological community names (Contractile apparatus, Calcium–contractile
+    coupling, Epithelial junction/transport, Basal epithelial differentiation) and
+    make_string_up_network_panel renders them as geom_mark_hull fills, node-outline colour,
+    and a "Topology-derived community" legend (see gold PDF). FRAME network_for_direction
+    computes louvain_communities and writes a numeric 'community' column to the node table
+    but the figure draws no hulls, no community outline colour, and no community legend;
+    node outline is plain white. The community structure that defines the panel is not shown.
+  reference:
+    - {file: analysis/cape_xizhao_edits/publication_figure_functions.R, line: 1471}
+    - {file: analysis/cape_xizhao_edits/publication_figure_functions.R, line: 1361}
+  frame:
+    - {file: src/bulk_rna_frame/workflow/scripts/networks.py, line: 248}
+    - {file: src/bulk_rna_frame/workflow/scripts/networks.py, line: 289}
+  evidence: code-only
+  target: figures
+  status: open
+  commit: null
+
+- id: B1-006
+  track: B
+  area: "Set1-B Upregulated STRING network — node fill, size, edge width"
+  verdict: OK
+  severity: S5
+  summary: "Node fill=log2FC, node size=degree, edge width=STRING score are all present."
+  detail: >
+    REF fills nodes by shrunken log2fc (directional gradient 0..15.5), sizes by graph_degree
+    (range 2.8-7.2), and maps edge linewidth to string_score. FRAME colours nodes by log2FC
+    (coolwarm, symmetric ±max|value|), sizes by 80+24*degree, and draws edge width 0.4+2.6*score.
+    The three encodings are faithful; differences are cosmetic (symmetric divergent palette vs
+    direction-specific gradient, missing degree/score legends), hence OK/S5.
+  reference:
+    - {file: analysis/cape_xizhao_edits/publication_figure_functions.R, line: 1490}
+  frame:
+    - {file: src/bulk_rna_frame/workflow/scripts/networks.py, line: 288}
+  evidence: code-only
+  target: figures
+  status: open
+  commit: null
+
+- id: B1-007
+  track: B
+  area: "Set1-C Downregulated STRING network — multi-component preservation"
+  verdict: FIDELITY-GAP
+  severity: S3
+  summary: "REF lays out all connected components (incl. the Hoxc9–Hoxc10 pair); FRAME displays only a top-degree induced subgraph."
+  detail: >
+    REF prepare_string_down_network keeps every connected node, lays out the main component
+    plus each secondary component separately (the gold PDF shows "21 connected genes and 38
+    interactions across 2 components", including the isolated Hoxc9–Hoxc10 and Rab3c–Sv2c
+    pairs) with the same named communities (Hemoglobin/oxygen transport, Neuronal/synaptic,
+    Neuropeptide/vascular, Synaptic vesicle trafficking, HOX patterning). FRAME's shared
+    network_for_direction selects display = top max_display nodes by degree and plots that
+    induced subgraph, so low-degree peripheral components can be dropped and the multi-component
+    structure is not guaranteed to appear; community hulls/naming are also absent (same gap as
+    B1-005, shared code path).
+  reference:
+    - {file: analysis/cape_xizhao_edits/publication_figure_functions.R, line: 1647}
+    - {file: analysis/cape_xizhao_edits/publication_figure_functions.R, line: 1610}
+  frame:
+    - {file: src/bulk_rna_frame/workflow/scripts/networks.py, line: 268}
+  evidence: code-only
+  target: figures
+  status: open
+  commit: null
+
+- id: B1-008
+  track: B
+  area: "Set1-D Regulator activity — differential-activity lollipop"
+  verdict: FIDELITY-GAP
+  severity: S3
+  summary: "FRAME renders only the heatmap; REF's right-hand activity-logFC lollipop with per-regulator FDR labels is missing."
+  detail: >
+    REF make_regulator_activity_panel composes a heatmap (left) with a lollipop of activity
+    logFC = CAPE−Control (right): direction-coloured segments+points, shaded background rects,
+    per-regulator FDR ('q = ...', bold if significant), and an "FDR" header, joined via
+    plot_layout(widths=c(1.34,1.0)). FRAME regulators.R produces only tile_heatmap of the top
+    regulators; it computes the differential (limma topTable, written to regulator_differential.tsv)
+    but never plots the lollipop, so the entire "Differential activity" half of the panel is absent.
+  reference:
+    - {file: analysis/cape_xizhao_edits/publication_figure_functions.R, line: 2011}
+    - {file: analysis/cape_xizhao_edits/publication_figure_functions.R, line: 2068}
+  frame:
+    - {file: src/bulk_rna_frame/workflow/scripts/regulators.R, line: 121}
+  evidence: code-only
+  target: figures
+  status: open
+  commit: null
+
+- id: B1-009
+  track: B
+  area: "Set1-D Regulator activity — balanced per-direction selection"
+  verdict: FIDELITY-GAP
+  severity: S3
+  summary: "REF selects top 6 regulators per direction (12, balanced, split boundary); FRAME takes top 15 by p-value, unbalanced."
+  detail: >
+    REF prepare_regulator_activity_panel does slice_min(adj.P.Val, n=6) grouped by higher_in
+    (CAPE vs control), yielding 12 regulators with a white boundary separating the two blocks
+    and a condition/direction sidebar (gold PDF: 6 higher-in-CAPE, 6 higher-in-Control). FRAME
+    takes head(differential$regulator, 15) ranked by p-value with no direction balancing, no
+    per-direction block boundary, and no condition header / direction sidebar tiles, so the
+    "top six programs per direction" composition is lost.
+  reference:
+    - {file: analysis/cape_xizhao_edits/publication_figure_functions.R, line: 1839}
+    - {file: analysis/cape_xizhao_edits/publication_figure_functions.R, line: 1957}
+  frame:
+    - {file: src/bulk_rna_frame/workflow/scripts/regulators.R, line: 113}
+  evidence: code-only
+  target: figures
+  status: open
+  commit: null
+
+- id: B1-010
+  track: B
+  area: "Set1-D Regulator activity — signed vs unsigned target-program scores"
+  verdict: FIDELITY-GAP
+  severity: S3
+  summary: "REF heatmap shows row-scaled UNSIGNED GTRD target-program VIPER activity; FRAME heatmap uses SIGNED activity."
+  detail: >
+    REF panel D subtitle/data are explicitly "row-scaled VIPER scores from unsigned GTRD target
+    sets" (viper_gtrd_scores). FRAME computes both signed (dorothea_activity_scores.tsv) and
+    unsigned (regulator_target_program_scores.tsv) matrices, but the rendered heatmap uses the
+    SIGNED matrix (signed_matrix from signed_wide). The heatmap therefore visualizes a different
+    quantity than REF's panel; the unsigned target-program view REF displays is computed but not
+    plotted.
+  reference:
+    - {file: analysis/cape_xizhao_edits/publication_figure_functions.R, line: 2072}
+  frame:
+    - {file: src/bulk_rna_frame/workflow/scripts/regulators.R, line: 114}
+    - {file: src/bulk_rna_frame/workflow/scripts/regulators.R, line: 97}
+  evidence: code-only
+  target: figures
+  status: open
+  commit: null
+
+- id: B1-011
+  track: B
+  area: "Set1-D Regulator activity — heatmap core"
+  verdict: OK
+  severity: S5
+  summary: "Both render a row-scaled regulator×sample activity heatmap with a diverging fill."
+  detail: >
+    REF and FRAME both draw regulators × samples tiles filled by row-scaled activity on a
+    blue–white–red diverging scale (REF limits ±1.5). The core heatmap encoding is faithful;
+    the surrounding composition gaps are captured separately in B1-008/009/010.
+  reference:
+    - {file: analysis/cape_xizhao_edits/publication_figure_functions.R, line: 1922}
+  frame:
+    - {file: src/bulk_rna_frame/workflow/scripts/regulators.R, line: 117}
+  evidence: code-only
+  target: figures
+  status: open
+  commit: null
+
+- id: B1-012
+  track: B
+  area: "Set1-E DoRothEA radial GRN — node fill encoding"
+  verdict: FIDELITY-GAP
+  severity: S3
+  summary: "REF fills nodes by CAPE−Control effect size (diverging); FRAME fills nodes by categorical program colour."
+  detail: >
+    REF make_dorothea_grn_radial_panel fills every node by value = CAPE−Control (target log2FC /
+    regulator activity) on a blue–white–red diverging scale (±10.5) — the effect gradient is the
+    central story of the gold PDF. FRAME grn.py radial view colours nodes by their program
+    (categorical program palette), so node fill conveys program membership, not effect size, and
+    the CAPE−Control effect gradient is absent from the nodes.
+  reference:
+    - {file: analysis/cape_xizhao_edits/publication_figure_functions.R, line: 2869}
+    - {file: analysis/cape_xizhao_edits/publication_figure_functions.R, line: 2819}
+  frame:
+    - {file: src/bulk_rna_frame/workflow/scripts/grn.py, line: 168}
+    - {file: src/bulk_rna_frame/workflow/scripts/grn.py, line: 169}
+  evidence: code-only
+  target: figures
+  status: open
+  commit: null
+
+- id: B1-013
+  track: B
+  area: "Set1-E DoRothEA radial GRN — sector ordering method"
+  verdict: FIDELITY-GAP
+  severity: S3
+  summary: "REF orders sectors by network-diffusion programs with an exact target-overlap permutation test; FRAME uses configured hypothesis panels on evenly spaced sectors."
+  detail: >
+    REF prepare_dorothea_grn_panel assigns program membership by personalized-PageRank diffusion
+    from epithelial/myogenic anchor seeds (threshold 0.8) with leave-one-out stability and reports
+    an EXACT target-overlap permutation P in the subtitle; prepare_dorothea_grn_radial sizes each
+    sector proportional to its target count. FRAME grn.py derives programs from configured gene
+    panels (program_map over hypothesis_panels) with majority-vote regulator labels, spaces sectors
+    evenly by program index (2*pi*i/n), and runs a program-MODULARITY permutation test (not the
+    target-overlap separation test). The sector semantics and the reported statistic differ.
+  reference:
+    - {file: analysis/cape_xizhao_edits/publication_figure_functions.R, line: 2207}
+    - {file: analysis/cape_xizhao_edits/publication_figure_functions.R, line: 2657}
+  frame:
+    - {file: src/bulk_rna_frame/workflow/scripts/grn.py, line: 154}
+    - {file: src/bulk_rna_frame/workflow/scripts/grn.py, line: 126}
+  evidence: code-only
+  target: figures
+  status: open
+  commit: null
+
+- id: B1-014
+  track: B
+  area: "Set1-E DoRothEA radial GRN — radial layout, node shape, edge sign"
+  verdict: OK
+  severity: S5
+  summary: "Both place regulators on an inner ring and targets on an outer ring, use square/circle node shapes, and colour edges by activating/repressing sign."
+  detail: >
+    REF and FRAME both build a radial layout (regulators inner radius ~0.5, targets outer radius
+    1.0), encode node type as shape (regulator=square, target=circle), and colour edges by
+    regulation sign (activating vs repressing). These structural encodings match. Cosmetic gaps
+    remain (FRAME uses a different sign palette, constant edge width instead of mapping linewidth
+    to prior likelihood, and labels only the top-25 targets vs all), hence OK/S5.
+  reference:
+    - {file: analysis/cape_xizhao_edits/publication_figure_functions.R, line: 2879}
+    - {file: analysis/cape_xizhao_edits/publication_figure_functions.R, line: 2885}
+  frame:
+    - {file: src/bulk_rna_frame/workflow/scripts/grn.py, line: 167}
+  evidence: code-only
+  target: figures
+  status: open
+  commit: null
+
+- id: B1-015
+  track: B
+  area: "Set1 A/B/C/E — cohort-specific hardcoding vs configured generality"
+  verdict: BEST-PRACTICE
+  severity: S4
+  summary: "REF hardcodes CAPE-specific gene lists for community/anchor naming; FRAME's configured-panel approach is more general and should not be matched."
+  detail: >
+    REF names STRING communities and GRN diffusion anchors from hardcoded mouse gene-symbol sets
+    (e.g. case_when(any(name %in% c('Casq1','Jph2','Pdlim3')) ...) in the network prep, and the
+    epithelial/myogenic anchor vectors in the GRN prep). These will not generalize to other cohorts.
+    FRAME derives programs from the project's configured hypothesis panels (program_map) and
+    data-driven communities, which is the correct engineering choice. FRAME should keep its
+    generalizable approach rather than replicate REF's hardcoded gene lists; the fidelity gaps
+    above should be closed with configurable/data-driven rendering, not by copying the constants.
+  reference:
+    - {file: analysis/cape_xizhao_edits/publication_figure_functions.R, line: 1368}
+    - {file: analysis/cape_xizhao_edits/publication_figure_functions.R, line: 2168}
+  frame:
+    - {file: src/bulk_rna_frame/workflow/scripts/grn.py, line: 39}
+    - {file: src/bulk_rna_frame/figures.py, line: 116}
+  evidence: code-only
+  target: figures
+  status: open
+  commit: null
