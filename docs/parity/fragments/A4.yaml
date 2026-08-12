@@ -1,0 +1,309 @@
+- id: A4-001
+  track: A
+  area: composition (cell-state fractions claim)
+  verdict: OK
+  severity: S1
+  summary: Cell-state outputs are labeled relative signature/composition scores and never imply estimated cell fractions
+  detail: >
+    README (line 19) claims "Cell-state results are relative signature/composition scores,
+    not estimated cell fractions." FRAME honors this everywhere the cell-state stage speaks:
+    the plot subtitle reads "Relative signature scores; positive effects are higher in the
+    contrast numerator" (composition.R:78), the plot title is "Cell-state signature shifts"
+    and the x axis is "Signature score log2 fold-change" (never a fraction/percent), and
+    composition_summary.json emits an explicit warning that outputs "must not be interpreted
+    as cell fractions" (composition.R:85). docs/methods.md:9 repeats the framing. REF likewise
+    scores ssGSEA signatures rather than estimating fractions (score_method = "ssgsea",
+    deconvolution_signatures.R:198). No output, label, axis, or table on the FRAME side implies
+    cell fractions. Claim verified; verdict OK at S1 because a fractions claim would be S1.
+  reference:
+    - {file: workflow/stages/composition/deconvolution_signatures.R, line: 198}
+  frame:
+    - {file: src/bulk_rna_frame/workflow/scripts/composition.R, line: 85}
+  evidence: code-only
+  target: stats
+  status: open
+  commit: null
+
+- id: A4-002
+  track: A
+  area: composition (scoring method)
+  verdict: OK
+  severity: S2
+  summary: Both pipelines score signatures with ssGSEA via GSVA::ssgseaParam(normalize=TRUE)
+  detail: >
+    REF scores cell-state signatures with GSVA's ssGSEA backend using ssgseaParam(minSize=1,
+    maxSize=max(lengths), normalize=TRUE) with an old-API fallback (deconvolution_signatures.R:87-114),
+    reporting score_method="ssgsea". FRAME uses the same method: GSVA::ssgseaParam(exprData=expression,
+    geneSets=gene_sets, minSize=min_genes, maxSize=Inf, normalize=TRUE) then GSVA::gsva(...,
+    BPPARAM=SerialParam()) (composition.R:43-44). Method (ssGSEA), normalization, and the
+    subsequent limma lmFit/eBayes differential model are equivalent; FRAME additionally pins
+    SerialParam for reproducibility. Parameter nuances (minSize, maxSize) are captured in A4-003.
+  reference:
+    - {file: workflow/stages/composition/deconvolution_signatures.R, line: 87}
+  frame:
+    - {file: src/bulk_rna_frame/workflow/scripts/composition.R, line: 43}
+  evidence: code-only
+  target: stats
+  status: open
+  commit: null
+
+- id: A4-003
+  track: A
+  area: composition (signature coverage filtering)
+  verdict: FIDELITY-GAP
+  severity: S4
+  summary: FRAME drops REF's upper-bound (max_genes) gate on signature size before scoring
+  detail: >
+    REF retains a signature for scoring only when min_genes <= matched <= max_genes (default
+    3..200), via retained_for_scoring (deconvolution_signatures.R:52,56). FRAME filters only on
+    the lower bound (lengths(gene_sets) >= min_genes, composition.R:40) and passes maxSize=Inf,
+    so an oversized signature is never excluded. For the curated lymphatic signatures (all <20
+    genes) this is inert, but it is a genuine loss of the size-sanity gate and would let an
+    accidentally huge signature dominate ssGSEA scoring in a new cohort. Best practice keeps an
+    explicit upper bound. FIDELITY-GAP, S4 (cohort-generality), routed to stats.
+  reference:
+    - {file: workflow/stages/composition/deconvolution_signatures.R, line: 52}
+  frame:
+    - {file: src/bulk_rna_frame/workflow/scripts/composition.R, line: 40}
+  evidence: code-only
+  target: stats
+  status: open
+  commit: null
+
+- id: A4-004
+  track: A
+  area: composition (signature-coverage audit table)
+  verdict: FIDELITY-GAP
+  severity: S4
+  summary: FRAME omits REF's per-signature coverage/missing-gene audit table
+  detail: >
+    REF writes a signature coverage TSV recording n_input_genes, n_matched_genes,
+    n_missing_genes, the matched-gene and missing-gene lists, and retained_for_scoring per
+    signature (deconvolution_signatures.R:43-54; deconvolution_tables.R:5-8). This lets a
+    reviewer see exactly which curated genes were absent from the assay. FRAME records only a
+    matched_genes count joined into the differential table (composition.R:39,57) and writes no
+    coverage/missing-gene table, so which signature members were dropped is not auditable.
+    FIDELITY-GAP, S4, routed to stats.
+  reference:
+    - {file: workflow/stages/composition/deconvolution_tables.R, line: 5}
+  frame:
+    - {file: src/bulk_rna_frame/workflow/scripts/composition.R, line: 39}
+  evidence: code-only
+  target: stats
+  status: open
+  commit: null
+
+- id: A4-005
+  track: A
+  area: composition (differential direction / contrast semantics)
+  verdict: OK
+  severity: S2
+  summary: FRAME cell-state effect direction is read from the contrast (numerator-denominator), matching REF's oriented logFC
+  detail: >
+    REF releases the group factor to denominator/reference-first from the resolved contrast,
+    fits limma on the ssGSEA scores, then orients logFC via orient_sign() so positive means
+    "up in the numerator" and labels higher_in accordingly (deconvolution_signatures.R:166-195).
+    FRAME relevels the design factor with ref=denominator (composition.R:48), selects the
+    contrast_group<numerator> coefficient (composition.R:51), so topTable's logFC is directly
+    numerator-vs-denominator, and sets higher_in = ifelse(logFC>=0, numerator, denominator)
+    (composition.R:62). Direction is derived from the contrast file on both sides, never from
+    group-name/appearance order. FRAME's grep-for-numerator-coefficient approach also generalizes
+    to covariate-adjusted / multi-level designs, whereas REF composition requires exactly one
+    condition coefficient. Contrast semantics preserved; verdict OK.
+  reference:
+    - {file: workflow/stages/composition/deconvolution_signatures.R, line: 188}
+  frame:
+    - {file: src/bulk_rna_frame/workflow/scripts/composition.R, line: 48}
+  evidence: code-only
+  target: stats
+  status: open
+  commit: null
+
+- id: A4-006
+  track: A
+  area: hypothesis (pathway/reference direction)
+  verdict: BEST-PRACTICE
+  severity: S1
+  summary: REF hypothesis pathway/reference stats infer treatment-vs-control from sample-sheet appearance order, ignoring the contrast; FRAME consumes contrast-oriented effects
+  detail: >
+    REF's hypothesis stage sets condition levels by appearance order
+    (factor(condition, levels=unique(condition)), hypothesis_io.R:181) and never receives a
+    contrasts.tsv (parse_hypothesis_args has no --contrasts). compute_pathway_panel_statistics
+    then takes condition_levels[[1]] as control and [[2]] as treatment and reports
+    mean_difference_treatment_minus_control / Wilcoxon (hypothesis_gene_panels.R:369,376-405);
+    prepare_reference_gene_set_assessment does the same (hypothesis_gene_panels.R:488-519).
+    Direction is therefore determined by row order in the sample CSV, not the study contrast's
+    numerator-denominator, so the reported difference can be inverted relative to the contrast.
+    Per the sacred contrast rule this is at least S1. FRAME's hypotheses.py never re-derives
+    direction from group order: pathway effect is the NES from fgsea (falling back to the GSVA
+    differential logFC), both oriented numerator-denominator upstream (hypotheses.py:104-113).
+    BEST-PRACTICE: the flaw is REF's; FRAME correctly avoids it and must not "match" it.
+  reference:
+    - {file: workflow/stages/hypothesis/hypothesis_gene_panels.R, line: 376}
+  frame:
+    - {file: src/bulk_rna_frame/workflow/scripts/hypotheses.py, line: 104}
+  evidence: code-only
+  target: stats
+  status: open
+  commit: null
+
+- id: A4-007
+  track: A
+  area: hypothesis (evidence spine wiring)
+  verdict: BEST-PRACTICE
+  severity: S3
+  summary: REF's evidence spine (lib/evidence.R) is unused test-only code; FRAME's hypotheses.py is the actual per-hypothesis evidence table
+  detail: >
+    REF's lib/evidence.R defines an evidence-record schema and a collate/aggregate API and
+    documents the intended philosophy - "PRESENTS evidence; does NOT render a
+    supported/contradicts verdict, the reader judges" (evidence.R:6-9). A repo-wide search shows
+    it is referenced only by tests/r/test_evidence.R and never sourced by any stage/Snakefile,
+    so REF never emits a predicted-vs-observed hypothesis table at run time. FRAME's hypotheses.py
+    is the operative implementation: it collates gene/pathway/regulator evidence per configured
+    claim into hypothesis_evidence.tsv and hypothesis_summary.tsv (hypotheses.py:82-140). Unlike
+    the REF intent, FRAME does assign a per-line support label (supporting/conflicting/neutral/
+    not_directional/unmeasured, hypotheses.py:47-59) and tallies supporting/conflicting counts,
+    but it stops short of an overall verdict and carries a non-causal caveat (hypotheses.py:141,144).
+    BEST-PRACTICE: FRAME operationalizes a spine REF left as dead code; the light per-line verdict
+    is acceptable given the caveat but should stay descriptive.
+  reference:
+    - {file: workflow/lib/evidence.R, line: 6}
+  frame:
+    - {file: src/bulk_rna_frame/workflow/scripts/hypotheses.py, line: 82}
+  evidence: code-only
+  target: stats
+  status: open
+  commit: null
+
+- id: A4-008
+  track: A
+  area: hypothesis (evidence aggregation granularity)
+  verdict: BEST-PRACTICE
+  severity: S4
+  summary: FRAME tallies evidence per individual gene rather than collapsing panels to one direction, biasing supporting/conflicting counts toward large gene panels
+  detail: >
+    REF's (unused) evidence.R aggregate_panel_direction collapses a panel to a single evidence
+    line using the median signed effect and the best (min) padj across members
+    (evidence.R:54-64). FRAME instead emits one evidence row per gene per group per panel
+    (hypotheses.py:84-96) and then counts supporting/conflicting across all rows
+    (hypotheses.py:136-137). Consequently a large multi-gene panel contributes many rows and
+    dominates a claim's tally, while a single pathway or regulator contributes one row - the
+    supporting/conflicting summary is weighted by panel size and mixes gene-level with
+    pathway/regulator-level granularity. Additionally the "significant" count applies the DE FDR
+    threshold (figures.de.fdr) uniformly to pathway padj and regulator adj.P.Val
+    (hypotheses.py:135). Neither is wrong per se, but a panel-level direction collapse (as REF's
+    spine intended) would give a less size-biased summary. BEST-PRACTICE, S4, routed to stats.
+  reference:
+    - {file: workflow/lib/evidence.R, line: 54}
+  frame:
+    - {file: src/bulk_rna_frame/workflow/scripts/hypotheses.py, line: 84}
+  evidence: code-only
+  target: stats
+  status: open
+  commit: null
+
+- id: A4-009
+  track: A
+  area: hypothesis (expected_direction schema vs support() parsing)
+  verdict: BEST-PRACTICE
+  severity: S4
+  summary: hypotheses.schema leaves expected_direction free text while support() matches a fixed token vocabulary, so synonyms silently degrade to not_directional
+  detail: >
+    hypotheses.schema.yaml types expected_direction as an arbitrary non-empty string
+    (hypotheses.schema.yaml:18), but hypotheses.py support() only recognizes fixed substrings -
+    positive {increase,higher,up,activation,adaptation}, negative {decrease,lower,down,repression,
+    loss}, and {context,mixed,configured}->not_directional (hypotheses.py:47-59). A claim written
+    with a synonym the tokenizer does not know (e.g. "elevated", "reduced", "gain", "suppressed",
+    "induced") silently falls through to not_directional and is never scored for support - a
+    quiet correctness hazard. The panel schema, by contrast, constrains expected_direction to an
+    enum [increased,decreased,mixed,context_dependent,not_specified] (hypothesis_panels.schema.yaml:23,63),
+    so the two schemas are inconsistent (and note "not_specified" is not in the token list either).
+    Best practice is an enum on the hypotheses schema plus explicit mapping. BEST-PRACTICE, S4,
+    routed to stats.
+  reference:
+    - {file: workflow/lib/evidence.R, line: 33}
+  frame:
+    - {file: src/bulk_rna_frame/schemas/hypotheses.schema.yaml, line: 18}
+  evidence: code-only
+  target: stats
+  status: open
+  commit: null
+
+- id: A4-010
+  track: A
+  area: hypothesis (output breadth)
+  verdict: FIDELITY-GAP
+  severity: S3
+  summary: FRAME hypotheses.py omits REF's hypothesis-stage figures and pathway/reference/leading-edge analyses
+  detail: >
+    REF's hypothesis stage produces a rich set of contrast-specific outputs - grouped gene-panel
+    expression plots and heatmaps, pathway-score plots backed by Wilcoxon statistics
+    (compute_pathway_panel_statistics), on-the-fly reference gene-set GSVA scoring with Wilcoxon
+    tests (prepare_reference_gene_set_assessment), and a leading-edge focus heatmap + fold-change
+    bar plot (prepare_leading_edge_focus) - orchestrated in stage.R:94-217. FRAME's hypotheses.py
+    emits only a tabular evidence file, a summary table, a JSON, and a minimal HTML table
+    (hypotheses.py:126-144); it renders no figures and does not recompute pathway Wilcoxon stats,
+    reference gene-set scores, or leading-edge material. Some of REF's descriptive content is
+    covered elsewhere in FRAME's publication panels (program_violins, program_heatmap_effects,
+    gsva_heatmap - figures.py PANEL_REGISTRY), so this is a FIDELITY-GAP rather than a regression,
+    but the hypothesis-specific Wilcoxon pathway stats, reference gene-set assessment, and
+    leading-edge focus have no clear FRAME counterpart. S3, routed to figures.
+  reference:
+    - {file: workflow/stages/hypothesis/stage.R, line: 94}
+  frame:
+    - {file: src/bulk_rna_frame/workflow/scripts/hypotheses.py, line: 126}
+  evidence: code-only
+  target: figures
+  status: open
+  commit: null
+
+- id: A4-011
+  track: A
+  area: hypothesis/composition (panels without color annotations)
+  verdict: OK
+  severity: S4
+  summary: Panels without color annotations are handled gracefully; color is optional and never required for hypothesis evidence or cell-state direction
+  detail: >
+    Per the focus note on frame commit 6e5dac1 ("support publication panels without color
+    annotations"), color is optional in hypothesis_panels.schema.yaml for programs, gene_panels,
+    and pathway_panels (hypothesis_panels.schema.yaml:17,34,51), matching REF where gene panels
+    carry no per-panel color and styling comes from hypothesis_theme.R
+    (hypothesis_gene_panels.R:89). hypotheses.py's normalized_gene_panels passes program color
+    through as possibly-None (figures.py:174) and support/evidence logic ignores color entirely,
+    so a colorless panel evaluates fine. The consuming publication heatmap now coalesces a
+    missing program_color to the "Other / poorly characterized" default rather than erroring
+    (commit 6e5dac1). Cell-state direction coloring uses the condition palette, not panel color
+    (composition.R:67). Direction/color handling is robust to missing annotations; verdict OK.
+  reference:
+    - {file: workflow/stages/hypothesis/hypothesis_gene_panels.R, line: 89}
+  frame:
+    - {file: src/bulk_rna_frame/schemas/hypothesis_panels.schema.yaml, line: 17}
+  evidence: code-only
+  target: figures
+  status: open
+  commit: null
+
+- id: A4-012
+  track: A
+  area: composition (signature provenance)
+  verdict: OK
+  severity: S5
+  summary: FRAME separates a neutral signature schema from consumer-owned signature content, unlike REF's baked-in lymphatic signatures
+  detail: >
+    REF ships the curated lymphatic/immune signature content directly in
+    config/deconvolution_signatures.yaml (11 named signatures with gene lists and categories,
+    deconvolution_signatures.yaml:1-37). FRAME instead defines a neutral signatures.schema.yaml
+    (id, label, category, genes; genes minItems 2) and keeps the actual curated signatures
+    consumer-owned, referenced by the project config (signatures.schema.yaml:1-23; documented in
+    docs/full-migration-map.md:214). This is the intended provenance separation and an
+    improvement for reuse; the only minor delta is that FRAME requires an explicit label per
+    signature whereas REF derived a label from the id via gsub("_"," ")
+    (deconvolution_signatures.R:72). Verdict OK, S5.
+  reference:
+    - {file: config/deconvolution_signatures.yaml, line: 1}
+  frame:
+    - {file: src/bulk_rna_frame/schemas/signatures.schema.yaml, line: 1}
+  evidence: code-only
+  target: stats
+  status: open
+  commit: null
