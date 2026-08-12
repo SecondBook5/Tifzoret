@@ -4,402 +4,325 @@
   verdict: OK
   severity: S5
   summary: PCA axis labels report PC1/PC2 percent variance from the same prcomp decomposition on VST.
-  detail: >
-    REF reads precomputed pca_variance_explained.tsv and labels axes
-    "PC1 (%.1f%% variance)"/"PC2 (%.1f%% variance)" via make_pca_plot. FRAME runs
-    stats::prcomp(t(vst), center=TRUE, scale.=FALSE) in qc.R, computes
-    variance = 100 * sdev^2 / sum(sdev^2), and labels "PC1 (%.1f%%)"/"PC2 (%.1f%%)".
-    Same underlying VST-space eigen-decomposition and same rounding; only the word
-    "variance" in the axis title differs. Statistically equivalent.
+  detail: 'REF reads precomputed pca_variance_explained.tsv and labels axes "PC1 (%.1f%% variance)"/"PC2 (%.1f%% variance)" via make_pca_plot. FRAME runs stats::prcomp(t(vst), center=TRUE, scale.=FALSE) in qc.R, computes variance = 100 * sdev^2 / sum(sdev^2), and labels "PC1 (%.1f%%)"/"PC2 (%.1f%%)". Same underlying VST-space eigen-decomposition and same rounding; only the word "variance" in the axis title differs. Statistically equivalent.
+
+    '
   reference:
-    - {file: analysis/cape_xizhao_edits/publication_figure_functions.R, line: 384}
-    - {file: analysis/cape_xizhao_edits/publication_figure_functions.R, line: 422}
+  - file: analysis/cape_xizhao_edits/publication_figure_functions.R
+    line: 384
+  - file: analysis/cape_xizhao_edits/publication_figure_functions.R
+    line: 422
   frame:
-    - {file: src/bulk_rna_frame/workflow/scripts/qc.R, line: 71}
-    - {file: src/bulk_rna_frame/workflow/scripts/qc.R, line: 98}
+  - file: src/bulk_rna_frame/workflow/scripts/qc.R
+    line: 71
+  - file: src/bulk_rna_frame/workflow/scripts/qc.R
+    line: 98
   evidence: code-only
   target: figures
   status: open
   commit: null
-
 - id: B2-002
   track: B
   area: Set2-A PCA group ellipses
   verdict: FIDELITY-GAP
   severity: S3
   summary: REF draws minimum-enclosing group boundaries; FRAME draws covariance ellipses, so Panel A envelopes look different.
-  detail: >
-    REF make_pca_plot builds a custom minimum-enclosing dashed oval per group
-    (enclosing_ellipse: axis-aligned, padded to guarantee containment) and the gold
-    Panel A subtitle reads "Dashed ovals denote minimum-enclosing group boundaries".
-    FRAME uses ellipse_coordinates (utils.R), a covariance ellipse oriented by
-    eigen(cov) with a chi-square radius (level 0.80) additionally expanded to
-    contain all points (observed_radius*1.08) and a stabilized minor axis for
-    3-point groups; its subtitle reads "Ellipses summarize within-group covariance".
-    Both are containment envelopes for n=3 groups but render as visibly different
-    shapes/orientation. FRAME's covariance-oriented ellipse is arguably the more
-    standard statistical object; this is a presentation-fidelity divergence, not a
-    numeric error.
+  detail: 'REF make_pca_plot builds a custom minimum-enclosing dashed oval per group (enclosing_ellipse: axis-aligned, padded to guarantee containment) and the gold Panel A subtitle reads "Dashed ovals denote minimum-enclosing group boundaries". FRAME uses ellipse_coordinates (utils.R), a covariance ellipse oriented by eigen(cov) with a chi-square radius (level 0.80) additionally expanded to contain all points (observed_radius*1.08) and a stabilized minor axis for 3-point groups; its subtitle reads "Ellipses summarize within-group covariance". Both are containment envelopes for n=3 groups but render as visibly different shapes/orientation. FRAME''s covariance-oriented ellipse is arguably the more standard statistical object; this is a presentation-fidelity divergence, not a numeric error.
+
+    '
   reference:
-    - {file: analysis/cape_xizhao_edits/publication_figure_functions.R, line: 390}
+  - file: analysis/cape_xizhao_edits/publication_figure_functions.R
+    line: 390
   frame:
-    - {file: src/bulk_rna_frame/workflow/scripts/utils.R, line: 136}
+  - file: src/bulk_rna_frame/workflow/scripts/utils.R
+    line: 136
   evidence: code-only
   target: figures
   status: open
   commit: null
-
 - id: B2-003
   track: B
   area: Set2-A PCA aspect ratio
   verdict: REGRESSION
   severity: S3
   summary: FRAME PCA omits coord_equal, so PC1/PC2 are not drawn on a common scale and group separation is visually distorted.
-  detail: >
-    REF make_pca_plot ends with coord_equal(clip="off"), which is best practice for
-    PCA: PC1 and PC2 are in the same units (VST-scale distances) and must share an
-    aspect ratio or the relative separation is misrepresented. FRAME's qc.R pca_plot
-    has no coord_equal/coord_fixed, so the panel is stretched to the default device
-    aspect and the 58.7%/14.1% variance split is not honestly conveyed. FRAME
-    diverges from REF in a worse way for the exact same data.
+  detail: 'REF make_pca_plot ends with coord_equal(clip="off"), which is best practice for PCA: PC1 and PC2 are in the same units (VST-scale distances) and must share an aspect ratio or the relative separation is misrepresented. FRAME''s qc.R pca_plot has no coord_equal/coord_fixed, so the panel is stretched to the default device aspect and the 58.7%/14.1% variance split is not honestly conveyed. FRAME diverges from REF in a worse way for the exact same data.
+
+    '
   reference:
-    - {file: analysis/cape_xizhao_edits/publication_figure_functions.R, line: 425}
+  - file: analysis/cape_xizhao_edits/publication_figure_functions.R
+    line: 425
   frame:
-    - {file: src/bulk_rna_frame/workflow/scripts/qc.R, line: 84}
+  - file: src/bulk_rna_frame/workflow/scripts/qc.R
+    line: 84
   evidence: code-only
   target: figures
   status: open
   commit: null
-
 - id: B2-004
   track: B
   area: Set2-A PCA/correlation dendrograms
   verdict: FIDELITY-GAP
   severity: S3
   summary: REF renders row/column dendrograms and a condition annotation bar on the correlation heatmap; FRAME draws neither dendrogram.
-  detail: >
-    REF make_correlation_heatmap uses ComplexHeatmap::Heatmap with
-    cluster_rows/cluster_columns as dendrograms, so gold Panel A shows the sample
-    trees on both axes plus a Condition annotation strip. FRAME's qc.R computes the
-    same average-linkage order but plots a ggplot geom_tile with only a thin
-    condition annotation bar (annotation_plot) and no dendrogram on either axis; the
-    clustering that determines the ordering is invisible to the reader. The
-    hierarchical relationship the panel is meant to communicate is lost. Same applies
-    to the paired pca_correlation layout.
+  detail: 'REF make_correlation_heatmap uses ComplexHeatmap::Heatmap with cluster_rows/cluster_columns as dendrograms, so gold Panel A shows the sample trees on both axes plus a Condition annotation strip. FRAME''s qc.R computes the same average-linkage order but plots a ggplot geom_tile with only a thin condition annotation bar (annotation_plot) and no dendrogram on either axis; the clustering that determines the ordering is invisible to the reader. The hierarchical relationship the panel is meant to communicate is lost. Same applies to the paired pca_correlation layout.
+
+    '
   reference:
-    - {file: analysis/cape_xizhao_edits/publication_figure_functions.R, line: 449}
+  - file: analysis/cape_xizhao_edits/publication_figure_functions.R
+    line: 449
   frame:
-    - {file: src/bulk_rna_frame/workflow/scripts/qc.R, line: 130}
+  - file: src/bulk_rna_frame/workflow/scripts/qc.R
+    line: 130
   evidence: code-only
   target: figures
   status: open
   commit: null
-
 - id: B2-005
   track: B
   area: Set2-A sample-correlation clustering
   verdict: OK
   severity: S4
   summary: Both order the sample-correlation matrix by average linkage on (1 - Pearson r).
-  detail: >
-    REF clusters with hclust(as.dist(1 - mat), method="average") and FRAME with
-    hclust(as.dist(1 - correlation), method="average") on Pearson correlation of the
-    VST matrix. Identical distance and linkage; the resulting sample ordering is the
-    same (Control2/1/3 | CAPE2/3/4 in the gold). Color scales differ in detail (REF
-    colorRamp2 min/median/1; FRAME 5-stop gradientn min..1) but the quantity encoded
-    is the same continuous Pearson r. Faithful.
+  detail: 'REF clusters with hclust(as.dist(1 - mat), method="average") and FRAME with hclust(as.dist(1 - correlation), method="average") on Pearson correlation of the VST matrix. Identical distance and linkage; the resulting sample ordering is the same (Control2/1/3 | CAPE2/3/4 in the gold). Color scales differ in detail (REF colorRamp2 min/median/1; FRAME 5-stop gradientn min..1) but the quantity encoded is the same continuous Pearson r. Faithful.
+
+    '
   reference:
-    - {file: analysis/cape_xizhao_edits/publication_figure_functions.R, line: 436}
+  - file: analysis/cape_xizhao_edits/publication_figure_functions.R
+    line: 436
   frame:
-    - {file: src/bulk_rna_frame/workflow/scripts/qc.R, line: 106}
+  - file: src/bulk_rna_frame/workflow/scripts/qc.R
+    line: 106
   evidence: code-only
   target: figures
   status: open
   commit: null
-
 - id: B2-006
   track: B
   area: Set2-B cell-state relative scores
   verdict: OK
   severity: S3
   summary: Both plot RELATIVE signature scores (not cell fractions); FRAME additionally emits an explicit not-fractions warning.
-  detail: >
-    Gold Panel B plots "Signature score log2 fold-change" with subtitle "Positive
-    scores are higher in CAPE; negative scores are higher in Control" - a relative
-    signature effect. FRAME composition.R computes ssGSEA scores (GSVA::ssgseaParam,
-    normalize=TRUE) then a limma eBayes contrast on those scores, plots logFC with
-    subtitle "Relative signature scores; positive effects are higher in the contrast
-    numerator", and writes a summary warning that outputs "must not be interpreted as
-    cell fractions". Both are relative; FRAME is explicit about it. REF reads a
-    precomputed deconvolution differential table rather than scoring inline, but the
-    displayed quantity is equivalent.
+  detail: 'Gold Panel B plots "Signature score log2 fold-change" with subtitle "Positive scores are higher in CAPE; negative scores are higher in Control" - a relative signature effect. FRAME composition.R computes ssGSEA scores (GSVA::ssgseaParam, normalize=TRUE) then a limma eBayes contrast on those scores, plots logFC with subtitle "Relative signature scores; positive effects are higher in the contrast numerator", and writes a summary warning that outputs "must not be interpreted as cell fractions". Both are relative; FRAME is explicit about it. REF reads a precomputed deconvolution differential table rather than scoring inline, but the displayed quantity is equivalent.
+
+    '
   reference:
-    - {file: analysis/cape_xizhao_edits/publication_figure_functions.R, line: 600}
+  - file: analysis/cape_xizhao_edits/publication_figure_functions.R
+    line: 600
   frame:
-    - {file: src/bulk_rna_frame/workflow/scripts/composition.R, line: 78}
+  - file: src/bulk_rna_frame/workflow/scripts/composition.R
+    line: 78
   evidence: code-only
   target: figures
   status: open
   commit: null
-
 - id: B2-007
   track: B
   area: Set2-B cell-state contrast semantics
   verdict: OK
   severity: S2
   summary: Higher-in direction is taken from the sign of the score logFC and mapped to numerator/denominator, not inferred from group names.
-  detail: >
-    REF sets higher <- if_else(logFC >= 0, "CAPE", "Control") with CAPE/Control
-    hardcoded. FRAME derives numerator/denominator from the contrast table row and
-    sets higher_in <- ifelse(logFC >= 0, numerator, denominator); the limma
-    coefficient is matched by an anchored "^contrast_group<numerator>$" pattern after
-    relevel(ref=denominator), so the positive direction is numerator - denominator by
-    construction, never inferred from factor-level ordering. Contrast semantics are
-    respected and FRAME generalizes REF's hardcoded labels.
+  detail: 'REF sets higher <- if_else(logFC >= 0, "CAPE", "Control") with CAPE/Control hardcoded. FRAME derives numerator/denominator from the contrast table row and sets higher_in <- ifelse(logFC >= 0, numerator, denominator); the limma coefficient is matched by an anchored "^contrast_group<numerator>$" pattern after relevel(ref=denominator), so the positive direction is numerator - denominator by construction, never inferred from factor-level ordering. Contrast semantics are respected and FRAME generalizes REF''s hardcoded labels.
+
+    '
   reference:
-    - {file: analysis/cape_xizhao_edits/publication_figure_functions.R, line: 558}
+  - file: analysis/cape_xizhao_edits/publication_figure_functions.R
+    line: 558
   frame:
-    - {file: src/bulk_rna_frame/workflow/scripts/composition.R, line: 60}
+  - file: src/bulk_rna_frame/workflow/scripts/composition.R
+    line: 60
   evidence: code-only
   target: figures
   status: open
   commit: null
-
 - id: B2-008
   track: B
   area: Set2-B cell-state signature curation
   verdict: FIDELITY-GAP
   severity: S3
   summary: REF curates a fixed 11-signature set and hand-ordered top-to-bottom layout; FRAME shows all passing signatures ordered by within-category effect.
-  detail: >
-    REF make_cell_state_hybrid filters to a hardcoded desired_top_to_bottom vector of
-    11 named signatures (Smooth muscle contractile ... Macrophage myeloid) and locks
-    that vertical order, giving the polished gold Panel B. FRAME plots every signature
-    that passes the min_genes filter, facets by category, and orders labels by
-    arrange(category, logFC) (data-driven). For a different cohort FRAME's approach is
-    more general, but for this figure the exact signature membership and ordering are
-    not reproduced. Presentation-fidelity gap, not a statistical one.
+  detail: 'REF make_cell_state_hybrid filters to a hardcoded desired_top_to_bottom vector of 11 named signatures (Smooth muscle contractile ... Macrophage myeloid) and locks that vertical order, giving the polished gold Panel B. FRAME plots every signature that passes the min_genes filter, facets by category, and orders labels by arrange(category, logFC) (data-driven). For a different cohort FRAME''s approach is more general, but for this figure the exact signature membership and ordering are not reproduced. Presentation-fidelity gap, not a statistical one.
+
+    '
   reference:
-    - {file: analysis/cape_xizhao_edits/publication_figure_functions.R, line: 561}
+  - file: analysis/cape_xizhao_edits/publication_figure_functions.R
+    line: 561
   frame:
-    - {file: src/bulk_rna_frame/workflow/scripts/composition.R, line: 63}
+  - file: src/bulk_rna_frame/workflow/scripts/composition.R
+    line: 63
   evidence: code-only
   target: figures
   status: open
   commit: null
-
 - id: B2-009
   track: B
   area: Set2-C volcano gene classes
   verdict: FIDELITY-GAP
   severity: S3
   summary: FRAME volcano has 3 point classes; the gold volcano distinguishes 4, breaking out "FDR-only" and "|LFC|-only" genes.
-  detail: >
-    The gold Panel C (build_volcano_plot) colors genes into significant_up,
-    significant_down, padj_only ("FDR<0.05 only", teal), and lfc_only ("|LFC|>=1 only",
-    orange), plus grey ns. FRAME de.R collapses to three: up_in_numerator /
-    down_in_numerator (each requires FDR<fdr AND |LFC|>=abs_log2fc) and
-    not_significant. Genes that are FDR-significant with small effect, and genes with
-    large effect that miss FDR, are both merged into the grey not_significant cloud in
-    FRAME, so the reader cannot see the two intermediate classes the reference
-    deliberately separates. Missing panel capability.
+  detail: 'The gold Panel C (build_volcano_plot) colors genes into significant_up, significant_down, padj_only ("FDR<0.05 only", teal), and lfc_only ("|LFC|>=1 only", orange), plus grey ns. FRAME de.R collapses to three: up_in_numerator / down_in_numerator (each requires FDR<fdr AND |LFC|>=abs_log2fc) and not_significant. Genes that are FDR-significant with small effect, and genes with large effect that miss FDR, are both merged into the grey not_significant cloud in FRAME, so the reader cannot see the two intermediate classes the reference deliberately separates. Missing panel capability.
+
+    '
   reference:
-    - {file: workflow/stages/de/de_plot_main.R, line: 695}
+  - file: workflow/stages/de/de_plot_main.R
+    line: 695
   frame:
-    - {file: src/bulk_rna_frame/workflow/scripts/de.R, line: 87}
+  - file: src/bulk_rna_frame/workflow/scripts/de.R
+    line: 87
   evidence: code-only
   target: figures
   status: open
   commit: null
-
 - id: B2-010
   track: B
   area: Set2-C volcano label selection
   verdict: FIDELITY-GAP
   severity: S3
   summary: FRAME labels the global top-N by adjusted p; REF uses a tiered priority / balanced up-down / other-FDR / fallback selector.
-  detail: >
-    REF select_volcano_label_table (de_labels.R) fills labels in tiers - study-named
-    priority genes first (only if FDR-significant), then a balanced strict up/down
-    split, then other FDR-significant genes, then strongest overall - deduplicating on
-    plot_label and preferring rows with real symbols, with a fixed seed. FRAME simply
-    filters direction != not_significant, arranges by adjusted_p_value then
-    desc(abs(log2FC)), and takes slice_head(top_labels): no priority-gene promotion,
-    no guaranteed up/down balance, and no symbol-dedup tiering. FRAME can therefore
-    omit hypothesis-relevant callouts (e.g. mechanism genes) and skew all labels to
-    one direction.
+  detail: 'REF select_volcano_label_table (de_labels.R) fills labels in tiers - study-named priority genes first (only if FDR-significant), then a balanced strict up/down split, then other FDR-significant genes, then strongest overall - deduplicating on plot_label and preferring rows with real symbols, with a fixed seed. FRAME simply filters direction != not_significant, arranges by adjusted_p_value then desc(abs(log2FC)), and takes slice_head(top_labels): no priority-gene promotion, no guaranteed up/down balance, and no symbol-dedup tiering. FRAME can therefore omit hypothesis-relevant callouts (e.g. mechanism genes) and skew all labels to one direction.
+
+    '
   reference:
-    - {file: workflow/stages/de/de_labels.R, line: 358}
+  - file: workflow/stages/de/de_labels.R
+    line: 358
   frame:
-    - {file: src/bulk_rna_frame/workflow/scripts/de.R, line: 99}
+  - file: src/bulk_rna_frame/workflow/scripts/de.R
+    line: 99
   evidence: code-only
   target: figures
   status: open
   commit: null
-
 - id: B2-011
   track: B
   area: Set2-C volcano off-scale handling
   verdict: FIDELITY-GAP
   severity: S3
   summary: REF clamps off-scale hero genes to the top edge with open-triangle markers and crops via symmetric display caps; FRAME does neither.
-  detail: >
-    REF build_volcano_plot computes symmetric display caps (compute_symmetric_display_cap,
-    0.995 quantile), plots true unclipped values inside a coord_cartesian window, and
-    renders genes above the y-cap as open up-triangles clamped to the top edge so the
-    strongest genes stay visible and labelable without stretching the axis. FRAME de.R
-    plots raw negative_log10_p with no cap and no off-scale treatment, so a few extreme
-    genes stretch the y-axis and compress the main cloud - exactly the artifact REF's
-    design notes call out. FRAME lacks this readability capability.
+  detail: 'REF build_volcano_plot computes symmetric display caps (compute_symmetric_display_cap, 0.995 quantile), plots true unclipped values inside a coord_cartesian window, and renders genes above the y-cap as open up-triangles clamped to the top edge so the strongest genes stay visible and labelable without stretching the axis. FRAME de.R plots raw negative_log10_p with no cap and no off-scale treatment, so a few extreme genes stretch the y-axis and compress the main cloud - exactly the artifact REF''s design notes call out. FRAME lacks this readability capability.
+
+    '
   reference:
-    - {file: workflow/stages/de/de_plot_main.R, line: 517}
+  - file: workflow/stages/de/de_plot_main.R
+    line: 517
   frame:
-    - {file: src/bulk_rna_frame/workflow/scripts/de.R, line: 112}
+  - file: src/bulk_rna_frame/workflow/scripts/de.R
+    line: 112
   evidence: code-only
   target: figures
   status: open
   commit: null
-
 - id: B2-012
   track: B
   area: Set2-C volcano significance line
   verdict: REGRESSION
   severity: S3
   summary: FRAME draws a horizontal line at -log10(FDR) on a raw-p volcano, implying a raw-p cutoff that does not exist; REF deliberately omits it.
-  detail: >
-    Both plots put raw -log10(p) on the y-axis. REF de_plot_main.R design note 2
-    explicitly refuses to draw a horizontal significance line because FDR significance
-    does not correspond to a single raw-p value and such a line "tends to imply a rule
-    the plot is not actually using". FRAME de.R adds
-    geom_hline(yintercept = -log10(cfg$figures$de$fdr)), which visually asserts a raw-p
-    threshold that the FDR-based coloring does not use, misleading the reader. This is
-    a one-line removal; recorded as an inline candidate for the serial pass.
+  detail: 'Both plots put raw -log10(p) on the y-axis. REF de_plot_main.R design note 2 explicitly refuses to draw a horizontal significance line because FDR significance does not correspond to a single raw-p value and such a line "tends to imply a rule the plot is not actually using". FRAME de.R adds geom_hline(yintercept = -log10(cfg$figures$de$fdr)), which visually asserts a raw-p threshold that the FDR-based coloring does not use, misleading the reader. This is a one-line removal; recorded as an inline candidate for the serial pass.
+
+    '
   reference:
-    - {file: workflow/stages/de/de_plot_main.R, line: 16}
+  - file: workflow/stages/de/de_plot_main.R
+    line: 16
   frame:
-    - {file: src/bulk_rna_frame/workflow/scripts/de.R, line: 116}
+  - file: src/bulk_rna_frame/workflow/scripts/de.R
+    line: 116
   evidence: code-only
   target: inline
-  status: open
-  commit: null
-
+  status: fixed-inline
+  commit: 2e0c662
 - id: B2-013
   track: B
   area: Set2-C volcano thresholds
   verdict: OK
   severity: S5
   summary: Volcano FDR and |log2FC| thresholds are config-driven with defaults (0.05, 1.0) matching REF, and the x-axis states the contrast direction.
-  detail: >
-    REF hardcodes fdr_threshold and lfc_threshold (1.0) into the class and shading
-    logic. FRAME reads cfg$figures$de$fdr and cfg$figures$de$abs_log2fc (template
-    defaults fdr=0.05, abs_log2fc=1.0, matching REF) for the direction classification,
-    the dotted |log2FC| guides, and the shaded regions, and labels the x-axis
-    "Shrunken log2 fold-change (numerator - denominator)", making the contrast
-    direction explicit. Threshold parity holds at defaults and the axis is more
-    self-documenting than REF.
+  detail: 'REF hardcodes fdr_threshold and lfc_threshold (1.0) into the class and shading logic. FRAME reads cfg$figures$de$fdr and cfg$figures$de$abs_log2fc (template defaults fdr=0.05, abs_log2fc=1.0, matching REF) for the direction classification, the dotted |log2FC| guides, and the shaded regions, and labels the x-axis "Shrunken log2 fold-change (numerator - denominator)", making the contrast direction explicit. Threshold parity holds at defaults and the axis is more self-documenting than REF.
+
+    '
   reference:
-    - {file: workflow/stages/de/de_plot_main.R, line: 562}
+  - file: workflow/stages/de/de_plot_main.R
+    line: 562
   frame:
-    - {file: src/bulk_rna_frame/workflow/scripts/de.R, line: 88}
+  - file: src/bulk_rna_frame/workflow/scripts/de.R
+    line: 88
   evidence: code-only
   target: figures
   status: open
   commit: null
-
 - id: B2-014
   track: B
   area: Set2-D three DE-clustering options
   verdict: OK
   severity: S3
   summary: FRAME supports all three DE-heatmap organizations - global-clustered, program-grouped-legend, and program-grouped direct-labels.
-  detail: >
-    REF de_heatmap_requested_edit.R builds make_de_heatmap in modes global_clustered
-    (D1), program_grouped_legend (D2) and program_grouped_direct (D3). FRAME
-    publication.R emits the matching three variants via heatmap_variant(): global_order
-    -> de_heatmap_global, program_order -> de_heatmap_program_grouped, and
-    program_order with direct_labels=TRUE -> de_heatmap_compact. The figures.py panel
-    registry exposes these as de_heatmap variants global_clustered / program_grouped /
-    direct_program_labels (default global_clustered). All three REF options are
-    present.
+  detail: 'REF de_heatmap_requested_edit.R builds make_de_heatmap in modes global_clustered (D1), program_grouped_legend (D2) and program_grouped_direct (D3). FRAME publication.R emits the matching three variants via heatmap_variant(): global_order -> de_heatmap_global, program_order -> de_heatmap_program_grouped, and program_order with direct_labels=TRUE -> de_heatmap_compact. The figures.py panel registry exposes these as de_heatmap variants global_clustered / program_grouped / direct_program_labels (default global_clustered). All three REF options are present.
+
+    '
   reference:
-    - {file: analysis/cape_xizhao_edits/de_heatmap_requested_edit.R, line: 13}
+  - file: analysis/cape_xizhao_edits/de_heatmap_requested_edit.R
+    line: 13
   frame:
-    - {file: src/bulk_rna_frame/workflow/scripts/publication.R, line: 140}
-    - {file: src/bulk_rna_frame/figures.py, line: 79}
+  - file: src/bulk_rna_frame/workflow/scripts/publication.R
+    line: 140
+  - file: src/bulk_rna_frame/figures.py
+    line: 79
   evidence: code-only
   target: figures
   status: open
   commit: null
-
 - id: B2-015
   track: B
   area: Set2-D DE-heatmap dendrograms
   verdict: FIDELITY-GAP
   severity: S3
   summary: REF renders the global row tree (D1), within-program row trees (D2) and the sample tree; FRAME uses ordering-only geom_tile with no dendrogram in any variant.
-  detail: >
-    REF make_de_heatmap (ComplexHeatmap) shows the column dendrogram in all modes,
-    the full global row dendrogram in D1, and per-slice within-program row dendrograms
-    in D2 (show_row_dend=TRUE), hiding only D3's row tree while still using it for
-    order. FRAME computes the same kind of orderings (global_order via
-    hclust(dist(z),"complete"); per-program within-slice hclust) but renders every
-    variant as a ggplot geom_tile grid, so no row or column dendrogram is ever drawn.
-    The gold Panels D1/D2 visibly show these trees; FRAME cannot. Presentation-fidelity
-    gap across all three options.
+  detail: 'REF make_de_heatmap (ComplexHeatmap) shows the column dendrogram in all modes, the full global row dendrogram in D1, and per-slice within-program row dendrograms in D2 (show_row_dend=TRUE), hiding only D3''s row tree while still using it for order. FRAME computes the same kind of orderings (global_order via hclust(dist(z),"complete"); per-program within-slice hclust) but renders every variant as a ggplot geom_tile grid, so no row or column dendrogram is ever drawn. The gold Panels D1/D2 visibly show these trees; FRAME cannot. Presentation-fidelity gap across all three options.
+
+    '
   reference:
-    - {file: analysis/cape_xizhao_edits/publication_figure_functions.R, line: 336}
+  - file: analysis/cape_xizhao_edits/publication_figure_functions.R
+    line: 336
   frame:
-    - {file: src/bulk_rna_frame/workflow/scripts/publication.R, line: 115}
+  - file: src/bulk_rna_frame/workflow/scripts/publication.R
+    line: 115
   evidence: code-only
   target: figures
   status: open
   commit: null
-
 - id: B2-016
   track: B
   area: Set2-D DE-heatmap clustering methods
   verdict: OK
   severity: S4
   summary: Row clustering matches (Euclidean/complete); FRAME orders columns by 1-corr/average vs REF Euclidean/complete rotated to a fixed sample order.
-  detail: >
-    Global row order: REF ComplexHeatmap default (Euclidean, complete) and FRAME
-    hclust(dist(z), method="complete") agree, and both split-then-cluster within
-    program for the grouped modes. Column order differs: REF clusters
-    hclust(dist(t(z)), "complete") then dendextend::rotate to a fixed
-    control1..Cape4 order; FRAME uses hclust(as.dist(1-cor(z)), "average"). Both
-    recover the Control-vs-CAPE split seen in the gold, and since the column order does
-    not alter any z-value it is a benign method/ordering difference rather than a
-    numeric divergence.
+  detail: 'Global row order: REF ComplexHeatmap default (Euclidean, complete) and FRAME hclust(dist(z), method="complete") agree, and both split-then-cluster within program for the grouped modes. Column order differs: REF clusters hclust(dist(t(z)), "complete") then dendextend::rotate to a fixed control1..Cape4 order; FRAME uses hclust(as.dist(1-cor(z)), "average"). Both recover the Control-vs-CAPE split seen in the gold, and since the column order does not alter any z-value it is a benign method/ordering difference rather than a numeric divergence.
+
+    '
   reference:
-    - {file: analysis/cape_xizhao_edits/publication_figure_functions.R, line: 271}
+  - file: analysis/cape_xizhao_edits/publication_figure_functions.R
+    line: 271
   frame:
-    - {file: src/bulk_rna_frame/workflow/scripts/publication.R, line: 90}
+  - file: src/bulk_rna_frame/workflow/scripts/publication.R
+    line: 90
   evidence: code-only
   target: figures
   status: open
   commit: null
-
 - id: B2-017
   track: B
   area: Set2-D DE-heatmap programs and scaling
   verdict: OK
   severity: S4
   summary: Row z-scoring and clamp match; FRAME sources program assignments from config while REF hardcodes them, and both take the top DE genes by significance.
-  detail: >
-    Scaling: REF z <- t(scale(t(mat))) with color limits +/-1.5 (squish); FRAME
-    row_zscore clamps to +/- cfg$figures$de$z_limit (default 1.5) with matching
-    scale_fill_gradient2 limits - equivalent per-gene standardization and clamp. Gene
-    selection: REF reads a precomputed cape_top_de_heatmap_genes.tsv; FRAME selects the
-    top cfg$figures$de$top_heatmap_genes (default 40, matching the 40 rows in the gold)
-    by arrange(adjusted_p_value, desc(abs(log2_fold_change))). Program annotation: REF
-    hardcodes an 8-group case_when mapping and program_levels; FRAME derives programs
-    and their order from hypothesis_panels.yaml (configured_gene_panels /
-    program_order), which reproduces the same 8 program strip in the gold while
-    generalizing to other cohorts.
+  detail: 'Scaling: REF z <- t(scale(t(mat))) with color limits +/-1.5 (squish); FRAME row_zscore clamps to +/- cfg$figures$de$z_limit (default 1.5) with matching scale_fill_gradient2 limits - equivalent per-gene standardization and clamp. Gene selection: REF reads a precomputed cape_top_de_heatmap_genes.tsv; FRAME selects the top cfg$figures$de$top_heatmap_genes (default 40, matching the 40 rows in the gold) by arrange(adjusted_p_value, desc(abs(log2_fold_change))). Program annotation: REF hardcodes an 8-group case_when mapping and program_levels; FRAME derives programs and their order from hypothesis_panels.yaml (configured_gene_panels / program_order), which reproduces the same 8 program strip in the gold while generalizing to other cohorts.
+
+    '
   reference:
-    - {file: analysis/cape_xizhao_edits/publication_figure_functions.R, line: 211}
+  - file: analysis/cape_xizhao_edits/publication_figure_functions.R
+    line: 211
   frame:
-    - {file: src/bulk_rna_frame/workflow/scripts/publication.R, line: 89}
+  - file: src/bulk_rna_frame/workflow/scripts/publication.R
+    line: 89
   evidence: code-only
   target: figures
   status: open

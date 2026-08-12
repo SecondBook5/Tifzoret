@@ -202,23 +202,18 @@ All four findings share a single root cause: FRAME applies BH multiple-testing c
 
 ---
 
-## Inline-Fix Backlog (Pending Serial Inline Pass)
+## Inline Fixes
 
-The following 12 findings are marked `target: inline` but have NOT been applied yet. They represent trivial/obvious gaps suitable for immediate fixing:
+**Applied inline (status `fixed-inline`, commit `2e0c662`).** Four trivial/obvious defects were corrected during the serial inline pass; all tests remain green:
 
-- **A3-007:** Regulatory (regulon) and STRING association edges stay in separate stages/files and are never merged
-- **A5-002:** num.sv(method="be") is permutation-based but no set.seed is set, so n.sv (and the whole SV-adjusted DE) is nondeterministic.
-- **C1-005:** Frame captures seeds in manifest and propagates across R and Python stages
-- **C1-006:** Frame generates comprehensive provider receipts with retrieval metadata and checksums
-- **C1-007:** Frame implements content-addressable provider caching with SHA256 cache keys
-- **C1-008:** Frame manifest captures comprehensive run provenance (config, seeds, env, revision, checksums)
-- **C1-009:** Frame reuses prepared input checksums in release manifest avoiding redundant hashing
-- **C1-010:** Frame implements numeric verification with configurable tolerances (default atol=1e-8, rtol=1e-6)
-- **B2-012:** FRAME draws a horizontal line at -log10(FDR) on a raw-p volcano, implying a raw-p cutoff that does not exist; REF deliberately omits it.
-- **A5-014:** FRAME's read_counts_contract lacks the 2^31 overflow guard REF's io.R added, allowing silent NA coercion of counts beyond 32-bit range.
-- **B3-007:** FRAME clamps GSVA row z-scores to +/-2 while REF (and the gold legend) uses +/-1.5
-- **C1-004:** Frame lacks REF's defaults inheritance mechanism
+- **A5-002** (S2, BEST-PRACTICE): `sva.R` had no `set.seed` before `sva::num.sv(method="be")`, so the surrogate-variable count — and the whole SV-adjusted DE sensitivity result — was nondeterministic. Fixed by seeding from `cfg$analysis$random_seed` (matching `mediation.R`).
+- **A5-014** (S4, REGRESSION): `utils.R::read_counts_contract` lacked REF's 2³¹ overflow guard, so counts ≥ 2³¹ would silently coerce to `NA`. Fixed by erroring on all-NA matrices and on values ≥ 2147483647 before integer coercion.
+- **B2-012** (S3, REGRESSION): the volcano drew a horizontal `geom_hline` at `-log10(FDR)` on a raw-p axis, implying a raw-p cutoff that does not exist; REF deliberately omits it. Line removed.
+- **B3-007** (S5, REGRESSION): GSVA row z-scores were clamped to ±2 vs the gold legend's ±1.5. Restored to ±1.5 (`row_zscore`'s own default).
 
+**Carried `target: inline` but require no fix (verdict `OK`).** These are faithful/equivalent behaviors recorded for coverage, not gaps: A3-007, C1-005, C1-006, C1-007, C1-008, C1-009, C1-010.
+
+**Re-routed off inline.** C1-004 (defaults-inheritance mechanism) is *not* a one-liner — it needs a schema field plus deep-merge logic — so it moves to the harness backlog rather than an inline edit.
 
 ---
 
@@ -227,12 +222,12 @@ The following 12 findings are marked `target: inline` but have NOT been applied 
 Findings with `status: open` are routed to sub-projects #2–#4 for systematic remediation:
 
 - **Figures:** 54 findings
-- **Harness:** 14 findings
+- **Harness:** 15 findings
 - **Stats:** 59 findings
 
 
 **Next steps:**
-- Sub-project #2 (Numerical-parity harness): Close 14 harness findings.
+- Sub-project #2 (Numerical-parity harness): Close 15 harness findings.
 - Sub-project #3 (Figure engine port): Close 54 figure findings.
 - Sub-project #4 (Statistical correctness): Close 59 stats findings + systemic multiple-testing fix.
 
@@ -265,4 +260,4 @@ Per the design spec (`docs/superpowers/specs/2026-08-12-parity-audit-design.md`)
 
 **Register:** `docs/parity-gaps.yaml` (139 entries)  
 **Evidence:** `analysis/bulk_rna_frame/` diff bridge + cape_thoracic_duct re-run  
-**Next:** Inline fixes → Sub-project #2 (harness) → Sub-project #3 (figures) → Sub-project #4 (stats)
+**Next:** Inline fixes applied (commit `2e0c662`) → Sub-project #2 (harness) → Sub-project #3 (figures) → Sub-project #4 (stats)

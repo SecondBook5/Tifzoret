@@ -1,474 +1,408 @@
 - id: B3-001
   track: B
-  area: "Set2-E GO BP ORA (FDR family)"
+  area: Set2-E GO BP ORA (FDR family)
   verdict: REGRESSION
   severity: S2
   summary: FRAME BH-adjusts ORA p-values across all pooled collections and both directions, unlike REF's per-ontology enrichGO
-  detail: >
-    REF panel E comes from clusterProfiler enrichGO run separately on the up and down gene
-    lists (dat$ora_up / dat$ora_down), so displayed FDR values are BH-corrected within the
-    GO Biological Process family only. FRAME computes ORA with a single custom hypergeometric
-    pass (run_ora) over the union of ALL measured gene sets in the GMT (GO + KEGG + Hallmark +
-    configured programs), then applies one p.adjust(method="BH") over the entire bound up+down
-    ora_table (pathways.R:228). ontology.R later filters that pooled result down to GO BP for
-    display and re-selects terms by the pooled adjusted_p_value (ontology.R:33-38). The result
-    is that the -log10(FDR) color and the top-term selection reflect a much larger, heterogeneous
-    multiple-testing family than REF's, changing both the shown FDR magnitudes and potentially
-    which 8 terms appear per direction. This is a numeric-parity divergence in a displayed
-    statistic; best practice is to correct within a coherent gene-set family (as REF does).
+  detail: 'REF panel E comes from clusterProfiler enrichGO run separately on the up and down gene lists (dat$ora_up / dat$ora_down), so displayed FDR values are BH-corrected within the GO Biological Process family only. FRAME computes ORA with a single custom hypergeometric pass (run_ora) over the union of ALL measured gene sets in the GMT (GO + KEGG + Hallmark + configured programs), then applies one p.adjust(method="BH") over the entire bound up+down ora_table (pathways.R:228). ontology.R later filters that pooled result down to GO BP for display and re-selects terms by the pooled adjusted_p_value (ontology.R:33-38). The result is that the -log10(FDR) color and the top-term selection reflect a much larger, heterogeneous multiple-testing family than REF''s, changing both the shown FDR magnitudes and potentially which 8 terms appear per direction. This is a numeric-parity divergence in a displayed statistic; best practice is to correct within a coherent gene-set family (as REF does).
+
+    '
   reference:
-    - {file: analysis/cape_xizhao_edits/ora_combined_requested_edit.R, line: 17}
-    - {file: analysis/cape_xizhao_edits/publication_figure_functions.R, line: 713}
+  - file: analysis/cape_xizhao_edits/ora_combined_requested_edit.R
+    line: 17
+  - file: analysis/cape_xizhao_edits/publication_figure_functions.R
+    line: 713
   frame:
-    - {file: src/bulk_rna_frame/workflow/scripts/pathways.R, line: 228}
-    - {file: src/bulk_rna_frame/workflow/scripts/ontology.R, line: 37}
+  - file: src/bulk_rna_frame/workflow/scripts/pathways.R
+    line: 228
+  - file: src/bulk_rna_frame/workflow/scripts/ontology.R
+    line: 37
   evidence: code-only
   target: stats
   status: open
   commit: null
-
 - id: B3-002
   track: B
-  area: "Set2-E GO BP ORA (layout & encoding)"
+  area: Set2-E GO BP ORA (layout & encoding)
   verdict: REGRESSION
   severity: S3
   summary: REF stacks the two directions vertically with filled shape-21 bubbles on a percent axis; FRAME lays them side-by-side with plain points on a fraction axis
-  detail: >
-    REF make_combined_ora facets the two directions vertically (facet_wrap ncol=1,
-    Upregulated strip on top / Downregulated below), draws filled outlined bubbles
-    (geom_point shape=21, colour="#40354A"), and plots the x axis as a percentage
-    (gene_ratio_pct = 100*Count/GeneRatio-denominator, breaks every 2%, "%" labels),
-    matching the gold PDF. FRAME ontology.R uses facet_grid(. ~ direction_label) which
-    places the directions SIDE BY SIDE, uses plain geom_point (no shape-21 fill/outline),
-    and plots gene_ratio as a raw fraction (0-1) with no percent formatting. Both use
-    viridis magma for -log10(FDR) and size for count, so the statistic mapping is faithful,
-    but the composition, glyph, and axis units diverge from the published panel.
+  detail: 'REF make_combined_ora facets the two directions vertically (facet_wrap ncol=1, Upregulated strip on top / Downregulated below), draws filled outlined bubbles (geom_point shape=21, colour="#40354A"), and plots the x axis as a percentage (gene_ratio_pct = 100*Count/GeneRatio-denominator, breaks every 2%, "%" labels), matching the gold PDF. FRAME ontology.R uses facet_grid(. ~ direction_label) which places the directions SIDE BY SIDE, uses plain geom_point (no shape-21 fill/outline), and plots gene_ratio as a raw fraction (0-1) with no percent formatting. Both use viridis magma for -log10(FDR) and size for count, so the statistic mapping is faithful, but the composition, glyph, and axis units diverge from the published panel.
+
+    '
   reference:
-    - {file: analysis/cape_xizhao_edits/publication_figure_functions.R, line: 766}
-    - {file: analysis/cape_xizhao_edits/publication_figure_functions.R, line: 773}
+  - file: analysis/cape_xizhao_edits/publication_figure_functions.R
+    line: 766
+  - file: analysis/cape_xizhao_edits/publication_figure_functions.R
+    line: 773
   frame:
-    - {file: src/bulk_rna_frame/workflow/scripts/ontology.R, line: 44}
-    - {file: src/bulk_rna_frame/workflow/scripts/ontology.R, line: 42}
+  - file: src/bulk_rna_frame/workflow/scripts/ontology.R
+    line: 44
+  - file: src/bulk_rna_frame/workflow/scripts/ontology.R
+    line: 42
   evidence: code-only
   target: figures
   status: open
   commit: null
-
 - id: B3-003
   track: B
-  area: "Set2-E GO BP ORA (direction semantics)"
+  area: Set2-E GO BP ORA (direction semantics)
   verdict: OK
   severity: S3
   summary: Both split ORA by up/down direction with labels tied to the contrast numerator
-  detail: >
-    REF labels the two facets "Upregulated in CAPE" / "Downregulated in CAPE". FRAME derives
-    direction from de$direction ("up_in_numerator"/"down_in_numerator") and labels facets
-    "Upregulated in {numerator}" / "Downregulated in {numerator}", so the direction encoding
-    is anchored to the contrast numerator rather than inferred from group names. Contrast
-    semantics are preserved and equivalent to REF.
+  detail: 'REF labels the two facets "Upregulated in CAPE" / "Downregulated in CAPE". FRAME derives direction from de$direction ("up_in_numerator"/"down_in_numerator") and labels facets "Upregulated in {numerator}" / "Downregulated in {numerator}", so the direction encoding is anchored to the contrast numerator rather than inferred from group names. Contrast semantics are preserved and equivalent to REF.
+
+    '
   reference:
-    - {file: analysis/cape_xizhao_edits/publication_figure_functions.R, line: 727}
+  - file: analysis/cape_xizhao_edits/publication_figure_functions.R
+    line: 727
   frame:
-    - {file: src/bulk_rna_frame/workflow/scripts/ontology.R, line: 22}
+  - file: src/bulk_rna_frame/workflow/scripts/ontology.R
+    line: 22
   evidence: code-only
   target: figures
   status: open
   commit: null
-
 - id: B3-004
   track: B
-  area: "Set2-F Hallmark GSVA (pathway selection)"
+  area: Set2-F Hallmark GSVA (pathway selection)
   verdict: FIDELITY-GAP
   severity: S3
   summary: REF displays a fixed curated set of 24 named Hallmark pathways; FRAME shows the top-N pathways by data-driven differential ranking with no way to pin the curated set
-  detail: >
-    REF prepare_gsva_heatmap hardcodes exactly 24 Hallmark pathways (HALLMARK_OXIDATIVE_
-    PHOSPHORYLATION ... HALLMARK_WNT_BETA_CATENIN_SIGNALING) and always plots that curated
-    list. FRAME pathways.R selects rows purely data-drivenly: it fits limma on the GSVA
-    matrix and keeps the top cfg$figures$pathways$top_gsva_terms (default 12) pathways by
-    adjusted differential p-value (pathways.R:305-308). There is no config hook to pin a
-    curated pathway list for the GSVA heatmap, so FRAME cannot reproduce the fixed 24-row
-    Hallmark composition of panel F (different rows, different count). Data-driven selection
-    is defensible for a generic pipeline, but it is a fidelity gap versus the published panel.
+  detail: 'REF prepare_gsva_heatmap hardcodes exactly 24 Hallmark pathways (HALLMARK_OXIDATIVE_ PHOSPHORYLATION ... HALLMARK_WNT_BETA_CATENIN_SIGNALING) and always plots that curated list. FRAME pathways.R selects rows purely data-drivenly: it fits limma on the GSVA matrix and keeps the top cfg$figures$pathways$top_gsva_terms (default 12) pathways by adjusted differential p-value (pathways.R:305-308). There is no config hook to pin a curated pathway list for the GSVA heatmap, so FRAME cannot reproduce the fixed 24-row Hallmark composition of panel F (different rows, different count). Data-driven selection is defensible for a generic pipeline, but it is a fidelity gap versus the published panel.
+
+    '
   reference:
-    - {file: analysis/cape_xizhao_edits/publication_figure_functions.R, line: 849}
+  - file: analysis/cape_xizhao_edits/publication_figure_functions.R
+    line: 849
   frame:
-    - {file: src/bulk_rna_frame/workflow/scripts/pathways.R, line: 305}
+  - file: src/bulk_rna_frame/workflow/scripts/pathways.R
+    line: 305
   evidence: code-only
   target: figures
   status: open
   commit: null
-
 - id: B3-005
   track: B
-  area: "Set2-F Hallmark GSVA (scoring method)"
+  area: Set2-F Hallmark GSVA (scoring method)
   verdict: REGRESSION
   severity: S2
   summary: FRAME scores pathways with ssGSEA (ssgseaParam) whereas REF's panel is labelled and computed as classic GSVA
-  detail: >
-    The gold panel is titled "Hallmark GSVA activity" and REF reads precomputed GSVA scores
-    (dat$gsva) produced by the classic GSVA algorithm. FRAME pathways.R computes scores with
-    GSVA::ssgseaParam (single-sample GSEA), a different enrichment estimator with different
-    per-sample score distributions and normalization (normalize=TRUE). The two methods are
-    not numerically equivalent, so FRAME's sample scores (and therefore the row z-scores and
-    limma differential used for selection) diverge from the published GSVA values. If the
-    intended parity target is GSVA, FRAME should offer gsvaParam; otherwise the panel/axis
-    label is misleading. (REF's exact upstream param is not visible in these files, so this
-    is flagged as a method divergence rather than a confirmed value mismatch.)
+  detail: 'The gold panel is titled "Hallmark GSVA activity" and REF reads precomputed GSVA scores (dat$gsva) produced by the classic GSVA algorithm. FRAME pathways.R computes scores with GSVA::ssgseaParam (single-sample GSEA), a different enrichment estimator with different per-sample score distributions and normalization (normalize=TRUE). The two methods are not numerically equivalent, so FRAME''s sample scores (and therefore the row z-scores and limma differential used for selection) diverge from the published GSVA values. If the intended parity target is GSVA, FRAME should offer gsvaParam; otherwise the panel/axis label is misleading. (REF''s exact upstream param is not visible in these files, so this is flagged as a method divergence rather than a confirmed value mismatch.)
+
+    '
   reference:
-    - {file: analysis/cape_xizhao_edits/publication_figure_functions.R, line: 865}
+  - file: analysis/cape_xizhao_edits/publication_figure_functions.R
+    line: 865
   frame:
-    - {file: src/bulk_rna_frame/workflow/scripts/pathways.R, line: 273}
+  - file: src/bulk_rna_frame/workflow/scripts/pathways.R
+    line: 273
   evidence: code-only
   target: stats
   status: open
   commit: null
-
 - id: B3-006
   track: B
-  area: "Set2-F Hallmark GSVA (ordering & clustering)"
+  area: Set2-F Hallmark GSVA (ordering & clustering)
   verdict: REGRESSION
   severity: S3
   summary: REF orders rows by CAPE-minus-Control effect and keeps columns in fixed condition order; FRAME hierarchically clusters both rows and columns
-  detail: >
-    REF prepare_gsva_heatmap sets cluster_rows=FALSE and cluster_columns=FALSE; rows are
-    ordered by cape_minus_control = mean(CAPE) - mean(Control) (a proper numerator-minus-
-    denominator effect) and columns are held in the fixed order control1..control3, Cape2..Cape4
-    so the condition block structure is preserved (matching the top condition annotation and
-    the gold PDF). FRAME clusters rows via hclust(dist, complete) and columns via
-    hclust(as.dist(1-cor), average) (pathways.R:312-313). Column clustering can interleave
-    Control and CAPE samples, and rows are no longer ordered by the contrast effect, so the
-    published effect-sorted, condition-grouped reading of panel F is not reproduced.
+  detail: 'REF prepare_gsva_heatmap sets cluster_rows=FALSE and cluster_columns=FALSE; rows are ordered by cape_minus_control = mean(CAPE) - mean(Control) (a proper numerator-minus- denominator effect) and columns are held in the fixed order control1..control3, Cape2..Cape4 so the condition block structure is preserved (matching the top condition annotation and the gold PDF). FRAME clusters rows via hclust(dist, complete) and columns via hclust(as.dist(1-cor), average) (pathways.R:312-313). Column clustering can interleave Control and CAPE samples, and rows are no longer ordered by the contrast effect, so the published effect-sorted, condition-grouped reading of panel F is not reproduced.
+
+    '
   reference:
-    - {file: analysis/cape_xizhao_edits/publication_figure_functions.R, line: 935}
-    - {file: analysis/cape_xizhao_edits/publication_figure_functions.R, line: 876}
+  - file: analysis/cape_xizhao_edits/publication_figure_functions.R
+    line: 935
+  - file: analysis/cape_xizhao_edits/publication_figure_functions.R
+    line: 876
   frame:
-    - {file: src/bulk_rna_frame/workflow/scripts/pathways.R, line: 312}
+  - file: src/bulk_rna_frame/workflow/scripts/pathways.R
+    line: 312
   evidence: code-only
   target: figures
   status: open
   commit: null
-
 - id: B3-007
   track: B
-  area: "Set2-F Hallmark GSVA (z-score limits)"
+  area: Set2-F Hallmark GSVA (z-score limits)
   verdict: REGRESSION
   severity: S5
   summary: FRAME clamps GSVA row z-scores to +/-2 while REF (and the gold legend) uses +/-1.5
-  detail: >
-    REF's ComplexHeatmap color ramp and legend run -1.5 / 0 / 1.5 (gold legend confirms
-    "Row z-score -1.5 0 1.5"). FRAME clamps row z-scores with row_zscore(gsva_display, 2)
-    and would render a +/-2 scale, a minor polish/legend mismatch versus the published panel.
-    Trivially adjustable (an inline candidate).
+  detail: 'REF''s ComplexHeatmap color ramp and legend run -1.5 / 0 / 1.5 (gold legend confirms "Row z-score -1.5 0 1.5"). FRAME clamps row z-scores with row_zscore(gsva_display, 2) and would render a +/-2 scale, a minor polish/legend mismatch versus the published panel. Trivially adjustable (an inline candidate).
+
+    '
   reference:
-    - {file: analysis/cape_xizhao_edits/publication_figure_functions.R, line: 931}
+  - file: analysis/cape_xizhao_edits/publication_figure_functions.R
+    line: 931
   frame:
-    - {file: src/bulk_rna_frame/workflow/scripts/pathways.R, line: 311}
+  - file: src/bulk_rna_frame/workflow/scripts/pathways.R
+    line: 311
   evidence: code-only
   target: inline
-  status: open
-  commit: null
-
+  status: fixed-inline
+  commit: 2e0c662
 - id: B3-008
   track: B
-  area: "Set2-F Hallmark GSVA (condition annotation)"
+  area: Set2-F Hallmark GSVA (condition annotation)
   verdict: OK
   severity: S3
   summary: Both panels carry a top condition annotation bar and human-readable sample/pathway labels
-  detail: >
-    REF adds a HeatmapAnnotation Condition bar (Control/CAPE fills) and pretty column labels;
-    FRAME adds an annotation_plot condition tile row above the heatmap with condition_palette
-    fills and cleaned pathway labels (str_wrap). The condition annotation intent is faithfully
-    carried over.
+  detail: 'REF adds a HeatmapAnnotation Condition bar (Control/CAPE fills) and pretty column labels; FRAME adds an annotation_plot condition tile row above the heatmap with condition_palette fills and cleaned pathway labels (str_wrap). The condition annotation intent is faithfully carried over.
+
+    '
   reference:
-    - {file: analysis/cape_xizhao_edits/publication_figure_functions.R, line: 919}
+  - file: analysis/cape_xizhao_edits/publication_figure_functions.R
+    line: 919
   frame:
-    - {file: src/bulk_rna_frame/workflow/scripts/pathways.R, line: 327}
+  - file: src/bulk_rna_frame/workflow/scripts/pathways.R
+    line: 327
   evidence: code-only
   target: figures
   status: open
   commit: null
-
 - id: B3-009
   track: B
-  area: "Set2-G curated GSEA (multi-track curve)"
+  area: Set2-G curated GSEA (multi-track curve)
   verdict: OK
   severity: S3
   summary: FRAME reproduces the four-track GSEA layout (ES curve, hit rug, ranked-metric strip, Wald metric) with an equivalent weighted running-ES computation
-  detail: >
-    REF gsea_tracks stacks running-ES curve, gene-hit rug, a correlated-direction gradient
-    strip, and a Wald-statistic area plot. FRAME build_curve stacks es_plot, hits_plot,
-    strip_plot, metric_plot with matching intent, and running_enrichment implements the same
-    weighted Kolmogorov-Smirnov walk (hit increment = |stat|/sum(|stat| over hits), miss
-    increment = -1/n_misses) as REF's cumsum(ifelse(hit, weighted/sum(weighted[hit]),
-    -1/sum(!hit))). The ES/NES machinery is statistically equivalent.
+  detail: 'REF gsea_tracks stacks running-ES curve, gene-hit rug, a correlated-direction gradient strip, and a Wald-statistic area plot. FRAME build_curve stacks es_plot, hits_plot, strip_plot, metric_plot with matching intent, and running_enrichment implements the same weighted Kolmogorov-Smirnov walk (hit increment = |stat|/sum(|stat| over hits), miss increment = -1/n_misses) as REF''s cumsum(ifelse(hit, weighted/sum(weighted[hit]), -1/sum(!hit))). The ES/NES machinery is statistically equivalent.
+
+    '
   reference:
-    - {file: analysis/cape_xizhao_edits/publication_figure_functions.R, line: 979}
+  - file: analysis/cape_xizhao_edits/publication_figure_functions.R
+    line: 979
   frame:
-    - {file: src/bulk_rna_frame/workflow/scripts/pathways.R, line: 53}
+  - file: src/bulk_rna_frame/workflow/scripts/pathways.R
+    line: 53
   evidence: code-only
   target: figures
   status: open
   commit: null
-
 - id: B3-010
   track: B
-  area: "Set2-G curated GSEA (leading-edge gene labels)"
+  area: Set2-G curated GSEA (leading-edge gene labels)
   verdict: FIDELITY-GAP
   severity: S3
   summary: REF labels the top leading-edge genes on the hit rug; FRAME's hit track carries no gene labels
-  detail: >
-    REF gsea_tracks draws geom_text_repel labels for the four strongest leading-edge genes
-    on the hit-rug track (e.g. Tpm2/Mylk/Acta2/Cnn1 in the gold Contractile curve). FRAME
-    build_curve's hits_plot only draws segments colored by leading_edge and emits no gene
-    labels, so the manuscript-relevant gene callouts on panel G are absent.
+  detail: 'REF gsea_tracks draws geom_text_repel labels for the four strongest leading-edge genes on the hit-rug track (e.g. Tpm2/Mylk/Acta2/Cnn1 in the gold Contractile curve). FRAME build_curve''s hits_plot only draws segments colored by leading_edge and emits no gene labels, so the manuscript-relevant gene callouts on panel G are absent.
+
+    '
   reference:
-    - {file: analysis/cape_xizhao_edits/publication_figure_functions.R, line: 1018}
+  - file: analysis/cape_xizhao_edits/publication_figure_functions.R
+    line: 1018
   frame:
-    - {file: src/bulk_rna_frame/workflow/scripts/pathways.R, line: 87}
+  - file: src/bulk_rna_frame/workflow/scripts/pathways.R
+    line: 87
   evidence: code-only
   target: figures
   status: open
   commit: null
-
 - id: B3-011
   track: B
-  area: "Set2-G curated GSEA (correlated-direction strip labels)"
+  area: Set2-G curated GSEA (correlated-direction strip labels)
   verdict: FIDELITY-GAP
   severity: S4
   summary: REF annotates the ranked-metric gradient with "CAPE-correlated"/"Control-correlated" and a zero-cross marker; FRAME's strip has neither
-  detail: >
-    REF's gradient strip (p_grad) overlays "CAPE-correlated" and "Control-correlated" text
-    and a zero-cross dashed line, orienting the reader to which pole is the numerator. FRAME
-    strip_plot is a bare gradient tile with no directional text; FRAME does annotate a
-    zero-cross on the separate metric plot, but the correlated-direction labeling of panel G
-    is missing.
+  detail: 'REF''s gradient strip (p_grad) overlays "CAPE-correlated" and "Control-correlated" text and a zero-cross dashed line, orienting the reader to which pole is the numerator. FRAME strip_plot is a bare gradient tile with no directional text; FRAME does annotate a zero-cross on the separate metric plot, but the correlated-direction labeling of panel G is missing.
+
+    '
   reference:
-    - {file: analysis/cape_xizhao_edits/publication_figure_functions.R, line: 1032}
+  - file: analysis/cape_xizhao_edits/publication_figure_functions.R
+    line: 1032
   frame:
-    - {file: src/bulk_rna_frame/workflow/scripts/pathways.R, line: 94}
+  - file: src/bulk_rna_frame/workflow/scripts/pathways.R
+    line: 94
   evidence: code-only
   target: figures
   status: open
   commit: null
-
 - id: B3-012
   track: B
-  area: "Set2-G curated GSEA (program selection & ordering)"
+  area: Set2-G curated GSEA (program selection & ordering)
   verdict: OK
   severity: S3
   summary: FRAME can reproduce the four curated programs in fixed order via configured GSEA programs
-  detail: >
-    REF runs run_custom_program_gsea on four curated programs (Contractile, Calcium signaling,
-    Lymphatic valve, WNT/PCP valve) and lays them 2x2 in that order. FRAME injects configured
-    programs as CONFIGURED_PROGRAM_* gene sets and, when gsea_programs is set, selects and
-    orders the curves by those configured ids (pathways.R:342-347, wrap_plots ncol=2), so the
-    same four-program panel with the same ordering is achievable. fgseaMultilevel with minSize=3
-    and eps=0 matches REF's call.
+  detail: 'REF runs run_custom_program_gsea on four curated programs (Contractile, Calcium signaling, Lymphatic valve, WNT/PCP valve) and lays them 2x2 in that order. FRAME injects configured programs as CONFIGURED_PROGRAM_* gene sets and, when gsea_programs is set, selects and orders the curves by those configured ids (pathways.R:342-347, wrap_plots ncol=2), so the same four-program panel with the same ordering is achievable. fgseaMultilevel with minSize=3 and eps=0 matches REF''s call.
+
+    '
   reference:
-    - {file: analysis/cape_xizhao_edits/gsea_advanced_requested_edit.R, line: 29}
+  - file: analysis/cape_xizhao_edits/gsea_advanced_requested_edit.R
+    line: 29
   frame:
-    - {file: src/bulk_rna_frame/workflow/scripts/pathways.R, line: 342}
+  - file: src/bulk_rna_frame/workflow/scripts/pathways.R
+    line: 342
   evidence: code-only
   target: figures
   status: open
   commit: null
-
 - id: B3-013
   track: B
-  area: "Set2-G curated GSEA (rank dedup rule)"
+  area: Set2-G curated GSEA (rank dedup rule)
   verdict: REGRESSION
   severity: S4
   summary: REF collapses multi-probe symbols by keeping the most positive Wald stat; FRAME keeps the largest absolute stat
-  detail: >
-    REF builds ranks via arrange(desc(stat_raw)) then distinct(gene_symbol) - i.e. per symbol
-    it retains the most positive Wald statistic. FRAME builds ranks via
-    arrange(desc(abs(statistic))) then distinct(gene_symbol) - i.e. it retains the largest
-    magnitude statistic regardless of sign (pathways.R:195-196). For genes with multiple
-    features mapping to one symbol this yields different representative ranks and thus slightly
-    different curve positions/NES. Minor cohort-generality divergence; symbol-collapse rule
-    should match REF for parity.
+  detail: 'REF builds ranks via arrange(desc(stat_raw)) then distinct(gene_symbol) - i.e. per symbol it retains the most positive Wald statistic. FRAME builds ranks via arrange(desc(abs(statistic))) then distinct(gene_symbol) - i.e. it retains the largest magnitude statistic regardless of sign (pathways.R:195-196). For genes with multiple features mapping to one symbol this yields different representative ranks and thus slightly different curve positions/NES. Minor cohort-generality divergence; symbol-collapse rule should match REF for parity.
+
+    '
   reference:
-    - {file: analysis/cape_xizhao_edits/publication_figure_functions.R, line: 964}
+  - file: analysis/cape_xizhao_edits/publication_figure_functions.R
+    line: 964
   frame:
-    - {file: src/bulk_rna_frame/workflow/scripts/pathways.R, line: 195}
+  - file: src/bulk_rna_frame/workflow/scripts/pathways.R
+    line: 195
   evidence: code-only
   target: stats
   status: open
   commit: null
-
 - id: B3-014
   track: B
-  area: "Set2-H integrated heatmap+effects (FDR encoding)"
+  area: Set2-H integrated heatmap+effects (FDR encoding)
   verdict: FIDELITY-GAP
   severity: S3
   summary: REF fills forest points by FDR<0.05 significance class; FRAME colors them by program with no significance encoding
-  detail: >
-    REF program_panels forest plot maps geom_point fill to point_class in {"CAPE, FDR<0.05",
-    "Control, FDR<0.05", "FDR>=0.05"} (filled vs open), realizing the panel-H subtitle
-    "filled effect-size points denote FDR < 0.05". FRAME's effect_plot maps point colour to
-    program and applies no per-gene significance styling (publication.R:163-165), so the
-    published FDR distinction on the effect estimates is lost.
+  detail: 'REF program_panels forest plot maps geom_point fill to point_class in {"CAPE, FDR<0.05", "Control, FDR<0.05", "FDR>=0.05"} (filled vs open), realizing the panel-H subtitle "filled effect-size points denote FDR < 0.05". FRAME''s effect_plot maps point colour to program and applies no per-gene significance styling (publication.R:163-165), so the published FDR distinction on the effect estimates is lost.
+
+    '
   reference:
-    - {file: analysis/cape_xizhao_edits/program_panels_requested_edit.R, line: 207}
+  - file: analysis/cape_xizhao_edits/program_panels_requested_edit.R
+    line: 207
   frame:
-    - {file: src/bulk_rna_frame/workflow/scripts/publication.R, line: 163}
+  - file: src/bulk_rna_frame/workflow/scripts/publication.R
+    line: 163
   evidence: code-only
   target: figures
   status: open
   commit: null
-
 - id: B3-015
   track: B
-  area: "Set2-H integrated heatmap+effects (program grouping & composition)"
+  area: Set2-H integrated heatmap+effects (program grouping & composition)
   verdict: REGRESSION
   severity: S3
   summary: REF splits rows into per-program facets with a colored program strip and condition header; FRAME is one ungrouped heatmap+effects pair keyed only by color legend
-  detail: >
-    REF composes panel H as a three-column layout (colored program strip | expression heatmap |
-    forest) with rows facet-split by program (facet_grid space="free_y") and a condition header
-    bar, so each program is a visually bounded block. FRAME program_integrated is a two-panel
-    patchwork (program_heat | effect_plot) with genes stacked continuously in program order and
-    programs conveyed only by point/legend color; there is no facet split, no program strip
-    column, and no condition header row (publication.R:159-168). The grouped block structure of
-    the published panel is not reproduced.
+  detail: 'REF composes panel H as a three-column layout (colored program strip | expression heatmap | forest) with rows facet-split by program (facet_grid space="free_y") and a condition header bar, so each program is a visually bounded block. FRAME program_integrated is a two-panel patchwork (program_heat | effect_plot) with genes stacked continuously in program order and programs conveyed only by point/legend color; there is no facet split, no program strip column, and no condition header row (publication.R:159-168). The grouped block structure of the published panel is not reproduced.
+
+    '
   reference:
-    - {file: analysis/cape_xizhao_edits/program_panels_requested_edit.R, line: 211}
+  - file: analysis/cape_xizhao_edits/program_panels_requested_edit.R
+    line: 211
   frame:
-    - {file: src/bulk_rna_frame/workflow/scripts/publication.R, line: 166}
+  - file: src/bulk_rna_frame/workflow/scripts/publication.R
+    line: 166
   evidence: code-only
   target: figures
   status: open
   commit: null
-
 - id: B3-016
   track: B
-  area: "Set2-H integrated heatmap+effects (effect estimate & CI)"
+  area: Set2-H integrated heatmap+effects (effect estimate & CI)
   verdict: OK
   severity: S2
   summary: Both draw shrunken log2FC with 95% CI = estimate +/- 1.96*shrunken SE, oriented to the contrast
-  detail: >
-    REF forest_data computes ci_low/ci_high = estimate -/+ 1.96*lfcSE_shrunken on
-    log2FoldChange_display. FRAME computes xmin/xmax = log2_fold_change -/+ 1.96*lfc_se on the
-    de table's shrunken effect (publication.R:164), with the x axis labeled "Shrunken log2FC".
-    The effect statistic and CI construction are equivalent and the fold change carries the
-    numerator-minus-denominator sign, so contrast semantics are preserved.
+  detail: 'REF forest_data computes ci_low/ci_high = estimate -/+ 1.96*lfcSE_shrunken on log2FoldChange_display. FRAME computes xmin/xmax = log2_fold_change -/+ 1.96*lfc_se on the de table''s shrunken effect (publication.R:164), with the x axis labeled "Shrunken log2FC". The effect statistic and CI construction are equivalent and the fold change carries the numerator-minus-denominator sign, so contrast semantics are preserved.
+
+    '
   reference:
-    - {file: analysis/cape_xizhao_edits/program_panels_requested_edit.R, line: 94}
+  - file: analysis/cape_xizhao_edits/program_panels_requested_edit.R
+    line: 94
   frame:
-    - {file: src/bulk_rna_frame/workflow/scripts/publication.R, line: 164}
+  - file: src/bulk_rna_frame/workflow/scripts/publication.R
+    line: 164
   evidence: code-only
   target: figures
   status: open
   commit: null
-
 - id: B3-017
   track: B
-  area: "Set2-I consolidated violins (significance test)"
+  area: Set2-I consolidated violins (significance test)
   verdict: REGRESSION
   severity: S1
   summary: REF annotates brackets with the modeled DESeq2 DE FDR; FRAME recomputes a Wilcoxon test on VST expression that cannot reach the significance the panel shows at n=3/group
-  detail: >
-    REF make_violin_block draws significance brackets straight from the gene panel summary's
-    DESeq2 adjusted p-value (padj / log2FoldChange_display), i.e. the modeled differential
-    result, and only for genes with padj<0.05, with ***/**/* by padj thresholds - matching the
-    gold panel-I brackets and its subtitle "brackets denote DE FDR". FRAME publication.R
-    instead recomputes significance with wilcox.test(numerator vs denominator) on the VST
-    values, BH-adjusted across the displayed genes (publication.R:173-176). With n=3 per group
-    a two-sided Wilcoxon rank-sum has a minimum attainable p around 0.1 (exact) / ~0.08 (normal
-    approximation), so FRAME can essentially never produce the *, ** or *** brackets in the
-    published figure and will label nearly every gene "ns". This both diverges from REF and is
-    a statistically inappropriate, underpowered test that discards the properly modeled DE
-    result - a statistical-correctness regression.
+  detail: 'REF make_violin_block draws significance brackets straight from the gene panel summary''s DESeq2 adjusted p-value (padj / log2FoldChange_display), i.e. the modeled differential result, and only for genes with padj<0.05, with ***/**/* by padj thresholds - matching the gold panel-I brackets and its subtitle "brackets denote DE FDR". FRAME publication.R instead recomputes significance with wilcox.test(numerator vs denominator) on the VST values, BH-adjusted across the displayed genes (publication.R:173-176). With n=3 per group a two-sided Wilcoxon rank-sum has a minimum attainable p around 0.1 (exact) / ~0.08 (normal approximation), so FRAME can essentially never produce the *, ** or *** brackets in the published figure and will label nearly every gene "ns". This both diverges from REF and is a statistically inappropriate, underpowered test that discards the properly modeled DE result - a statistical-correctness regression.
+
+    '
   reference:
-    - {file: analysis/cape_xizhao_edits/program_panels_requested_edit.R, line: 288}
+  - file: analysis/cape_xizhao_edits/program_panels_requested_edit.R
+    line: 288
   frame:
-    - {file: src/bulk_rna_frame/workflow/scripts/publication.R, line: 174}
+  - file: src/bulk_rna_frame/workflow/scripts/publication.R
+    line: 174
   evidence: code-only
   target: stats
   status: open
   commit: null
-
 - id: B3-018
   track: B
-  area: "Set2-I consolidated violins (per-animal points & mean)"
+  area: Set2-I consolidated violins (per-animal points & mean)
   verdict: FIDELITY-GAP
   severity: S3
   summary: REF overlays one jittered point per animal and a mean diamond per group; FRAME shows neither
-  detail: >
-    REF make_violin_block layers geom_point (jitter, one per replicate) and stat_summary
-    mean diamonds (shape 23) over each violin+boxplot, matching the panel-I subtitle
-    "One point per animal; diamonds show means". FRAME's violin_plot draws only violin +
-    boxplot + significance bracket and omits both the per-animal points and the mean diamond
-    (publication.R:180-190), so the descriptive per-replicate detail of the published panel
-    is missing.
+  detail: 'REF make_violin_block layers geom_point (jitter, one per replicate) and stat_summary mean diamonds (shape 23) over each violin+boxplot, matching the panel-I subtitle "One point per animal; diamonds show means". FRAME''s violin_plot draws only violin + boxplot + significance bracket and omits both the per-animal points and the mean diamond (publication.R:180-190), so the descriptive per-replicate detail of the published panel is missing.
+
+    '
   reference:
-    - {file: analysis/cape_xizhao_edits/program_panels_requested_edit.R, line: 304}
+  - file: analysis/cape_xizhao_edits/program_panels_requested_edit.R
+    line: 304
   frame:
-    - {file: src/bulk_rna_frame/workflow/scripts/publication.R, line: 182}
+  - file: src/bulk_rna_frame/workflow/scripts/publication.R
+    line: 182
   evidence: code-only
   target: figures
   status: open
   commit: null
-
 - id: B3-019
   track: B
-  area: "Set2-I consolidated violins (bracket display policy)"
+  area: Set2-I consolidated violins (bracket display policy)
   verdict: REGRESSION
   severity: S5
   summary: REF draws brackets only for significant genes; FRAME draws a bracket for every gene and prints "ns"
-  detail: >
-    REF only emits a bracket+star for genes with padj<0.05 (brackets computed by filtering
-    padj<0.05), leaving non-significant facets clean as in the gold panel. FRAME computes a
-    test row for every gene and draws the bracket segments and a label for all of them, with
-    significance case_when defaulting to "ns" (publication.R:176), cluttering non-significant
-    facets. Minor presentation divergence.
+  detail: 'REF only emits a bracket+star for genes with padj<0.05 (brackets computed by filtering padj<0.05), leaving non-significant facets clean as in the gold panel. FRAME computes a test row for every gene and draws the bracket segments and a label for all of them, with significance case_when defaulting to "ns" (publication.R:176), cluttering non-significant facets. Minor presentation divergence.
+
+    '
   reference:
-    - {file: analysis/cape_xizhao_edits/program_panels_requested_edit.R, line: 275}
+  - file: analysis/cape_xizhao_edits/program_panels_requested_edit.R
+    line: 275
   frame:
-    - {file: src/bulk_rna_frame/workflow/scripts/publication.R, line: 176}
+  - file: src/bulk_rna_frame/workflow/scripts/publication.R
+    line: 176
   evidence: code-only
   target: figures
   status: open
   commit: null
-
 - id: B3-020
   track: B
-  area: "Set2-I consolidated violins (condition orientation)"
+  area: Set2-I consolidated violins (condition orientation)
   verdict: OK
   severity: S3
   summary: Both order the x axis denominator-then-numerator (Control left, CAPE right) preserving contrast orientation
-  detail: >
-    REF orders condition levels c("Control","CAPE"). FRAME sets condition =
-    factor(condition, levels = c(denominator, numerator)) (publication.R:172), so Control
-    (denominator) is left and CAPE (numerator) is right, matching the gold panel and keeping
-    the contrast orientation explicit rather than alphabetical.
+  detail: 'REF orders condition levels c("Control","CAPE"). FRAME sets condition = factor(condition, levels = c(denominator, numerator)) (publication.R:172), so Control (denominator) is left and CAPE (numerator) is right, matching the gold panel and keeping the contrast orientation explicit rather than alphabetical.
+
+    '
   reference:
-    - {file: analysis/cape_xizhao_edits/program_panels_requested_edit.R, line: 295}
+  - file: analysis/cape_xizhao_edits/program_panels_requested_edit.R
+    line: 295
   frame:
-    - {file: src/bulk_rna_frame/workflow/scripts/publication.R, line: 172}
+  - file: src/bulk_rna_frame/workflow/scripts/publication.R
+    line: 172
   evidence: code-only
   target: figures
   status: open
   commit: null
-
 - id: B3-021
   track: B
-  area: "Set2 E-I panel registry"
+  area: Set2 E-I panel registry
   verdict: OK
   severity: S4
   summary: All five panels are registered as constructors in figures.py, delegating actual rendering to the R scripts
-  detail: >
-    figures.py (WIP) is a panel registry/gallery, not a renderer: PANEL_REGISTRY registers
-    go_ora (ontology_bidirectional), gsva_heatmap, gsea_multitrack (gsea_curves),
-    program_heatmap_effects (program_integrated), and program_violins, each pointing at the
-    R-produced figure/displayed-data artifacts. So panels E-I are all wired into the FRAME
-    figure system; the plotting fidelity issues live in ontology.R / pathways.R / publication.R
-    as captured above, not in figures.py.
+  detail: 'figures.py (WIP) is a panel registry/gallery, not a renderer: PANEL_REGISTRY registers go_ora (ontology_bidirectional), gsva_heatmap, gsea_multitrack (gsea_curves), program_heatmap_effects (program_integrated), and program_violins, each pointing at the R-produced figure/displayed-data artifacts. So panels E-I are all wired into the FRAME figure system; the plotting fidelity issues live in ontology.R / pathways.R / publication.R as captured above, not in figures.py.
+
+    '
   reference:
-    - {file: analysis/cape_xizhao_edits/gsea_advanced_requested_edit.R, line: 47}
+  - file: analysis/cape_xizhao_edits/gsea_advanced_requested_edit.R
+    line: 47
   frame:
-    - {file: src/bulk_rna_frame/figures.py, line: 96}
+  - file: src/bulk_rna_frame/figures.py
+    line: 96
   evidence: code-only
   target: figures
   status: open

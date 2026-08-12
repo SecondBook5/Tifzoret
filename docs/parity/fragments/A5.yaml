@@ -4,334 +4,263 @@
   verdict: OK
   severity: S4
   summary: SVA estimates n.sv, then feeds surrogate variables back into the DESeq2 design and refits.
-  detail: >
-    FRAME estimates the number of surrogate variables with sva::num.sv(vst, mod,
-    method="be") on the variance-stabilized matrix, with mod = model.matrix(full
-    design) and mod0 = the design minus the contrast factor (correct full/null
-    split for SVA). When n_sv > 0 it runs sva(), appends SV1..SVn to colData,
-    rebuilds the design as "~ <original formula> + SV1 + ... + SVn", refits DESeq2,
-    and reports original vs SV-adjusted log2FC/padj for the exact contrast
-    coefficient. The relevel(ref=denominator) done before model.matrix is preserved
-    into the refit, and resultsNames is matched by an anchored numerator_vs_denominator
-    pattern, so contrast semantics (numerator - denominator) are respected. There is
-    no reference SVA stage; the nearest REF comparator is the limma sensitivity refit,
-    which likewise adds covariates to a design and re-estimates. Surrogate variables
-    are genuinely propagated into DE, so the mechanism is sound.
+  detail: 'FRAME estimates the number of surrogate variables with sva::num.sv(vst, mod, method="be") on the variance-stabilized matrix, with mod = model.matrix(full design) and mod0 = the design minus the contrast factor (correct full/null split for SVA). When n_sv > 0 it runs sva(), appends SV1..SVn to colData, rebuilds the design as "~ <original formula> + SV1 + ... + SVn", refits DESeq2, and reports original vs SV-adjusted log2FC/padj for the exact contrast coefficient. The relevel(ref=denominator) done before model.matrix is preserved into the refit, and resultsNames is matched by an anchored numerator_vs_denominator pattern, so contrast semantics (numerator - denominator) are respected. There is no reference SVA stage; the nearest REF comparator is the limma sensitivity refit, which likewise adds covariates to a design and re-estimates. Surrogate variables are genuinely propagated into DE, so the mechanism is sound.
+
+    '
   reference:
-    - {file: workflow/stages/core/limma_sensitivity.R, line: 11}
+  - file: workflow/stages/core/limma_sensitivity.R
+    line: 11
   frame:
-    - {file: src/bulk_rna_frame/workflow/scripts/sva.R, line: 25}
+  - file: src/bulk_rna_frame/workflow/scripts/sva.R
+    line: 25
   evidence: code-only
   target: stats
   status: open
   commit: null
-
 - id: A5-002
   track: A
   area: sva
   verdict: BEST-PRACTICE
   severity: S2
   summary: num.sv(method="be") is permutation-based but no set.seed is set, so n.sv (and the whole SV-adjusted DE) is nondeterministic.
-  detail: >
-    sva::num.sv with method="be" (Buja-Eyuboglu) draws B=20 random permutations
-    with seed=NULL by default, so the estimated number of surrogate variables can
-    differ run-to-run. Because n_sv drives whether and how many SVs are added to
-    the DESeq2 design, the entire SV-adjusted sensitivity result is
-    nonreproducible. FRAME sets a seed in mediation.R (from cfg$analysis$random_seed)
-    and for the multilayer layout, but sva.R sets none before num.sv. Best practice
-    for a reproducibility-focused pipeline that records seeds in its manifest is to
-    set.seed(cfg$analysis$random_seed) before num.sv (or pass seed= to num.sv).
-    Trivial one-line fix; recorded as inline candidate.
+  detail: 'sva::num.sv with method="be" (Buja-Eyuboglu) draws B=20 random permutations with seed=NULL by default, so the estimated number of surrogate variables can differ run-to-run. Because n_sv drives whether and how many SVs are added to the DESeq2 design, the entire SV-adjusted sensitivity result is nonreproducible. FRAME sets a seed in mediation.R (from cfg$analysis$random_seed) and for the multilayer layout, but sva.R sets none before num.sv. Best practice for a reproducibility-focused pipeline that records seeds in its manifest is to set.seed(cfg$analysis$random_seed) before num.sv (or pass seed= to num.sv). Trivial one-line fix; recorded as inline candidate.
+
+    '
   reference:
-    - {file: workflow/stages/core/limma_sensitivity.R, line: 12}
+  - file: workflow/stages/core/limma_sensitivity.R
+    line: 12
   frame:
-    - {file: src/bulk_rna_frame/workflow/scripts/sva.R, line: 19}
+  - file: src/bulk_rna_frame/workflow/scripts/sva.R
+    line: 19
   evidence: code-only
   target: inline
-  status: open
-  commit: null
-
+  status: fixed-inline
+  commit: 2e0c662
 - id: A5-003
   track: A
   area: sva
   verdict: OK
   severity: S4
   summary: Small-sample SVA warns (does not fail) and the warning is written into the summary JSON that the manifest harvests.
-  detail: >
-    When nrow(metadata) < minimum_recommended_samples (config, default 10) sva.R
-    appends an exploratory-result warning to a list and keeps running; it is written
-    to sva_summary.json under "warnings". manifest.collect_warnings rglobs every
-    *_summary.json and copies each warning into the release manifest. This matches
-    the README claim that advanced analyses continue on small samples but surface
-    warnings into summaries, reports, and the manifest. Verified.
+  detail: 'When nrow(metadata) < minimum_recommended_samples (config, default 10) sva.R appends an exploratory-result warning to a list and keeps running; it is written to sva_summary.json under "warnings". manifest.collect_warnings rglobs every *_summary.json and copies each warning into the release manifest. This matches the README claim that advanced analyses continue on small samples but surface warnings into summaries, reports, and the manifest. Verified.
+
+    '
   reference:
-    - {file: workflow/envs/sva_mediation.yaml, line: 1}
+  - file: workflow/envs/sva_mediation.yaml
+    line: 1
   frame:
-    - {file: src/bulk_rna_frame/workflow/scripts/sva.R, line: 21}
+  - file: src/bulk_rna_frame/workflow/scripts/sva.R
+    line: 21
   evidence: code-only
   target: stats
   status: open
   commit: null
-
 - id: A5-004
   track: A
   area: sva
   verdict: BEST-PRACTICE
   severity: S5
   summary: SVA is run on the VST matrix via sva(); svaseq on counts would be the canonical RNA-seq variant.
-  detail: >
-    FRAME applies sva() to the variance-stabilized (VST) expression matrix and then
-    uses the resulting SVs as covariates on the raw-count DESeq2 model. Leek's
-    guidance for count data is svaseq() (which internally log-transforms), but
-    running plain sva() on an already variance-stabilized matrix is a defensible and
-    common approximation. No correctness impact; noted for completeness.
+  detail: 'FRAME applies sva() to the variance-stabilized (VST) expression matrix and then uses the resulting SVs as covariates on the raw-count DESeq2 model. Leek''s guidance for count data is svaseq() (which internally log-transforms), but running plain sva() on an already variance-stabilized matrix is a defensible and common approximation. No correctness impact; noted for completeness.
+
+    '
   reference:
-    - {file: workflow/stages/core/limma_sensitivity.R, line: 12}
+  - file: workflow/stages/core/limma_sensitivity.R
+    line: 12
   frame:
-    - {file: src/bulk_rna_frame/workflow/scripts/sva.R, line: 25}
+  - file: src/bulk_rna_frame/workflow/scripts/sva.R
+    line: 25
   evidence: code-only
   target: stats
   status: open
   commit: null
-
 - id: A5-005
   track: A
   area: wgcna
   verdict: OK
   severity: S4
   summary: Soft-power picks the smallest power reaching R^2>=0.8 (fallback max R^2); single-block config makes module detection deterministic without a seed.
-  detail: >
-    pickSoftThreshold over powers 1:20 (signed) selects the smallest power whose
-    scale-free fit R^2 >= 0.8, falling back to the power with maximum R^2 when none
-    reach 0.8 - the standard WGCNA criterion. blockwiseModules is forced into a
-    single block (maxBlockSize = ncol(datExpr)+1), which skips the stochastic
-    projectiveKMeans block pre-clustering; TOM construction and hierarchical
-    clustering are deterministic, so no set.seed is required for reproducible modules.
-    Adding set.seed defensively would be harmless but is not needed here. No reference
-    WGCNA stage exists; judged on best practice as OK.
+  detail: 'pickSoftThreshold over powers 1:20 (signed) selects the smallest power whose scale-free fit R^2 >= 0.8, falling back to the power with maximum R^2 when none reach 0.8 - the standard WGCNA criterion. blockwiseModules is forced into a single block (maxBlockSize = ncol(datExpr)+1), which skips the stochastic projectiveKMeans block pre-clustering; TOM construction and hierarchical clustering are deterministic, so no set.seed is required for reproducible modules. Adding set.seed defensively would be harmless but is not needed here. No reference WGCNA stage exists; judged on best practice as OK.
+
+    '
   reference:
-    - {file: workflow/envs/wgcna.yaml, line: 1}
+  - file: workflow/envs/wgcna.yaml
+    line: 1
   frame:
-    - {file: src/bulk_rna_frame/workflow/scripts/wgcna.R, line: 22}
+  - file: src/bulk_rna_frame/workflow/scripts/wgcna.R
+    line: 22
   evidence: code-only
   target: stats
   status: open
   commit: null
-
 - id: A5-006
   track: A
   area: wgcna
   verdict: OK
   severity: S4
   summary: Module-trait correlation encodes the contrast direction (trait=1 for numerator) and warns on small samples.
-  detail: >
-    The trait vector is numeric factor(level in c(denominator, numerator)) - 1, so
-    denominator=0 and numerator=1; a positive module-trait correlation therefore
-    means higher eigengene in the numerator, consistent with the sacred
-    numerator - denominator convention. Small-sample guard (ncol(expression) <
-    minimum_recommended_samples, default 15) appends an exploratory warning to
-    wgcna_summary.json without failing, which the manifest harvests. Sound.
+  detail: 'The trait vector is numeric factor(level in c(denominator, numerator)) - 1, so denominator=0 and numerator=1; a positive module-trait correlation therefore means higher eigengene in the numerator, consistent with the sacred numerator - denominator convention. Small-sample guard (ncol(expression) < minimum_recommended_samples, default 15) appends an exploratory warning to wgcna_summary.json without failing, which the manifest harvests. Sound.
+
+    '
   reference:
-    - {file: workflow/envs/wgcna.yaml, line: 1}
+  - file: workflow/envs/wgcna.yaml
+    line: 1
   frame:
-    - {file: src/bulk_rna_frame/workflow/scripts/wgcna.R, line: 25}
+  - file: src/bulk_rna_frame/workflow/scripts/wgcna.R
+    line: 25
   evidence: code-only
   target: stats
   status: open
   commit: null
-
 - id: A5-007
   track: A
   area: mediation
   verdict: OK
   severity: S4
   summary: Mediation fits lm mediator/outcome models with a fixed seed, quasi-Bayesian sims, and correct treatment coding; guarded on missing pathways/package/small n.
-  detail: >
-    mediation.R sets.seed(cfg$analysis$random_seed) before mediation::mediate
-    (boot=FALSE quasi-Bayesian Monte Carlo, sims default 2000), so ACME/ADE/proportion
-    estimates are reproducible. Treatment is coded factor(c(denominator, numerator))-1
-    (denominator=0), so ACME sign follows numerator - denominator. It guards the
-    absence of mediator_pathway/outcome_pathways (status not_configured), pathways
-    missing from GSVA scores (status missing_pathways), the mediation package being
-    unavailable (status package_unavailable, graceful degrade), and small n (warning).
-    No reference mediation stage; judged sound on best practice.
+  detail: 'mediation.R sets.seed(cfg$analysis$random_seed) before mediation::mediate (boot=FALSE quasi-Bayesian Monte Carlo, sims default 2000), so ACME/ADE/proportion estimates are reproducible. Treatment is coded factor(c(denominator, numerator))-1 (denominator=0), so ACME sign follows numerator - denominator. It guards the absence of mediator_pathway/outcome_pathways (status not_configured), pathways missing from GSVA scores (status missing_pathways), the mediation package being unavailable (status package_unavailable, graceful degrade), and small n (warning). No reference mediation stage; judged sound on best practice.
+
+    '
   reference:
-    - {file: workflow/envs/sva_mediation.yaml, line: 5}
+  - file: workflow/envs/sva_mediation.yaml
+    line: 5
   frame:
-    - {file: src/bulk_rna_frame/workflow/scripts/mediation.R, line: 33}
+  - file: src/bulk_rna_frame/workflow/scripts/mediation.R
+    line: 33
   evidence: code-only
   target: stats
   status: open
   commit: null
-
 - id: A5-008
   track: A
   area: mediation
   verdict: BEST-PRACTICE
   severity: S4
   summary: Mediator and outcome models omit the design covariates, weakening the no-unmeasured-confounding (sequential ignorability) assumption; assumption is not stated in machine output.
-  detail: >
-    The mediator model (mediator ~ treatment) and outcome model
-    (outcome ~ treatment + mediator) include only the treatment even when the study
-    design formula carries adjustment covariates (e.g. batch). Causal mediation relies
-    on sequential ignorability; best practice is to include the same covariates used
-    in the DE design in both sub-models. FRAME's causal caveat lives in docs
-    (advanced_methods/methods), but the machine-readable summary warnings mention only
-    small-sample exploratory status, not the confounding assumption. Also, multiple
-    outcome pathways are collapsed to a single rowMeans composite outcome, a modeling
-    simplification. Exploratory module, no reference counterpart; flagged as improvement.
+  detail: 'The mediator model (mediator ~ treatment) and outcome model (outcome ~ treatment + mediator) include only the treatment even when the study design formula carries adjustment covariates (e.g. batch). Causal mediation relies on sequential ignorability; best practice is to include the same covariates used in the DE design in both sub-models. FRAME''s causal caveat lives in docs (advanced_methods/methods), but the machine-readable summary warnings mention only small-sample exploratory status, not the confounding assumption. Also, multiple outcome pathways are collapsed to a single rowMeans composite outcome, a modeling simplification. Exploratory module, no reference counterpart; flagged as improvement.
+
+    '
   reference:
-    - {file: workflow/stages/core/limma_sensitivity.R, line: 7}
+  - file: workflow/stages/core/limma_sensitivity.R
+    line: 7
   frame:
-    - {file: src/bulk_rna_frame/workflow/scripts/mediation.R, line: 34}
+  - file: src/bulk_rna_frame/workflow/scripts/mediation.R
+    line: 34
   evidence: code-only
   target: stats
   status: open
   commit: null
-
 - id: A5-009
   track: A
   area: power
   verdict: BEST-PRACTICE
   severity: S4
   summary: Power uses the observed standardized effect (post-hoc power), which is statistically circular; the script honestly flags it as exploratory/optimistic.
-  detail: >
-    power.py computes Cohen's d from the observed group means and pooled SD
-    (denominator N-2, correct two-group pooling) then n_per_group =
-    ceil(2*((z_0.975 + z_0.8)/d)^2), the standard two-sample normal-approximation
-    formula (z=1.96/0.84). Basing a power/sample-size estimate on the observed effect
-    is post-hoc power, widely criticized as circular and optimistic. FRAME acknowledges
-    this in the summary warning ("exploratory and can be optimistic in small samples")
-    and labels the method a "normal-approximation planning estimate", and it guards
-    empty groups (all(groups.values())) and zero variance. Deterministic. No reference
-    stage; the honest labeling keeps this at best-practice rather than a defect.
+  detail: 'power.py computes Cohen''s d from the observed group means and pooled SD (denominator N-2, correct two-group pooling) then n_per_group = ceil(2*((z_0.975 + z_0.8)/d)^2), the standard two-sample normal-approximation formula (z=1.96/0.84). Basing a power/sample-size estimate on the observed effect is post-hoc power, widely criticized as circular and optimistic. FRAME acknowledges this in the summary warning ("exploratory and can be optimistic in small samples") and labels the method a "normal-approximation planning estimate", and it guards empty groups (all(groups.values())) and zero variance. Deterministic. No reference stage; the honest labeling keeps this at best-practice rather than a defect.
+
+    '
   reference:
-    - {file: workflow/envs/sva_mediation.yaml, line: 6}
+  - file: workflow/envs/sva_mediation.yaml
+    line: 6
   frame:
-    - {file: src/bulk_rna_frame/workflow/scripts/power.py, line: 17}
+  - file: src/bulk_rna_frame/workflow/scripts/power.py
+    line: 17
   evidence: code-only
   target: stats
   status: open
   commit: null
-
 - id: A5-010
   track: A
   area: multilayer
   verdict: OK
   severity: S4
   summary: Multilayer integration is an honest evidence-triangulation (gene in >=2 of regulatory/coexpression/STRING layers); layout seeded; causality caveat emitted.
-  detail: >
-    multilayer.py normalizes symbols (uppercase) from the GRN edges, WGCNA hubs, and
-    STRING up/down edges, then marks a gene "triangulated" when it appears in >= 2 of
-    the three evidence layers. Node/edge tables are deterministic (sorted) and the
-    network figure uses spring_layout(seed=1). The summary warns that layer overlap
-    "does not establish causality", which is the correct interpretive guardrail. A
-    sound, conservative integration; no reference multilayer stage.
+  detail: 'multilayer.py normalizes symbols (uppercase) from the GRN edges, WGCNA hubs, and STRING up/down edges, then marks a gene "triangulated" when it appears in >= 2 of the three evidence layers. Node/edge tables are deterministic (sorted) and the network figure uses spring_layout(seed=1). The summary warns that layer overlap "does not establish causality", which is the correct interpretive guardrail. A sound, conservative integration; no reference multilayer stage.
+
+    '
   reference:
-    - {file: workflow/stages/common/adapter.py, line: 11}
+  - file: workflow/stages/common/adapter.py
+    line: 11
   frame:
-    - {file: src/bulk_rna_frame/workflow/scripts/multilayer.py, line: 74}
+  - file: src/bulk_rna_frame/workflow/scripts/multilayer.py
+    line: 74
   evidence: code-only
   target: stats
   status: open
   commit: null
-
 - id: A5-011
   track: A
   area: multilayer
   verdict: BEST-PRACTICE
   severity: S5
   summary: The co-expression layer contributes nodes but no edges to the drawn network (WGCNA supplies hub genes, not an edge list).
-  detail: >
-    Only regulatory (GRN) and STRING edges are added to the graph; the WGCNA
-    co-expression layer provides hub gene_symbols (nodes) but no edges, so the
-    plotted subgraph of triangulated nodes shows regulatory + STRING edges only.
-    This under-represents the co-expression relationships in the visual, though it
-    does not affect the triangulation counts in the node tables. Minor visual
-    limitation; no correctness impact and no reference counterpart.
+  detail: 'Only regulatory (GRN) and STRING edges are added to the graph; the WGCNA co-expression layer provides hub gene_symbols (nodes) but no edges, so the plotted subgraph of triangulated nodes shows regulatory + STRING edges only. This under-represents the co-expression relationships in the visual, though it does not affect the triangulation counts in the node tables. Minor visual limitation; no correctness impact and no reference counterpart.
+
+    '
   reference:
-    - {file: workflow/stages/common/adapter.py, line: 11}
+  - file: workflow/stages/common/adapter.py
+    line: 11
   frame:
-    - {file: src/bulk_rna_frame/workflow/scripts/multilayer.py, line: 91}
+  - file: src/bulk_rna_frame/workflow/scripts/multilayer.py
+    line: 91
   evidence: code-only
   target: figures
   status: open
   commit: null
-
 - id: A5-012
   track: A
   area: shared-libs/config-merge
   verdict: OK
   severity: S4
   summary: FRAME replaces REF's silent deep-merge-over-defaults with schema-validated profiles plus explicit module overrides.
-  detail: >
-    REF's configmerge.merge_defaults deep-merges a study config over a defaults.yaml
-    (added because studies declared defaults: but the Snakefile never merged them).
-    FRAME has no defaults-file inheritance; instead normalize_config migrates
-    v1->v2, and resolve_modules derives enabled modules from the analysis.profile
-    (standard/publication/full) and then applies explicit analysis.modules overrides
-    via dict update (study/override wins), with the whole config JSON-Schema
-    validated up front. This is functionally the intent of REF's merge (defaults
-    filled, overrides win) but safer: a single validated document rather than an
-    unvalidated silent merge. Judged OK/improvement.
+  detail: 'REF''s configmerge.merge_defaults deep-merges a study config over a defaults.yaml (added because studies declared defaults: but the Snakefile never merged them). FRAME has no defaults-file inheritance; instead normalize_config migrates v1->v2, and resolve_modules derives enabled modules from the analysis.profile (standard/publication/full) and then applies explicit analysis.modules overrides via dict update (study/override wins), with the whole config JSON-Schema validated up front. This is functionally the intent of REF''s merge (defaults filled, overrides win) but safer: a single validated document rather than an unvalidated silent merge. Judged OK/improvement.
+
+    '
   reference:
-    - {file: workflow/lib/configmerge.py, line: 14}
+  - file: workflow/lib/configmerge.py
+    line: 14
   frame:
-    - {file: src/bulk_rna_frame/config.py, line: 100}
+  - file: src/bulk_rna_frame/config.py
+    line: 100
   evidence: code-only
   target: harness
   status: open
   commit: null
-
 - id: A5-013
   track: A
   area: shared-libs/runtime-bootstrap
   verdict: BEST-PRACTICE
   severity: S5
   summary: FRAME's R scripts source utils.R directly from the script path; REF's runtime_utils provides validated, error-wrapped ordered sourcing and package bootstrap.
-  detail: >
-    Every FRAME R stage resolves its own path from commandArgs and does
-    source(file.path(dirname(script_path), "utils.R")). REF's runtime_utils.R offers
-    source_helper_files_in_order with existence checks and tryCatch error wrapping,
-    and packages.R's load_optional_packages warns (does not error) on missing
-    optional packages. FRAME's sva.R/wgcna.R hard-require their package via library()
-    (fail if absent) while mediation.R soft-checks with requireNamespace (graceful),
-    an internal inconsistency - though acceptable because each stage runs in a
-    dedicated conda env (sva_mediation.yaml / wgcna.yaml) that guarantees the package.
-    FRAME's bootstrap is simpler and works; adding REF-style existence/error handling
-    and consistent optional-package handling would be more robust. Minor.
+  detail: 'Every FRAME R stage resolves its own path from commandArgs and does source(file.path(dirname(script_path), "utils.R")). REF''s runtime_utils.R offers source_helper_files_in_order with existence checks and tryCatch error wrapping, and packages.R''s load_optional_packages warns (does not error) on missing optional packages. FRAME''s sva.R/wgcna.R hard-require their package via library() (fail if absent) while mediation.R soft-checks with requireNamespace (graceful), an internal inconsistency - though acceptable because each stage runs in a dedicated conda env (sva_mediation.yaml / wgcna.yaml) that guarantees the package. FRAME''s bootstrap is simpler and works; adding REF-style existence/error handling and consistent optional-package handling would be more robust. Minor.
+
+    '
   reference:
-    - {file: workflow/stages/common/runtime_utils.R, line: 90}
+  - file: workflow/stages/common/runtime_utils.R
+    line: 90
   frame:
-    - {file: src/bulk_rna_frame/workflow/scripts/utils.R, line: 1}
+  - file: src/bulk_rna_frame/workflow/scripts/utils.R
+    line: 1
   evidence: code-only
   target: harness
   status: open
   commit: null
-
 - id: A5-014
   track: A
   area: shared-libs/io
   verdict: REGRESSION
   severity: S4
   summary: FRAME's read_counts_contract lacks the 2^31 overflow guard REF's io.R added, allowing silent NA coercion of counts beyond 32-bit range.
-  detail: >
-    REF's io.R read_counts explicitly refuses silent NA coercion - it errors when the
-    matrix is all-NA or when max(count) >= 2^31-1 before storage.mode(mat) <-
-    "integer" (an audit LOW finding it deliberately fixed). FRAME's shared
-    read_counts_contract in utils.R does storage.mode(mat) <- "integer" with no such
-    guard, so a count >= 2^31 would silently become NA. config.py validates that
-    counts parse as non-negative Python ints before the run, which closes the
-    non-integer/negative path, but Python ints do not overflow, so an astronomically
-    large per-gene count (>~2.1e9, practically impossible in bulk RNA-seq) would pass
-    validation and then silently NA-coerce in qc.R/de.R. Real but very low-likelihood
-    parity regression vs REF's explicit guard; restoring the max-value check is a
-    trivial defensive fix.
+  detail: 'REF''s io.R read_counts explicitly refuses silent NA coercion - it errors when the matrix is all-NA or when max(count) >= 2^31-1 before storage.mode(mat) <- "integer" (an audit LOW finding it deliberately fixed). FRAME''s shared read_counts_contract in utils.R does storage.mode(mat) <- "integer" with no such guard, so a count >= 2^31 would silently become NA. config.py validates that counts parse as non-negative Python ints before the run, which closes the non-integer/negative path, but Python ints do not overflow, so an astronomically large per-gene count (>~2.1e9, practically impossible in bulk RNA-seq) would pass validation and then silently NA-coerce in qc.R/de.R. Real but very low-likelihood parity regression vs REF''s explicit guard; restoring the max-value check is a trivial defensive fix.
+
+    '
   reference:
-    - {file: workflow/lib/io.R, line: 19}
+  - file: workflow/lib/io.R
+    line: 19
   frame:
-    - {file: src/bulk_rna_frame/workflow/scripts/utils.R, line: 108}
+  - file: src/bulk_rna_frame/workflow/scripts/utils.R
+    line: 108
   evidence: code-only
   target: inline
-  status: open
-  commit: null
+  status: fixed-inline
+  commit: 2e0c662

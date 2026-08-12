@@ -4,321 +4,266 @@
   verdict: REGRESSION
   severity: S4
   summary: Frame rejects REF configs with missing version field; migrate-config exists but doesn't handle this case
-  detail: >
-    REF configs have no `version` field (config.schema.yaml has no version property),
-    but FRAME requires `version: const: 2` (project.schema.yaml:15-16). When
-    normalize_config encounters version=None, it raises "unsupported project
-    configuration version: None" (config.py:97) instead of attempting migration.
-    The CLI provides `migrate-config` (cli.py:174-202) but it only handles v1→v2
-    migration (config.py:43-87), not no-version→v2. This means REF configs cannot
-    run without manual rewriting, blocking 3/4 published studies. Generality blocker:
-    frame cannot ingest its own reference cohorts' configuration format.
+  detail: 'REF configs have no `version` field (config.schema.yaml has no version property), but FRAME requires `version: const: 2` (project.schema.yaml:15-16). When normalize_config encounters version=None, it raises "unsupported project configuration version: None" (config.py:97) instead of attempting migration. The CLI provides `migrate-config` (cli.py:174-202) but it only handles v1→v2 migration (config.py:43-87), not no-version→v2. This means REF configs cannot run without manual rewriting, blocking 3/4 published studies. Generality blocker: frame cannot ingest its own reference cohorts'' configuration format.
+
+    '
   reference:
-    - {file: config/config.schema.yaml, line: 1}
+  - file: config/config.schema.yaml
+    line: 1
   frame:
-    - {file: src/bulk_rna_frame/schemas/project.schema.yaml, line: 15}
-    - {file: src/bulk_rna_frame/config.py, line: 97}
-    - {file: src/bulk_rna_frame/config.py, line: 43}
+  - file: src/bulk_rna_frame/schemas/project.schema.yaml
+    line: 15
+  - file: src/bulk_rna_frame/config.py
+    line: 97
+  - file: src/bulk_rna_frame/config.py
+    line: 43
   evidence: code-only
   target: harness
   status: open
   commit: null
-
 - id: C1-002
   track: C
   area: config-schema
   verdict: FIDELITY-GAP
   severity: S4
   summary: Frame input schema incompatible with REF source schema structure
-  detail: >
-    REF uses `source: {kind: [directory, archive, pending], archive,
-    archive_member_root, regression_member_root}` (config.schema.yaml:14-23).
-    FRAME uses discriminated union `inputs: {kind: [counts, bam, nfcore_rnaseq,
-    archive]}` with structured defs (project.schema.yaml:41-46, 222-269). The
-    `archive_member_root` and `regression_member_root` fields from REF (used by
-    ligation_vs_sham, old_vs_young, rela_ko_vs_wt configs) have no FRAME
-    counterpart. FRAME's archive input accepts `member_root` (line 266) but not
-    `regression_member_root`. Even with version:1 added, migrate_v1_mapping
-    doesn't translate these source fields to the new inputs structure. REF's
-    `source.kind: directory` with `bam_root` doesn't map cleanly to FRAME's
-    `inputs.kind: bam` with `bam_root`.
+  detail: 'REF uses `source: {kind: [directory, archive, pending], archive, archive_member_root, regression_member_root}` (config.schema.yaml:14-23). FRAME uses discriminated union `inputs: {kind: [counts, bam, nfcore_rnaseq, archive]}` with structured defs (project.schema.yaml:41-46, 222-269). The `archive_member_root` and `regression_member_root` fields from REF (used by ligation_vs_sham, old_vs_young, rela_ko_vs_wt configs) have no FRAME counterpart. FRAME''s archive input accepts `member_root` (line 266) but not `regression_member_root`. Even with version:1 added, migrate_v1_mapping doesn''t translate these source fields to the new inputs structure. REF''s `source.kind: directory` with `bam_root` doesn''t map cleanly to FRAME''s `inputs.kind: bam` with `bam_root`.
+
+    '
   reference:
-    - {file: config/config.schema.yaml, line: 14}
-    - {file: studies/ligation_vs_sham/config.yaml, line: 6}
+  - file: config/config.schema.yaml
+    line: 14
+  - file: studies/ligation_vs_sham/config.yaml
+    line: 6
   frame:
-    - {file: src/bulk_rna_frame/schemas/project.schema.yaml, line: 41}
-    - {file: src/bulk_rna_frame/schemas/project.schema.yaml, line: 259}
-    - {file: src/bulk_rna_frame/config.py, line: 43}
+  - file: src/bulk_rna_frame/schemas/project.schema.yaml
+    line: 41
+  - file: src/bulk_rna_frame/schemas/project.schema.yaml
+    line: 259
+  - file: src/bulk_rna_frame/config.py
+    line: 43
   evidence: code-only
   target: harness
   status: open
   commit: null
-
 - id: C1-003
   track: C
   area: config-schema
   verdict: FIDELITY-GAP
   severity: S4
   summary: Frame enforces strict schema (additionalProperties:false); REF allows extensibility
-  detail: >
-    REF schema declares `additionalProperties: true` (config.schema.yaml:67),
-    allowing user-defined extensions like `regression: {historical_count_member,
-    historical_de_member}` in ligation_vs_sham (config.yaml:21-23). FRAME enforces
-    `additionalProperties: false` throughout (project.schema.yaml:3, 18, 34, 50,
-    etc.), rejecting any undeclared keys. This prevents REF configs from being
-    validated even if version/source fields were fixed. Generality impact: frame
-    cannot accommodate project-specific metadata extensions that don't affect
-    workflow execution.
+  detail: 'REF schema declares `additionalProperties: true` (config.schema.yaml:67), allowing user-defined extensions like `regression: {historical_count_member, historical_de_member}` in ligation_vs_sham (config.yaml:21-23). FRAME enforces `additionalProperties: false` throughout (project.schema.yaml:3, 18, 34, 50, etc.), rejecting any undeclared keys. This prevents REF configs from being validated even if version/source fields were fixed. Generality impact: frame cannot accommodate project-specific metadata extensions that don''t affect workflow execution.
+
+    '
   reference:
-    - {file: config/config.schema.yaml, line: 67}
-    - {file: studies/ligation_vs_sham/config.yaml, line: 21}
+  - file: config/config.schema.yaml
+    line: 67
+  - file: studies/ligation_vs_sham/config.yaml
+    line: 21
   frame:
-    - {file: src/bulk_rna_frame/schemas/project.schema.yaml, line: 3}
+  - file: src/bulk_rna_frame/schemas/project.schema.yaml
+    line: 3
   evidence: code-only
   target: harness
   status: open
   commit: null
-
 - id: C1-004
   track: C
   area: config-defaults
   verdict: FIDELITY-GAP
   severity: S5
   summary: Frame lacks REF's defaults inheritance mechanism
-  detail: >
-    REF configs declare `defaults: config/defaults.yaml` (e.g.,
-    ligation_vs_sham/config.yaml:2) and provide configmerge.py with deep-merge
-    logic (workflow/lib/configmerge.py:14-25). However, per the audit comment in
-    configmerge.py:3-8, the reference Snakefile never actually loaded or merged
-    defaults, so all settings were duplicated inline. FRAME has no defaults
-    mechanism—no schema field for a defaults reference, no merge logic in
-    config.py. While this matches REF's actual behavior (not its declared intent),
-    it means frame cannot support cohort configs that genuinely inherit shared
-    settings. Generality impact: no DRY mechanism for multi-cohort projects with
-    shared parameters (e.g., reference genome, counting options, pathway
-    collections).
+  detail: 'REF configs declare `defaults: config/defaults.yaml` (e.g., ligation_vs_sham/config.yaml:2) and provide configmerge.py with deep-merge logic (workflow/lib/configmerge.py:14-25). However, per the audit comment in configmerge.py:3-8, the reference Snakefile never actually loaded or merged defaults, so all settings were duplicated inline. FRAME has no defaults mechanism—no schema field for a defaults reference, no merge logic in config.py. While this matches REF''s actual behavior (not its declared intent), it means frame cannot support cohort configs that genuinely inherit shared settings. Generality impact: no DRY mechanism for multi-cohort projects with shared parameters (e.g., reference genome, counting options, pathway collections).
+
+    '
   reference:
-    - {file: studies/ligation_vs_sham/config.yaml, line: 2}
-    - {file: workflow/lib/configmerge.py, line: 3}
-    - {file: workflow/lib/configmerge.py, line: 14}
+  - file: studies/ligation_vs_sham/config.yaml
+    line: 2
+  - file: workflow/lib/configmerge.py
+    line: 3
+  - file: workflow/lib/configmerge.py
+    line: 14
   frame:
-    - {file: src/bulk_rna_frame/schemas/project.schema.yaml, line: 1}
-    - {file: src/bulk_rna_frame/config.py, line: 257}
+  - file: src/bulk_rna_frame/schemas/project.schema.yaml
+    line: 1
+  - file: src/bulk_rna_frame/config.py
+    line: 257
   evidence: code-only
-  target: inline
+  target: harness
   status: open
   commit: null
-
 - id: C1-005
   track: C
   area: reproducibility-seeds
   verdict: OK
   severity: S2
   summary: Frame captures seeds in manifest and propagates across R and Python stages
-  detail: >
-    FRAME manifest.py records both `analysis.random_seed` (global) and
-    `figures.pathways.seed` in manifest.json random_seeds section (manifest.py:191-194).
-    Python scripts access global seed via
-    `project.config["analysis"].get("random_seed", 1)` (networks.py:line 4,
-    grn.py, multilayer.py:line 1). R scripts use `cfg$figures$pathways$seed`
-    (pathways.R:line 1) and `cfg$analysis$random_seed` (mediation.R:line 1) with
-    fallback to 1. Seeds are consistently propagated; manifest captures them for
-    provenance. Default seed is 1 if not specified (config.py:192, utils.R).
+  detail: 'FRAME manifest.py records both `analysis.random_seed` (global) and `figures.pathways.seed` in manifest.json random_seeds section (manifest.py:191-194). Python scripts access global seed via `project.config["analysis"].get("random_seed", 1)` (networks.py:line 4, grn.py, multilayer.py:line 1). R scripts use `cfg$figures$pathways$seed` (pathways.R:line 1) and `cfg$analysis$random_seed` (mediation.R:line 1) with fallback to 1. Seeds are consistently propagated; manifest captures them for provenance. Default seed is 1 if not specified (config.py:192, utils.R).
+
+    '
   reference:
-    - {file: config/defaults.yaml, line: 33}
+  - file: config/defaults.yaml
+    line: 33
   frame:
-    - {file: src/bulk_rna_frame/workflow/scripts/manifest.py, line: 191}
-    - {file: src/bulk_rna_frame/workflow/scripts/pathways.R, line: 1}
-    - {file: src/bulk_rna_frame/workflow/scripts/networks.py, line: 1}
+  - file: src/bulk_rna_frame/workflow/scripts/manifest.py
+    line: 191
+  - file: src/bulk_rna_frame/workflow/scripts/pathways.R
+    line: 1
+  - file: src/bulk_rna_frame/workflow/scripts/networks.py
+    line: 1
   evidence: code-only
   target: inline
   status: open
   commit: null
-
 - id: C1-006
   track: C
   area: reproducibility-receipts
   verdict: OK
   severity: S2
   summary: Frame generates comprehensive provider receipts with retrieval metadata and checksums
-  detail: >
-    FRAME resources.R generates receipts for gene-set providers (resources.R:131-143)
-    including: schema_version, provider, organism, database_release (per-provider
-    versions), retrieval_time_utc, request_parameters (collections, providers),
-    license_notice, gene_sets count, mappings count, sha256 of output GMT. Receipts
-    are cached alongside resolved resources (line 144-147) and collected into
-    manifest.json by manifest.py:120-133 as `resource_snapshots`. STRING API calls
-    also generate per-request receipts (line 117). Receipts enable auditing which
-    upstream data versions were used. REF has no comparable receipt mechanism.
+  detail: 'FRAME resources.R generates receipts for gene-set providers (resources.R:131-143) including: schema_version, provider, organism, database_release (per-provider versions), retrieval_time_utc, request_parameters (collections, providers), license_notice, gene_sets count, mappings count, sha256 of output GMT. Receipts are cached alongside resolved resources (line 144-147) and collected into manifest.json by manifest.py:120-133 as `resource_snapshots`. STRING API calls also generate per-request receipts (line 117). Receipts enable auditing which upstream data versions were used. REF has no comparable receipt mechanism.
+
+    '
   reference:
-    - {file: workflow/lib/configmerge.py, line: 1}
+  - file: workflow/lib/configmerge.py
+    line: 1
   frame:
-    - {file: src/bulk_rna_frame/workflow/scripts/resources.R, line: 131}
-    - {file: src/bulk_rna_frame/workflow/scripts/manifest.py, line: 120}
+  - file: src/bulk_rna_frame/workflow/scripts/resources.R
+    line: 131
+  - file: src/bulk_rna_frame/workflow/scripts/manifest.py
+    line: 120
   evidence: code-only
   target: inline
   status: open
   commit: null
-
 - id: C1-007
   track: C
   area: reproducibility-caching
   verdict: OK
   severity: S2
   summary: Frame implements content-addressable provider caching with SHA256 cache keys
-  detail: >
-    FRAME resources.R computes cache_key as SHA256 digest of (cache_schema_version,
-    species, reference, providers, collections, gtrd_snapshot hash, custom_gmt
-    hash) (resources.R:28-36). Cache directory is `~/.cache/bulk-rna-frame/resources/{cache_key}`.
-    If cache exists and refresh:false, cached GMT/table/receipt are reused (line
-    48-50). If offline:true and cache missing, errors rather than fetching (line
-    52-54). STRING API results are similarly cached with request-specific hashes
-    (providers.smk:10, evidence: string_*_<hash>.json files). Cache invalidation
-    is automatic when inputs change (new hash → new cache dir). REF has no
-    systematic caching.
+  detail: 'FRAME resources.R computes cache_key as SHA256 digest of (cache_schema_version, species, reference, providers, collections, gtrd_snapshot hash, custom_gmt hash) (resources.R:28-36). Cache directory is `~/.cache/bulk-rna-frame/resources/{cache_key}`. If cache exists and refresh:false, cached GMT/table/receipt are reused (line 48-50). If offline:true and cache missing, errors rather than fetching (line 52-54). STRING API results are similarly cached with request-specific hashes (providers.smk:10, evidence: string_*_<hash>.json files). Cache invalidation is automatic when inputs change (new hash → new cache dir). REF has no systematic caching.
+
+    '
   reference:
-    - {file: workflow/lib/configmerge.py, line: 1}
+  - file: workflow/lib/configmerge.py
+    line: 1
   frame:
-    - {file: src/bulk_rna_frame/workflow/scripts/resources.R, line: 28}
-    - {file: src/bulk_rna_frame/workflow/rules/providers.smk, line: 10}
+  - file: src/bulk_rna_frame/workflow/scripts/resources.R
+    line: 28
+  - file: src/bulk_rna_frame/workflow/rules/providers.smk
+    line: 10
   evidence: code-only
   target: inline
   status: open
   commit: null
-
 - id: C1-008
   track: C
   area: reproducibility-manifest
   verdict: OK
   severity: S2
   summary: Frame manifest captures comprehensive run provenance (config, seeds, env, revision, checksums)
-  detail: >
-    FRAME manifest.py (schema_version:2) writes manifest.json with: generated_utc,
-    project, analysis_set, profile, modules, species, reference, full configuration
-    snapshot, contrast_semantics declaration, contrasts, random_seeds (global +
-    pathways), platform, repository revision (git sha + dirty flag), environment
-    (CONDA_PREFIX, APPTAINER/SINGULARITY_CONTAINER), tools versions (python, snakemake,
-    R, samtools, featureCounts), resource_snapshots (from receipts), warnings
-    (from result JSONs), inputs with SHA256 checksums (reusing prepared_checksums
-    from input_manifest.json via manifest.py:51-75), results with SHA256 checksums
-    relative to result root (manifest.py:166-211). Manifest is comprehensive
-    release provenance. REF has no comparable manifest.
+  detail: 'FRAME manifest.py (schema_version:2) writes manifest.json with: generated_utc, project, analysis_set, profile, modules, species, reference, full configuration snapshot, contrast_semantics declaration, contrasts, random_seeds (global + pathways), platform, repository revision (git sha + dirty flag), environment (CONDA_PREFIX, APPTAINER/SINGULARITY_CONTAINER), tools versions (python, snakemake, R, samtools, featureCounts), resource_snapshots (from receipts), warnings (from result JSONs), inputs with SHA256 checksums (reusing prepared_checksums from input_manifest.json via manifest.py:51-75), results with SHA256 checksums relative to result root (manifest.py:166-211). Manifest is comprehensive release provenance. REF has no comparable manifest.
+
+    '
   reference:
-    - {file: workflow/lib/configmerge.py, line: 1}
+  - file: workflow/lib/configmerge.py
+    line: 1
   frame:
-    - {file: src/bulk_rna_frame/workflow/scripts/manifest.py, line: 171}
-    - {file: src/bulk_rna_frame/workflow/scripts/manifest.py, line: 51}
+  - file: src/bulk_rna_frame/workflow/scripts/manifest.py
+    line: 171
+  - file: src/bulk_rna_frame/workflow/scripts/manifest.py
+    line: 51
   evidence: code-only
   target: inline
   status: open
   commit: null
-
 - id: C1-009
   track: C
   area: reproducibility-checksums
   verdict: OK
   severity: S2
   summary: Frame reuses prepared input checksums in release manifest avoiding redundant hashing
-  detail: >
-    FRAME manifest.py:51-75 implements prepared_checksums(), which loads
-    input_manifest.json (generated during `prepare` step) and indexes all
-    {path, sha256, bytes} records. When building final manifest.json,
-    record(path, known=...) (line 210) checks if a prepared checksum exists
-    with matching size and mtime (manifest.py:32-48); if so, reuses the
-    sha256 instead of re-hashing. This avoids redundant SHA256 computation
-    for large BAM/count files. Optimization is correct: mtime check ensures
-    file hasn't changed since preparation.
+  detail: 'FRAME manifest.py:51-75 implements prepared_checksums(), which loads input_manifest.json (generated during `prepare` step) and indexes all {path, sha256, bytes} records. When building final manifest.json, record(path, known=...) (line 210) checks if a prepared checksum exists with matching size and mtime (manifest.py:32-48); if so, reuses the sha256 instead of re-hashing. This avoids redundant SHA256 computation for large BAM/count files. Optimization is correct: mtime check ensures file hasn''t changed since preparation.
+
+    '
   reference:
-    - {file: workflow/lib/configmerge.py, line: 1}
+  - file: workflow/lib/configmerge.py
+    line: 1
   frame:
-    - {file: src/bulk_rna_frame/workflow/scripts/manifest.py, line: 51}
-    - {file: src/bulk_rna_frame/workflow/scripts/manifest.py, line: 32}
+  - file: src/bulk_rna_frame/workflow/scripts/manifest.py
+    line: 51
+  - file: src/bulk_rna_frame/workflow/scripts/manifest.py
+    line: 32
   evidence: code-only
   target: inline
   status: open
   commit: null
-
 - id: C1-010
   track: C
   area: reproducibility-verification
   verdict: OK
   severity: S2
   summary: Frame implements numeric verification with configurable tolerances (default atol=1e-8, rtol=1e-6)
-  detail: >
-    FRAME verification.py:117-150 implements verify_runs() comparing reference
-    and candidate result directories. Tolerances default to atol=1e-8, rtol=1e-6
-    (line 117) and are configurable via CLI (cli.py:296-297). Comparison uses
-    math.isclose (verification.py:74) for numeric equality with NaN-safe handling
-    (line 72-73). Comparison recursively walks all .tsv files (line 123-135),
-    matches rows by gene_id where present (line 84-93), and reports cell-level
-    differences with examples (line 98-113). VerificationResult includes: passed
-    bool, tolerances, missing_tables, candidate_only_tables, failed_tables, and
-    per-table comparison details (line 139-149). Tolerances are reasonable for
-    floating-point DE statistics.
+  detail: 'FRAME verification.py:117-150 implements verify_runs() comparing reference and candidate result directories. Tolerances default to atol=1e-8, rtol=1e-6 (line 117) and are configurable via CLI (cli.py:296-297). Comparison uses math.isclose (verification.py:74) for numeric equality with NaN-safe handling (line 72-73). Comparison recursively walks all .tsv files (line 123-135), matches rows by gene_id where present (line 84-93), and reports cell-level differences with examples (line 98-113). VerificationResult includes: passed bool, tolerances, missing_tables, candidate_only_tables, failed_tables, and per-table comparison details (line 139-149). Tolerances are reasonable for floating-point DE statistics.
+
+    '
   reference:
-    - {file: workflow/lib/configmerge.py, line: 1}
+  - file: workflow/lib/configmerge.py
+    line: 1
   frame:
-    - {file: src/bulk_rna_frame/verification.py, line: 117}
-    - {file: src/bulk_rna_frame/verification.py, line: 65}
-    - {file: src/bulk_rna_frame/cli.py, line: 296}
+  - file: src/bulk_rna_frame/verification.py
+    line: 117
+  - file: src/bulk_rna_frame/verification.py
+    line: 65
+  - file: src/bulk_rna_frame/cli.py
+    line: 296
   evidence: code-only
   target: inline
   status: open
   commit: null
-
 - id: C1-011
   track: C
   area: reproducibility-containers
   verdict: BEST-PRACTICE
   severity: S4
   summary: Frame containers pin base image but environment.yaml lacks comprehensive version pins
-  detail: >
-    FRAME Dockerfile and Apptainer.def both use `mambaorg/micromamba:2.3.2`
-    (Dockerfile:1, Apptainer.def:2), pinning the base image. However,
-    environment.yaml (channels: conda-forge, bioconda) specifies only major/minor
-    versions for most packages: python=3.12, snakemake=9.23, r-base=4.5 (no patch
-    version), and many packages with no version at all (bioconductor-deseq2,
-    r-msigdbr, etc., environment.yaml:16-44). Best practice: pin patch versions
-    (python=3.12.8) or use lockfiles (conda-lock, poetry.lock) for true
-    reproducibility. Workflow envs/r.yaml has better pinning (r-base=4.5.3,
-    deseq2=1.50.2, envs/r.yaml:4-5) but many packages unpinned (line 11-19). REF
-    similarly lacks comprehensive pinning.
+  detail: 'FRAME Dockerfile and Apptainer.def both use `mambaorg/micromamba:2.3.2` (Dockerfile:1, Apptainer.def:2), pinning the base image. However, environment.yaml (channels: conda-forge, bioconda) specifies only major/minor versions for most packages: python=3.12, snakemake=9.23, r-base=4.5 (no patch version), and many packages with no version at all (bioconductor-deseq2, r-msigdbr, etc., environment.yaml:16-44). Best practice: pin patch versions (python=3.12.8) or use lockfiles (conda-lock, poetry.lock) for true reproducibility. Workflow envs/r.yaml has better pinning (r-base=4.5.3, deseq2=1.50.2, envs/r.yaml:4-5) but many packages unpinned (line 11-19). REF similarly lacks comprehensive pinning.
+
+    '
   reference:
-    - {file: workflow/lib/configmerge.py, line: 1}
+  - file: workflow/lib/configmerge.py
+    line: 1
   frame:
-    - {file: Dockerfile, line: 1}
-    - {file: environment.yaml, line: 4}
-    - {file: src/bulk_rna_frame/workflow/envs/r.yaml, line: 4}
+  - file: Dockerfile
+    line: 1
+  - file: environment.yaml
+    line: 4
+  - file: src/bulk_rna_frame/workflow/envs/r.yaml
+    line: 4
   evidence: code-only
   target: harness
   status: open
   commit: null
-
 - id: C1-012
   track: C
   area: config-generality
   verdict: FIDELITY-GAP
   severity: S4
   summary: Frame config structure differs fundamentally from REF, requiring manual translation per cohort
-  detail: >
-    REF configs have flat top-level structure: study, samples, contrasts,
-    hypotheses, source, reference, counting, qc, de, pathways, reporting,
-    publication (config.schema.yaml:3-67). FRAME nests differently: project,
-    species, reference, inputs (with discriminated union), analysis (containing
-    design, contrasts, profile, modules, settings), resources, hypotheses,
-    publication, figures, output (project.schema.yaml:4-213). Field mappings are
-    non-obvious: REF `study.id` → FRAME `project.id`; REF top-level `contrasts` →
-    FRAME `analysis.contrasts`; REF `source` → FRAME `inputs`; REF `hypotheses` →
-    FRAME `hypotheses.claims`; REF `publication.hypothesis_panels` → FRAME
-    `hypotheses.panels`. No automated mapping exists beyond v1→v2 migration
-    (which itself doesn't handle REF structure). Generality impact: each REF
-    cohort requires manual config rewriting to run on FRAME.
+  detail: 'REF configs have flat top-level structure: study, samples, contrasts, hypotheses, source, reference, counting, qc, de, pathways, reporting, publication (config.schema.yaml:3-67). FRAME nests differently: project, species, reference, inputs (with discriminated union), analysis (containing design, contrasts, profile, modules, settings), resources, hypotheses, publication, figures, output (project.schema.yaml:4-213). Field mappings are non-obvious: REF `study.id` → FRAME `project.id`; REF top-level `contrasts` → FRAME `analysis.contrasts`; REF `source` → FRAME `inputs`; REF `hypotheses` → FRAME `hypotheses.claims`; REF `publication.hypothesis_panels` → FRAME `hypotheses.panels`. No automated mapping exists beyond v1→v2 migration (which itself doesn''t handle REF structure). Generality impact: each REF cohort requires manual config rewriting to run on FRAME.
+
+    '
   reference:
-    - {file: config/config.schema.yaml, line: 3}
-    - {file: studies/ligation_vs_sham/config.yaml, line: 1}
+  - file: config/config.schema.yaml
+    line: 3
+  - file: studies/ligation_vs_sham/config.yaml
+    line: 1
   frame:
-    - {file: src/bulk_rna_frame/schemas/project.schema.yaml, line: 4}
-    - {file: src/bulk_rna_frame/config.py, line: 43}
+  - file: src/bulk_rna_frame/schemas/project.schema.yaml
+    line: 4
+  - file: src/bulk_rna_frame/config.py
+    line: 43
   evidence: code-only
   target: harness
   status: open
