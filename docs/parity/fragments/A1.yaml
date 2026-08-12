@@ -1,0 +1,272 @@
+- id: A1-001
+  track: A
+  area: counts
+  verdict: OK
+  severity: S2
+  summary: featureCounts command construction is byte-for-byte equivalent; counts exactly equal on cape
+  detail: >
+    REF (count_genes.py) and FRAME (materialize_inputs.featurecounts_command) build the
+    identical featureCounts invocation: -F GTF, -t <feature_type=exon>, -g <attribute=gene_id>,
+    -s <mode>, and the same optional flags -p (paired_end), --countReadPairs, -B
+    (require_both_ends_aligned) and -C (exclude_chimeric_fragments). Neither side passes -M
+    (so multi-mapping reads are excluded on both) nor -Q/--minMQS (so both keep the featureCounts
+    default MAPQ=0) nor --fraction. Both reject negative counts and match BAM columns by basename.
+    Best practice for a gene-level DESeq2 workflow is exactly this: uniquely-mapped reads only,
+    no fractional counting. The cape_thoracic_duct counts_equivalence.json shows 56748/56748 genes
+    identical for all six samples (max abs diff 0), confirming the counting layer is faithful.
+  reference:
+    - {file: workflow/stages/core/count_genes.py, line: 7}
+  frame:
+    - {file: src/bulk_rna_frame/workflow/scripts/materialize_inputs.py, line: 170}
+  evidence: run
+  target: stats
+  status: open
+  commit: null
+
+- id: A1-002
+  track: A
+  area: counts/strandedness
+  verdict: BEST-PRACTICE
+  severity: S2
+  summary: REF strand auto-detection argmaxes assignment rate over modes {0,1,2} and is biased to unstranded; FRAME's dominance ratio is correct
+  detail: >
+    REF strand_test.py runs featureCounts for every mode in strand_test_modes (default [0,1,2])
+    and picks best = max(mean_assignment_percent). Because unstranded (-s 0) assigns any read
+    regardless of strand, its assignment rate is always >= max(mode1, mode2); with mode 0 in the
+    candidate set the argmax therefore almost always resolves to unstranded, so a genuinely
+    stranded library would be silently mis-counted as unstranded. FRAME (infer_strand_mode)
+    instead requires modes {1,2}, computes dominance = max(m1,m2)/(m1+m2), and only chooses the
+    dominant directional mode when dominance >= strand_min_dominance (default 0.80), else falls
+    back to unstranded. That two-directional dominance ratio is the statistically correct way to
+    infer strandedness and is FRAME improving on a REF flaw. Not exercised by cape evidence:
+    cape's config pins strandedness: unstranded with strand_test_modes [1,2], so inference never
+    ran and counts still matched exactly.
+  reference:
+    - {file: workflow/stages/core/strand_test.py, line: 48}
+  frame:
+    - {file: src/bulk_rna_frame/workflow/scripts/materialize_inputs.py, line: 243}
+  evidence: code-only
+  target: stats
+  status: open
+  commit: null
+
+- id: A1-003
+  track: A
+  area: de
+  verdict: FIDELITY-GAP
+  severity: S4
+  summary: DE low-count prefilter is a configurable knob in REF but hardcoded to 10 in FRAME
+  detail: >
+    REF applies keep <- rowSums(matrix) >= snakemake@params[["minimum"]] where minimum is
+    config["qc"]["min_total_counts_per_gene"] (default 10, overridable per study). FRAME de.R
+    hardcodes keep <- rowSums(counts) >= 10L and the project schema exposes no min-count field at
+    all, so the threshold cannot be changed without editing source. For cape the effective value
+    is 10 on both sides, so the DE numerics match (de_equivalence.json: 24903 shared genes,
+    0 mismatches). The gap is generality/reproducibility: a cohort that needs a different prefilter
+    (or that documented one) cannot express it, and the value is not surfaced in de_summary.json.
+  reference:
+    - {file: workflow/rules/core.smk, line: 109}
+  frame:
+    - {file: src/bulk_rna_frame/workflow/scripts/de.R, line: 37}
+  evidence: run
+  target: stats
+  status: open
+  commit: null
+
+- id: A1-004
+  track: A
+  area: de
+  verdict: OK
+  severity: S2
+  summary: DESeq2 core (design, parametric fit, betaPrior=FALSE, independent filtering, BH) is equivalent; numerics within tol
+  detail: >
+    Both build DESeqDataSetFromMatrix on the same design formula, run DESeq with the default
+    parametric fitType and the default betaPrior=FALSE (required for coef-based apeglm), then call
+    results(dds, name=coef, alpha=fdr) which leaves independentFiltering=TRUE and
+    pAdjustMethod="BH" at their defaults on both sides. No divergence in the significance model.
+    de_equivalence.json confirms baseMean (max abs diff 0), raw log2FoldChange (6.76e-07),
+    stat (3.18e-06), pvalue (1.19e-07) and padj (3.59e-08) all within tolerance with 0 mismatched
+    genes, so design/fit/filtering/p-adjust are statistically equivalent.
+  reference:
+    - {file: workflow/stages/core/deseq2.R, line: 29}
+  frame:
+    - {file: src/bulk_rna_frame/workflow/scripts/de.R, line: 41}
+  evidence: run
+  target: stats
+  status: open
+  commit: null
+
+- id: A1-005
+  track: A
+  area: de
+  verdict: BEST-PRACTICE
+  severity: S1
+  summary: FRAME survives a failed parametric dispersion fit that would crash REF, but its fallback uses un-shrunk gene-wise dispersions
+  detail: >
+    REF runs DESeq(dds) with no error handling, so the DESeq2 parametric-fit error ("all gene-wise
+    dispersion estimates are within 2 orders of magnitude from the minimum, returning the gene-wise
+    estimates") aborts the whole run - a real risk for small-n or low-dispersion-spread cohorts
+    that the cape numbers never exercise. FRAME de.R wraps DESeq in tryCatch and, on that specific
+    message, falls back to estimateSizeFactors -> estimateDispersionsGeneEst -> assign dispGeneEst
+    -> nbinomWaldTest. This graceful degradation is an improvement over REF crashing. However the
+    fallback substitutes raw gene-wise MLE dispersions, skipping DESeq2's empirical-Bayes MAP
+    shrinkage toward a trend; that inflates per-gene dispersion variance (especially for low-count
+    genes) and is exactly what the DESeq2 docs advise against. Best practice for a failed
+    parametric fit is fitType="local" (or "mean"), not bare gene-wise estimates. Flag: adopt a
+    local/mean-fit fallback rather than raw dispGeneEst. When this path triggers FRAME also swaps
+    VST for normTransform, so downstream heatmap/PCA change too.
+  reference:
+    - {file: workflow/stages/core/deseq2.R, line: 29}
+  frame:
+    - {file: src/bulk_rna_frame/workflow/scripts/de.R, line: 40}
+  evidence: code-only
+  target: stats
+  status: open
+  commit: null
+
+- id: A1-006
+  track: A
+  area: de
+  verdict: FIDELITY-GAP
+  severity: S4
+  summary: LFC shrinkage method is configurable in REF (lfc_shrink_method) but hardcoded to apeglm in FRAME
+  detail: >
+    REF calls lfcShrink(dds, coef, type=snakemake@params[["shrink"]]) where shrink is
+    config["de"]["lfc_shrink_method"] (default apeglm, so "normal"/"ashr" are selectable). FRAME
+    de.R hardcodes lfcShrink(dds, coef=coefficient, type="apeglm") with no schema knob. apeglm is
+    the best-practice default, so hardcoding it is defensible, but a cohort that published with
+    normal or ashr shrinkage cannot be reproduced through FRAME. For cape both use apeglm, so the
+    shrunken log2FoldChange matches within tolerance (de_equivalence.json shrunken LFC max abs diff
+    6.74e-06, 0 mismatches).
+  reference:
+    - {file: workflow/rules/core.smk, line: 110}
+  frame:
+    - {file: src/bulk_rna_frame/workflow/scripts/de.R, line: 64}
+  evidence: run
+  target: stats
+  status: open
+  commit: null
+
+- id: A1-007
+  track: A
+  area: de
+  verdict: OK
+  severity: S1
+  summary: Contrast direction is derived explicitly from numerator/denominator on both sides; positive = up in numerator
+  detail: >
+    The sacred contrast rule holds. Both sides read factor/numerator/denominator from
+    contrasts.tsv, relevel the factor with ref=denominator, resolve the coefficient by the exact
+    pattern ^<factor>_<numerator>_vs_<denominator>$, and extract results for that named coefficient
+    - so a positive log2FoldChange is up in the numerator by construction, never inferred from
+    column order or group names. FRAME further labels the volcano x-axis "<numerator> - <denominator>"
+    and classes up/down as up_in_numerator/down_in_numerator. Direction is verified numerically:
+    de_equivalence.json decision_comparison reports 0 mismatched genes at FDR 0.05 / |LFC| 1.0,
+    which cannot happen if the sign convention differed.
+  reference:
+    - {file: workflow/stages/core/deseq2.R, line: 26}
+  frame:
+    - {file: src/bulk_rna_frame/workflow/scripts/de.R, line: 35}
+  evidence: run
+  target: stats
+  status: open
+  commit: null
+
+- id: A1-008
+  track: A
+  area: de
+  verdict: OK
+  severity: S2
+  summary: Significance classification uses raw padj plus shrunken |LFC| on both sides; NA-guarded
+  detail: >
+    FRAME de.R classifies direction with adjusted_p_value < fdr AND shrunken log2_fold_change
+    (>= abs_log2fc up / <= -abs_log2fc down), all guarded by !is.na(adjusted_p_value). REF's
+    build_plotting_table (de_tables.R) does the same: padj < fdr on the raw padj combined with
+    log2FoldChange_display = coalesce(shrunken, raw), again NA-guarded. So both call significance
+    on the raw adjusted p-value but threshold effect size on the shrunken LFC - matching policy,
+    matching decisions (0 decision mismatches in evidence). Only nuance: FRAME's single-table
+    ordering tie-breaks by desc(abs(shrunken LFC)) whereas REF orders each table by its own LFC;
+    this only reorders exact padj ties and is cosmetic.
+  reference:
+    - {file: workflow/stages/de/de_tables.R, line: 519}
+  frame:
+    - {file: src/bulk_rna_frame/workflow/scripts/de.R, line: 87}
+  evidence: run
+  target: stats
+  status: open
+  commit: null
+
+- id: A1-009
+  track: A
+  area: de/annotation
+  verdict: BEST-PRACTICE
+  severity: S3
+  summary: FRAME uses GTF-first symbols (never NA) while REF's numeric DE table uses orgdb-only mapIds that leaves NA/raw ids
+  detail: >
+    REF's numeric DE stage (core/deseq2.R decorate()) resolves symbols with mapIds(org.Mm.eg.db,
+    keytype=ENSEMBL, column=SYMBOL, multiVals="first"), which returns NA for any gene missing from
+    the lagging orgdb snapshot - the exact leak REF's own workflow/lib/annotate.R was written to
+    fix. FRAME resolves symbols GTF-first: materialize_inputs.write_annotation derives gene_symbol
+    from the GRCm39-107 GTF gene_name (falling back to the version-stripped id), and de.R joins by
+    gene_id and coalesces empty/NA symbols to the gene_id, so a symbol is never NA. That matches
+    the GTF-first philosophy REF's audit endorsed and is an improvement over the orgdb-only core
+    table. Residual minor gap: FRAME omits the orgdb middle tier that REF's annotate.R keeps
+    (GTF -> orgdb -> id), so a gene absent from the GTF but present in orgdb falls straight back to
+    its raw id in FRAME. Annotation is a label/figure concern only - the gene_id join is exact
+    (counts and DE match on gene_id), so numerics are unaffected.
+  reference:
+    - {file: workflow/stages/core/deseq2.R, line: 37}
+  frame:
+    - {file: src/bulk_rna_frame/workflow/scripts/de.R, line: 78}
+  evidence: run
+  target: stats
+  status: open
+  commit: null
+
+- id: A1-010
+  track: A
+  area: qc
+  verdict: REGRESSION
+  severity: S3
+  summary: FRAME QC computes VST/PCA on the full unfiltered matrix; REF QC first drops genes below the min-count threshold
+  detail: >
+    REF QC (qc/stage.R build_deseq_qc_objects) applies keep_mask <- rowSums(counts(dds)) >=
+    min_total_counts (default 10) before computing the blind VST, so PCA, sample correlation,
+    sample distance and the most-variable-genes heatmap are built on expressed genes only. FRAME
+    qc.R builds DESeqDataSetFromMatrix on the full counts matrix with no prefilter and runs the VST
+    on every gene, so tens of thousands of near-zero-count genes enter the variance-stabilized
+    matrix and shift the unsupervised QC coordinates relative to REF's published figures. This is a
+    figure-fidelity regression (FRAME drops a REF preprocessing step); no numeric DE evidence covers
+    it. Note the DE-stage prefilter (A1-003) is unaffected - this concerns only the QC stage.
+  reference:
+    - {file: workflow/stages/qc/stage.R, line: 881}
+  frame:
+    - {file: src/bulk_rna_frame/workflow/scripts/qc.R, line: 31}
+  evidence: code-only
+  target: stats
+  status: open
+  commit: null
+
+- id: A1-011
+  track: A
+  area: qc/de
+  verdict: REGRESSION
+  severity: S3
+  summary: FRAME uses varianceStabilizingTransformation() where REF uses the faster subset-based vst(), so VST-derived figures diverge
+  detail: >
+    REF computes the variance-stabilized matrix with vst() in both the QC stage (blind=TRUE) and
+    the core DE stage (blind=FALSE). vst() fits the dispersion trend on a ~1000-gene subset for
+    large matrices, which is the DESeq2-recommended fast path. FRAME calls
+    varianceStabilizingTransformation() in both qc.R (blind=TRUE) and de.R (blind=FALSE), which
+    fits on all genes. blind matches on both sides, but for the 25k-57k-gene matrices here the two
+    functions produce slightly different transformed values, so the QC PCA/correlation/distance and
+    the DE heatmap/contrast-PCA coordinates differ from REF's published figures. FRAME's transform
+    is arguably more exact but is slower and breaks figure parity; none of this touches the DESeq2
+    test statistics (VST feeds only figures, which the DE evidence does not compare).
+  reference:
+    - {file: workflow/stages/qc/stage.R, line: 906}
+  frame:
+    - {file: src/bulk_rna_frame/workflow/scripts/qc.R, line: 33}
+  evidence: code-only
+  target: figures
+  status: open
+  commit: null
