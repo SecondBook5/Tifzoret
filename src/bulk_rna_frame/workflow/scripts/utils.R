@@ -105,6 +105,8 @@ read_counts_contract <- function(path) {
   tab <- readr::read_tsv(path, show_col_types = FALSE, progress = FALSE)
   ids <- tab$gene_id
   mat <- as.matrix(tab[, setdiff(names(tab), "gene_id"), drop = FALSE])
+  if (all(is.na(mat))) stop("count matrix contains no non-NA values", call. = FALSE)
+  if (max(mat, na.rm = TRUE) >= 2147483647) stop("count matrix exceeds 32-bit integer range; refusing silent NA coercion", call. = FALSE)
   storage.mode(mat) <- "integer"
   rownames(mat) <- ids
   mat

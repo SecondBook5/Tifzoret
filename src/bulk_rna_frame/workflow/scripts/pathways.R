@@ -307,7 +307,7 @@ selected_pathways <- gsva_diff %>%
   pull(pathway)
 display_samples <- metadata[[factor_name]] %in% c(denominator, numerator)
 gsva_display <- gsva_matrix[selected_pathways, display_samples, drop = FALSE]
-gsva_z <- row_zscore(gsva_display, 2)
+gsva_z <- row_zscore(gsva_display, 1.5)
 row_order <- rownames(gsva_z)[stats::hclust(stats::dist(gsva_z), method = "complete")$order]
 column_order <- colnames(gsva_z)[stats::hclust(stats::as.dist(1 - stats::cor(gsva_z)), method = "average")$order]
 display_labels <- setNames(make.unique(label_gene_set(rownames(gsva_z))), rownames(gsva_z))

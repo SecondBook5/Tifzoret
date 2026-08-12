@@ -113,7 +113,6 @@ volcano_plot <- ggplot(volcano_table, aes(log2_fold_change, negative_log10_p, co
   annotate("rect", xmin = cfg$figures$de$abs_log2fc, xmax = Inf, ymin = -Inf, ymax = Inf, fill = "#F4A6A6", alpha = 0.10) +
   annotate("rect", xmin = -Inf, xmax = -cfg$figures$de$abs_log2fc, ymin = -Inf, ymax = Inf, fill = "#A6CEE3", alpha = 0.10) +
   geom_vline(xintercept = c(-cfg$figures$de$abs_log2fc, cfg$figures$de$abs_log2fc), colour = "#9AA4AC", linetype = 3, linewidth = 0.35) +
-  geom_hline(yintercept = -log10(cfg$figures$de$fdr), colour = "#9AA4AC", linetype = 3, linewidth = 0.35) +
   geom_point(size = 1.15, alpha = 0.78) +
   ggrepel::geom_label_repel(
     data = dplyr::filter(volcano_table, !is.na(label)),
