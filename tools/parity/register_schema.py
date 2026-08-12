@@ -17,6 +17,13 @@ def _check_ref_list(name, value, out, idx):
     for j, ref in enumerate(value):
         if not isinstance(ref, dict) or "file" not in ref or "line" not in ref:
             out.append(f"entry {idx}: {name}[{j}] needs file and line")
+            continue
+        # Validate file is a non-empty string
+        if not isinstance(ref["file"], str) or not ref["file"]:
+            out.append(f"entry {idx}: {name}[{j}] file must be a non-empty string")
+        # Validate line is an int
+        if not isinstance(ref["line"], int):
+            out.append(f"entry {idx}: {name}[{j}] line must be an int")
 
 def validate_fragment(data):
     errors = []
@@ -29,6 +36,11 @@ def validate_fragment(data):
         missing = REQUIRED_KEYS - set(e)
         for m in sorted(missing):
             errors.append(f"entry {i}: missing key '{m}'")
+        # Track ID before checking missing keys so duplicates are always caught
+        if "id" in e:
+            if e["id"] in seen:
+                errors.append(f"entry {i}: duplicate id {e['id']!r}")
+            seen.add(e["id"])
         if missing:
             continue
         if e["track"] not in TRACKS: errors.append(f"entry {i}: bad track {e['track']!r}")
@@ -41,13 +53,11 @@ def validate_fragment(data):
             errors.append(f"entry {i}: status fixed-inline requires a commit sha")
         _check_ref_list("reference", e.get("reference"), errors, i)
         _check_ref_list("frame", e.get("frame"), errors, i)
-        if e["id"] in seen:
-            errors.append(f"entry {i}: duplicate id {e['id']!r}")
-        seen.add(e["id"])
     return errors
 
 def load_and_validate(path):
-    data = yaml.safe_load(open(path, encoding="utf-8")) or []
+    with open(path, encoding="utf-8") as f:
+        data = yaml.safe_load(f) or []
     errs = validate_fragment(data)
     if errs:
         raise ValueError("invalid parity register:\n" + "\n".join(errs))

@@ -40,3 +40,28 @@ def test_duplicate_ids_reported():
 def test_load_and_validate_raises_on_invalid_file():
     with pytest.raises(ValueError):
         load_and_validate(str(FIX / "invalid_fragment.yaml"))
+
+def test_duplicate_ids_across_invalid_and_valid_entries():
+    # Invalid entry (missing severity) with id="A1-001"
+    invalid = _entry(id="A1-001"); del invalid["severity"]
+    # Valid entry with same id
+    valid = _entry(id="A1-001")
+    errs = validate_fragment([invalid, valid])
+    # Should report both the missing key AND the duplicate
+    assert any("severity" in e for e in errs)
+    assert any("duplicate" in e.lower() for e in errs)
+
+def test_reference_file_and_line_value_types():
+    # file must be a non-empty string
+    errs = validate_fragment([_entry(reference=[{"file": None, "line": 42}])])
+    assert any("file must be a non-empty string" in e for e in errs)
+
+    errs = validate_fragment([_entry(reference=[{"file": "", "line": 42}])])
+    assert any("file must be a non-empty string" in e for e in errs)
+
+    # line must be an int
+    errs = validate_fragment([_entry(reference=[{"file": "foo.R", "line": "not-a-number"}])])
+    assert any("line must be an int" in e for e in errs)
+
+    errs = validate_fragment([_entry(reference=[{"file": "foo.R", "line": None}])])
+    assert any("line must be an int" in e for e in errs)
