@@ -1,0 +1,522 @@
+- id: A2-001
+  track: A
+  area: pathways/fgsea-ranking-metric
+  verdict: OK
+  severity: S3
+  summary: Both rank preranked GSEA by the signed DESeq2 Wald statistic, collapsing duplicate symbols to the largest absolute value
+  detail: >
+    REF builds the ranking vector from the resolved `stat` column (DESeq2 Wald statistic),
+    filters missing/non-finite values, collapses duplicate gene symbols by keeping the row
+    with the largest absolute statistic (tie-break: larger raw stat, then symbol), then sorts
+    decreasing. FRAME does the equivalent: it filters `statistic` (raw$stat from
+    DESeq2::results, the unshrunk Wald statistic), arranges by desc(abs(statistic)), keeps the
+    first row per gene_symbol (largest abs), then sorts decreasing. Metric and collapse rule
+    match. Note FRAME's log2FoldChange is apeglm-shrunk but the ranking uses the unshrunk Wald
+    stat, matching REF. Minor divergence: FRAME's duplicate-collapse tie-break among equal
+    |stat| is only desc(abs()) (order otherwise input-dependent) whereas REF adds -stat then
+    symbol; negligible in practice.
+  reference:
+    - {file: workflow/stages/pathways/pathway_rankings.R, line: 170}
+    - {file: workflow/stages/pathways/pathway_rankings.R, line: 195}
+  frame:
+    - {file: src/bulk_rna_frame/workflow/scripts/pathways.R, line: 193}
+    - {file: src/bulk_rna_frame/workflow/scripts/de.R, line: 73}
+  evidence: code-only
+  target: stats
+  status: open
+  commit: null
+
+- id: A2-002
+  track: A
+  area: pathways/fgsea-ties
+  verdict: REGRESSION
+  severity: S2
+  summary: FRAME passes tied ranks to fgsea with no tie-breaking and suppresses the warning; REF applies deterministic tie-breaking (an explicit audit fix)
+  detail: >
+    REF wraps every fgseaMultilevel call with make_fgsea_ranking_vector_tie_safe(), which
+    applies a tiny deterministic offset within each tied-statistic group (scaled to a fraction
+    of the smallest true gap) so tied genes get a stable, reproducible order before enrichment
+    scoring; the REF comment marks this as an audit HIGH finding. FRAME does no tie-breaking:
+    it sorts the raw Wald statistics decreasing and calls fgseaMultilevel inside
+    suppressWarnings(), silencing fgsea's own tie warning. With many genes sharing identical
+    Wald statistics (common for low-count genes), the order among ties -- and thus the enrichment
+    score at tie boundaries and the leading-edge membership -- can differ across fgsea versions
+    and platforms. Best practice is REF's deterministic resolution. FRAME regresses on
+    reproducibility of published GSEA results.
+  reference:
+    - {file: workflow/stages/pathways/pathway_fgsea.R, line: 135}
+    - {file: workflow/stages/pathways/pathway_fgsea.R, line: 424}
+  frame:
+    - {file: src/bulk_rna_frame/workflow/scripts/pathways.R, line: 199}
+    - {file: src/bulk_rna_frame/workflow/scripts/pathways.R, line: 201}
+  evidence: code-only
+  target: stats
+  status: open
+  commit: null
+
+- id: A2-003
+  track: A
+  area: pathways/fgsea-eps-nperm
+  verdict: BEST-PRACTICE
+  severity: S3
+  summary: FRAME sets fgsea eps=0 (exact small p-values) vs REF's default eps=1e-10; neither overrides nPermSimple
+  detail: >
+    FRAME calls fgseaMultilevel with eps=0, which removes the lower bound on estimated p-values
+    and lets the multilevel algorithm compute arbitrarily small tail probabilities; this is the
+    fgsea-authors' recommended setting for precise small p-values. REF passes no eps, inheriting
+    the package default eps=1e-10, so REF floors very significant pathways at ~1e-10 (its
+    gseGO/gseKEGG calls likewise pin eps=1e-10). This is a numeric divergence at the extreme
+    tail (affects padj of the most significant terms and, rarely, ordering) but FRAME's choice
+    is the more accurate one, so it is flagged as an improvement rather than a regression.
+    Neither side sets nPermSimple, so both use the default (1000) initial simple permutations;
+    that dimension is at parity.
+  reference:
+    - {file: workflow/stages/pathways/pathway_fgsea.R, line: 438}
+    - {file: workflow/stages/ontology/ontology_go.R, line: 133}
+  frame:
+    - {file: src/bulk_rna_frame/workflow/scripts/pathways.R, line: 206}
+  evidence: code-only
+  target: stats
+  status: open
+  commit: null
+
+- id: A2-004
+  track: A
+  area: pathways/seed-determinism
+  verdict: REGRESSION
+  severity: S3
+  summary: FRAME seeds once at script top from a config key; REF hard-codes seed=1L and re-seeds immediately before every stochastic call
+  detail: >
+    fgsea (multilevel) is stochastic. REF defaults seed=1L in code, threads it through the
+    stage, and calls set.seed(seed) immediately before each fgseaMultilevel / gseGO / gseKEGG /
+    GSVA invocation (explicit audit HIGH reproducibility fix), so each stochastic step is
+    independently reproducible. FRAME calls set.seed(cfg$figures$pathways$seed) once at the top
+    of pathways.R (default seed is 1 in all project templates, matching REF) and runs
+    fgseaMultilevel with BiocParallel::SerialParam(); with no RNG consumed between the seed and
+    the call, the current code path is deterministic. Two concerns: (1) reproducibility depends
+    on the single top-level seed and on no future reordering introducing RNG before fgsea, which
+    is more fragile than REF's per-call seeding; (2) if figures.pathways.seed is absent from a
+    user config, set.seed(NULL) leaves the RNG unseeded and fgsea becomes non-deterministic,
+    whereas REF's hard-coded default always seeds. Recommend a per-call seed plus a default when
+    the key is missing.
+  reference:
+    - {file: workflow/stages/pathways/pathway_fgsea.R, line: 435}
+    - {file: workflow/stages/pathways/stage.R, line: 327}
+  frame:
+    - {file: src/bulk_rna_frame/workflow/scripts/pathways.R, line: 118}
+  evidence: code-only
+  target: stats
+  status: open
+  commit: null
+
+- id: A2-005
+  track: A
+  area: pathways/ora-universe
+  verdict: REGRESSION
+  severity: S2
+  summary: FRAME's ORA background is every gene with a symbol (including NA-padj / independent-filtered rows); REF restricts to genes with finite stat, padj and log2FC
+  detail: >
+    REF builds the ORA background universe as genes with a non-blank symbol AND a finite Wald
+    statistic AND finite adjusted p-value AND finite log2 fold change -- i.e. genes actually
+    carried through DE with valid statistics. FRAME defines the universe as
+    unique(de$gene_symbol) filtered only for non-empty symbol, so genes with NA padj (dropped by
+    DESeq2 independent filtering / all-zero) are still counted in the hypergeometric denominator.
+    This inflates the universe relative to REF, shrinking every hypergeometric p-value. The
+    universe definition directly changes ORA p-values and which terms clear significance; REF's
+    tested-gene universe is the more defensible background. FRAME diverges in the less-correct
+    direction.
+  reference:
+    - {file: workflow/stages/pathways/pathway_ora.R, line: 173}
+  frame:
+    - {file: src/bulk_rna_frame/workflow/scripts/pathways.R, line: 220}
+  evidence: code-only
+  target: stats
+  status: open
+  commit: null
+
+- id: A2-006
+  track: A
+  area: pathways/ora-direction-split
+  verdict: OK
+  severity: S3
+  summary: Both split ORA foreground into up/down by the sign of the log2 fold change relative to the contrast numerator
+  detail: >
+    Contrast semantics are preserved on both sides. REF assigns up genes by log2FC > lfc and
+    down genes by log2FC < -lfc, with direction defined by the DESeq2 numerator-vs-denominator
+    convention. FRAME derives up_in_numerator / down_in_numerator from de$direction, which the DE
+    stage sets from the sign of log2_fold_change (positive = up in numerator), and runs ORA
+    separately per direction. Direction is taken from the effect sign, never inferred from group
+    names, on both sides. The up/down split itself is faithful; the significance/effect-size
+    threshold that gates the foreground differs and is captured separately (A2-007).
+  reference:
+    - {file: workflow/stages/pathways/pathway_ora.R, line: 294}
+  frame:
+    - {file: src/bulk_rna_frame/workflow/scripts/pathways.R, line: 221}
+    - {file: src/bulk_rna_frame/workflow/scripts/de.R, line: 87}
+  evidence: code-only
+  target: stats
+  status: open
+  commit: null
+
+- id: A2-007
+  track: A
+  area: pathways/ora-foreground-threshold
+  verdict: REGRESSION
+  severity: S3
+  summary: FRAME's ORA foreground requires |log2FC| >= abs_log2fc (1.0 in templates); REF's default foreground uses padj-only (lfc_threshold = 0)
+  detail: >
+    REF's build_pathway_ora_gene_sets defaults lfc_threshold = 0 and the stage never overrides
+    it, so the ORA foreground is every gene with padj < 0.05 regardless of effect size. FRAME
+    reuses the DE-stage `direction` column, which requires adjusted_p_value < fdr AND
+    |log2_fold_change| >= abs_log2fc (abs_log2fc = 1.0 in the bam/nfcore templates), so FRAME's
+    foreground is a strictly smaller, effect-size-gated set. This is a defensible design choice
+    (it aligns ORA with the volcano significance definition) but it diverges from REF and changes
+    the foreground membership and therefore the ORA results; flagged as a divergence to
+    reconcile.
+  reference:
+    - {file: workflow/stages/pathways/pathway_ora.R, line: 241}
+  frame:
+    - {file: src/bulk_rna_frame/workflow/scripts/de.R, line: 88}
+    - {file: src/bulk_rna_frame/workflow/scripts/pathways.R, line: 221}
+  evidence: code-only
+  target: stats
+  status: open
+  commit: null
+
+- id: A2-008
+  track: A
+  area: pathways/ora-hypergeometric
+  verdict: OK
+  severity: S3
+  summary: FRAME's manual phyper ORA is mathematically equivalent to REF's clusterProfiler::enricher hypergeometric test
+  detail: >
+    REF runs ORA via clusterProfiler::enricher() (hypergeometric test on a TERM2GENE table
+    restricted to the universe). FRAME computes the same hypergeometric survival probability
+    directly: phyper(count-1, n_members, universe-n_members, n_selected, lower.tail=FALSE) after
+    intersecting both the foreground and each pathway with the universe. The p-value math is
+    equivalent. One behavioral difference: REF gates ORA with min_foreground_genes = 5 (skips
+    tiny foregrounds) and minGSSize/maxGSSize inside enricher, whereas FRAME has no
+    minimum-foreground gate and relies on the gene sets already being size-filtered upstream
+    (see A2-016); this only affects edge cases with very small inputs.
+  reference:
+    - {file: workflow/stages/pathways/pathway_ora.R, line: 514}
+    - {file: workflow/stages/pathways/pathway_ora.R, line: 484}
+  frame:
+    - {file: src/bulk_rna_frame/workflow/scripts/pathways.R, line: 32}
+  evidence: code-only
+  target: stats
+  status: open
+  commit: null
+
+- id: A2-009
+  track: A
+  area: pathways/fgsea-multiple-testing-scope
+  verdict: REGRESSION
+  severity: S2
+  summary: FRAME runs one fgseaMultilevel over all collections pooled (one BH family); REF runs fgsea per collection so BH is applied within each collection
+  detail: >
+    REF calls run_single_collection_fgsea() separately for Hallmark and Reactome, so
+    fgseaMultilevel computes its BH-adjusted padj within each collection independently (and GO/
+    KEGG GSEA are separately adjusted via gseGO/gseKEGG). FRAME passes the entire combined GMT
+    (Hallmark + Reactome + GO_BP + KEGG + custom/configured programs) to a single fgseaMultilevel
+    call, so BH is applied once across the pooled family of all collections. Because the pooled
+    family mixes a ~50-term Hallmark collection with thousands of GO BP terms, the padj of
+    curated-collection pathways is inflated by the multitude of GO tests, materially reducing the
+    reported fgsea_significant count relative to REF and diverging from the conventional
+    per-collection GSEA adjustment. This changes which pathways are called significant.
+  reference:
+    - {file: workflow/stages/pathways/pathway_fgsea.R, line: 602}
+    - {file: workflow/stages/pathways/pathway_fgsea.R, line: 438}
+  frame:
+    - {file: src/bulk_rna_frame/workflow/scripts/pathways.R, line: 201}
+    - {file: src/bulk_rna_frame/workflow/scripts/pathways.R, line: 218}
+  evidence: code-only
+  target: stats
+  status: open
+  commit: null
+
+- id: A2-010
+  track: A
+  area: pathways/ora-multiple-testing-scope
+  verdict: REGRESSION
+  severity: S2
+  summary: FRAME BH-adjusts ORA once across both directions and all collections pooled; REF adjusts within each collection x direction cell
+  detail: >
+    REF runs enricher() independently for each (collection, direction) combination
+    (Hallmark-up, Hallmark-down, Reactome-up, Reactome-down), so each cell gets its own BH
+    adjustment over its own term set. FRAME binds the up and down ORA results for every
+    collection into one table and applies a single p.adjust(method="BH") across the whole pooled
+    set of up + down x all collections. Pooling both directions and heterogeneous collections
+    into one BH family changes every adjusted p-value versus REF and, as with A2-009, penalizes
+    small curated collections. The scope of multiple-testing correction is a statistical-design
+    divergence that alters significance calls.
+  reference:
+    - {file: workflow/stages/pathways/pathway_ora.R, line: 646}
+  frame:
+    - {file: src/bulk_rna_frame/workflow/scripts/pathways.R, line: 223}
+    - {file: src/bulk_rna_frame/workflow/scripts/pathways.R, line: 228}
+  evidence: code-only
+  target: stats
+  status: open
+  commit: null
+
+- id: A2-011
+  track: A
+  area: ontology/go-kegg-fdr-inheritance
+  verdict: REGRESSION
+  severity: S2
+  summary: FRAME's ontology stage reuses the pooled ORA adjusted p-value; GO/KEGG FDR is not computed within the GO or KEGG family
+  detail: >
+    REF's ontology stage recomputes ORA per ontology with a within-family BH adjustment:
+    enrichGO(pAdjustMethod="BH") over GO BP terms and enrichKEGG(pAdjustMethod="BH") over KEGG
+    terms, each family adjusted on its own. FRAME's ontology.R does no new enrichment: it reads
+    the pathways-stage ora.tsv, inner-joins the resource table, and filters provider in
+    (go, kegg), so the adjusted_p_value and negative_log10_adjusted_p it displays are the
+    pooled-across-all-collections-and-both-directions BH values from A2-010, not a GO- or
+    KEGG-specific FDR. The GO BP figure and KEGG table therefore report an FDR computed over a
+    family that includes non-GO/non-KEGG terms, and the significance filter (adjusted_p_value <
+    fdr) on that figure inherits the same mis-scoped correction. This is a statistical-labeling
+    correctness issue for the ontology outputs.
+  reference:
+    - {file: workflow/stages/ontology/ontology_go.R, line: 58}
+    - {file: workflow/stages/ontology/ontology_kegg.R, line: 56}
+  frame:
+    - {file: src/bulk_rna_frame/workflow/scripts/ontology.R, line: 17}
+    - {file: src/bulk_rna_frame/workflow/scripts/ontology.R, line: 33}
+  evidence: code-only
+  target: stats
+  status: open
+  commit: null
+
+- id: A2-012
+  track: A
+  area: pathways/gsva-method-kcdf
+  verdict: REGRESSION
+  severity: S2
+  summary: REF scores pathway activity with GSVA (kcdf=Gaussian, continuous VST); FRAME uses ssGSEA (normalize=TRUE), producing non-comparable scores
+  detail: >
+    REF's default scoring method is "gsva": it builds GSVA::gsvaParam(kcdf="Gaussian") because
+    the input is continuous VST-scale expression, and the Gaussian kernel CDF is the correct
+    choice for continuous data. FRAME instead builds GSVA::ssgseaParam(normalize=TRUE) and runs
+    ssGSEA. GSVA (Gaussian) and ssGSEA are different algorithms on different scales, so the
+    per-sample pathway scores, their row-scaling in the heatmap, and the ranking of "top
+    differential" programs are not comparable to REF's published values. Both are valid methods
+    in isolation, but FRAME diverges from the reference/published method; kcdf is not applicable
+    to ssGSEA (rank-based), so REF's kcdf tuning has no FRAME counterpart.
+  reference:
+    - {file: workflow/stages/pathways/pathway_gsva.R, line: 860}
+    - {file: workflow/stages/pathways/pathway_gsva.R, line: 842}
+  frame:
+    - {file: src/bulk_rna_frame/workflow/scripts/pathways.R, line: 273}
+  evidence: code-only
+  target: stats
+  status: open
+  commit: null
+
+- id: A2-013
+  track: A
+  area: pathways/gsva-differential-test
+  verdict: BEST-PRACTICE
+  severity: S3
+  summary: FRAME tests differential pathway activity with a covariate-adjusted limma moderated t-test; REF uses an unadjusted two-group Wilcoxon rank-sum
+  detail: >
+    REF's GSVA differential is a per-pathway wilcox.test between the two contrast groups plus a
+    raw mean difference oriented to numerator-minus-denominator; it ignores any design
+    covariates and is low-powered for small n. FRAME fits limma::lmFit + eBayes on the score
+    matrix using the full design formula (covariate-adjusted, moderated t) and extracts the
+    numerator coefficient. Fitting limma on GSVA/ssGSEA scores is the approach recommended in the
+    GSVA vignette and is the stronger analysis, so FRAME improves on REF here. It is still a
+    numeric divergence from published REF (different p-values, different top programs) and is
+    tied to the method divergence in A2-012, so it should be reconciled deliberately rather than
+    silently.
+  reference:
+    - {file: workflow/stages/pathways/pathway_gsva.R, line: 1450}
+    - {file: workflow/stages/pathways/pathway_gsva.R, line: 1465}
+  frame:
+    - {file: src/bulk_rna_frame/workflow/scripts/pathways.R, line: 292}
+  evidence: code-only
+  target: stats
+  status: open
+  commit: null
+
+- id: A2-014
+  track: A
+  area: pathways/gsva-contrast-sign
+  verdict: OK
+  severity: S3
+  summary: FRAME orients GSVA differential sign correctly as numerator minus denominator via relevel(ref=denominator)
+  detail: >
+    Contrast semantics are preserved. FRAME relevels the grouping factor with ref = denominator,
+    substitutes it into the design formula, and selects the numerator coefficient, so logFC >= 0
+    is labeled up_in_numerator (positive = numerator minus denominator). REF fixes the same
+    convention by ordering group_2 = numerator and group_1 = denominator and computing
+    mean_group_2 - mean_group_1 through the shared contrast helper (its comment notes a prior bug
+    where appearance-order inverted the sign). Both sides define effect direction from the
+    explicit contrast, not from group-name inference.
+  reference:
+    - {file: workflow/stages/pathways/pathway_gsva.R, line: 1465}
+  frame:
+    - {file: src/bulk_rna_frame/workflow/scripts/pathways.R, line: 284}
+    - {file: src/bulk_rna_frame/workflow/scripts/pathways.R, line: 287}
+  evidence: code-only
+  target: stats
+  status: open
+  commit: null
+
+- id: A2-015
+  track: A
+  area: pathways/gene-set-min-size
+  verdict: REGRESSION
+  severity: S2
+  summary: FRAME's minimum gene-set size (2-4 in templates) is far below REF's fixed minSize=10 and below the >=10 GSEA convention
+  detail: >
+    REF fixes min_term_size = 10L for fgsea, ORA and GSVA (its stage never lowers it). FRAME
+    derives minSize from cfg$gene_sets$min_size, which is 2 in the bam/nfcore templates and 4 in
+    the minimal template (and drops to an effective 3 when configured GSEA programs are present),
+    and applies it uniformly to the pre-filter of gene sets, to fgseaMultilevel, and to
+    ssgseaParam. Enrichment on gene sets of size 2-4 is statistically unreliable (unstable NES,
+    inflated variance), so FRAME's default is below both REF and the standard >=10 (often 15)
+    minimum-size guidance. The maximum size (500) matches REF in the bam/nfcore templates. This
+    is configurable, but the shipped defaults diverge in a statistically weaker direction.
+  reference:
+    - {file: workflow/stages/pathways/pathway_fgsea.R, line: 397}
+    - {file: workflow/stages/pathways/pathway_ora.R, line: 466}
+  frame:
+    - {file: src/bulk_rna_frame/workflow/scripts/pathways.R, line: 153}
+    - {file: src/bulk_rna_frame/workflow/scripts/pathways.R, line: 191}
+  evidence: code-only
+  target: stats
+  status: open
+  commit: null
+
+- id: A2-016
+  track: A
+  area: pathways/collection-version-pinning
+  verdict: BEST-PRACTICE
+  severity: S2
+  summary: FRAME records provider versions in a provenance manifest (an improvement over REF), but both still fetch MSigDB/GO/KEGG from live/unpinned sources
+  detail: >
+    Reproducibility of gene-set collections is critical for a Nature Comms submission. REF fetches
+    collections live inside each run with no version capture: msigdbr::msigdbr(db_species="MM")
+    for Hallmark/Reactome, clusterProfiler::enrichKEGG(organism="mmu") and gseKEGG against live
+    KEGG, and the STRING REST API -- none pinned or logged. FRAME decouples retrieval into
+    resources.R, which builds a static GMT and writes a provenance JSON recording the msigdbr
+    package version and MSigDB db_version, the org.*.eg.db package version, and the KEGGREST
+    version (retrieval = "live KEGG REST"). Recording versions is a real improvement over REF.
+    However FRAME still resolves KEGG via live KEGGREST and MSigDB via the installed msigdbr with
+    no pinned snapshot or lockfile, so a rebuild on a different date/package version yields
+    different sets. Neither pipeline is fully reproducible; FRAME is closer. Cited in resources.R
+    (not in the pathways.R/ontology.R scope, but it is where FRAME's pinning must be strengthened).
+  reference:
+    - {file: workflow/stages/pathways/pathway_gene_sets.R, line: 213}
+    - {file: workflow/stages/ontology/ontology_kegg.R, line: 51}
+  frame:
+    - {file: src/bulk_rna_frame/workflow/scripts/resources.R, line: 81}
+    - {file: src/bulk_rna_frame/workflow/scripts/resources.R, line: 114}
+  evidence: code-only
+  target: harness
+  status: open
+  commit: null
+
+- id: A2-017
+  track: A
+  area: ontology/string-enrichment-network
+  verdict: FIDELITY-GAP
+  severity: S3
+  summary: FRAME's ontology stage omits the STRING enrichment + subnetwork analysis that REF's ontology stage produces (likely relocated to the networks/GRN module)
+  detail: >
+    REF's ontology stage runs a full STRING stage (run_string_stage): it selects up/down/
+    leading-edge seed symbols, maps them to STRING IDs, and calls the STRING enrichment and
+    network endpoints to produce per-seed enrichment tables, edge tables and node/degree tables.
+    FRAME's ontology.R has no STRING logic at all -- it only reformats the pathways-stage ORA
+    into a GO BP figure and a GO/KEGG table. This is a capability gap within the ontology scope.
+    Caveat: FRAME appears to provide STRING functionality in a separate module (grn.py /
+    networks.py; a recent commit batches large STRING induced-network requests), so the gap may
+    be a relocation rather than a true loss -- this needs confirmation from the GRN/networks
+    cluster.
+  reference:
+    - {file: workflow/stages/ontology/ontology_string.R, line: 265}
+  frame:
+    - {file: src/bulk_rna_frame/workflow/scripts/ontology.R, line: 1}
+    - {file: src/bulk_rna_frame/workflow/scripts/grn.py, line: 1}
+  evidence: code-only
+  target: harness
+  status: open
+  commit: null
+
+- id: A2-018
+  track: A
+  area: ontology/go-kegg-gsea-and-kegg-plot
+  verdict: FIDELITY-GAP
+  severity: S3
+  summary: REF runs dedicated GO and KEGG GSEA (gseGO/gseKEGG) and plots KEGG ORA; FRAME provides only ORA, plots GO BP alone and leaves KEGG in a table
+  detail: >
+    REF's ontology stage produces, per ontology, both ORA and preranked GSEA: gseGO(ont="BP",
+    by="fgsea") and gseKEGG(by="fgsea"), each with its own within-family adjustment and result
+    tables. FRAME's ontology.R does no GSEA and no new KEGG analysis; GO/KEGG appear only through
+    the reused pathways ORA, only GO BP is plotted (ontology_bidirectional), and KEGG is written
+    to ontology.tsv but never plotted. GO/KEGG terms do receive preranked GSEA indirectly because
+    the combined GMT fed to the single fgseaMultilevel call includes GO_BP_ and KEGG_ sets, but
+    those results are pooled (A2-009), not surfaced as dedicated ontology GSEA outputs. Net:
+    FRAME is missing dedicated GO GSEA, KEGG GSEA, and the KEGG ORA figure relative to REF.
+  reference:
+    - {file: workflow/stages/ontology/ontology_go.R, line: 124}
+    - {file: workflow/stages/ontology/ontology_kegg.R, line: 124}
+  frame:
+    - {file: src/bulk_rna_frame/workflow/scripts/ontology.R, line: 32}
+    - {file: src/bulk_rna_frame/workflow/scripts/ontology.R, line: 41}
+  evidence: code-only
+  target: figures
+  status: open
+  commit: null
+
+- id: A2-019
+  track: A
+  area: ontology/identifier-space
+  verdict: OK
+  severity: S3
+  summary: GO/KEGG ORA runs in Entrez space in REF and symbol space in FRAME, but both are hypergeometric over the same GO BP / KEGG term families
+  detail: >
+    REF maps symbols to ENTREZID and runs enrichGO/enrichKEGG in Entrez space with readable=TRUE
+    for display, using org.Mm.eg.db and organism="mmu". FRAME operates entirely in gene-symbol
+    space: resources.R materializes GO_BP_ and KEGG_ terms as symbol lists (GO via org.Mm.eg.db
+    GOALL/ONTOLOGYALL=="BP", KEGG via KEGGREST keggLink mapped to symbols), and ontology.R
+    inherits the symbol-space hypergeometric ORA from pathways.R. The underlying term families
+    and hypergeometric model match; only the identifier space differs, which can cause small
+    coverage differences at the symbol<->Entrez mapping boundary. No correctness divergence
+    beyond the universe scoping already captured in A2-005.
+  reference:
+    - {file: workflow/stages/ontology/ontology_go.R, line: 52}
+    - {file: workflow/stages/ontology/ontology_kegg.R, line: 51}
+  frame:
+    - {file: src/bulk_rna_frame/workflow/scripts/resources.R, line: 95}
+    - {file: src/bulk_rna_frame/workflow/scripts/ontology.R, line: 19}
+  evidence: code-only
+  target: stats
+  status: open
+  commit: null
+
+- id: A2-020
+  track: A
+  area: pathways/gsea-enrichment-curve
+  verdict: OK
+  severity: S4
+  summary: FRAME recomputes its own weighted running-enrichment curve for display while taking leading-edge membership from fgsea; consistent with REF's classic curve
+  detail: >
+    FRAME's running_enrichment() rebuilds the enrichment curve for the plotted pathways using the
+    classic weighted Kolmogorov-Smirnov walk (hit increments proportional to abs(rank) over the
+    sum of hit weights, miss increments -1/n_misses), which corresponds to the fgsea default
+    gseaParam = 1; leading-edge membership on the curve is read back from fgsea's leadingEdge
+    column, not recomputed. REF renders classic fgsea enrichment plots from the fgsea object
+    directly. The two curves should agree up to tie ordering; the residual risk is the same tie
+    non-determinism flagged in A2-002. This is display-layer parity with no independent
+    statistical claim, hence OK.
+  reference:
+    - {file: workflow/stages/pathways/pathway_fgsea.R, line: 266}
+  frame:
+    - {file: src/bulk_rna_frame/workflow/scripts/pathways.R, line: 53}
+    - {file: src/bulk_rna_frame/workflow/scripts/pathways.R, line: 358}
+  evidence: code-only
+  target: figures
+  status: open
+  commit: null
