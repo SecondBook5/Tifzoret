@@ -1,0 +1,9 @@
+=== Capturing evidence for old_vs_young ===
+Study config: /home/ajbook/projects/lymphatic-flow-homeostasis/studies/old_vs_young/config.yaml
+Timestamp: 2026-08-12T22:54:18Z
+
+No pre-existing comparison outputs found; attempting fresh bridge run
+
+--- Step 1: Validating study config ---
+Validation exit code: 2
+BLOCKED: Validation failed for old_vs_young

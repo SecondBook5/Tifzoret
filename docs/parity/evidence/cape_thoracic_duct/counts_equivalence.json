@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "analysis_set": "primary",
+  "samples": [
+    "control1",
+    "control2",
+    "control3",
+    "Cape2",
+    "Cape3",
+    "Cape4"
+  ],
+  "reference_genes": 56748,
+  "candidate_genes": 56748,
+  "missing_candidate_genes": [],
+  "extra_candidate_genes": [],
+  "per_sample": {
+    "control1": {
+      "mismatched_genes": 0,
+      "maximum_absolute_difference": 0,
+      "reference_total": 25786645,
+      "candidate_total": 25786645
+    },
+    "control2": {
+      "mismatched_genes": 0,
+      "maximum_absolute_difference": 0,
+      "reference_total": 25271433,
+      "candidate_total": 25271433
+    },
+    "control3": {
+      "mismatched_genes": 0,
+      "maximum_absolute_difference": 0,
+      "reference_total": 28153810,
+      "candidate_total": 28153810
+    },
+    "Cape2": {
+      "mismatched_genes": 0,
+      "maximum_absolute_difference": 0,
+      "reference_total": 31163285,
+      "candidate_total": 31163285
+    },
+    "Cape3": {
+      "mismatched_genes": 0,
+      "maximum_absolute_difference": 0,
+      "reference_total": 27542451,
+      "candidate_total": 27542451
+    },
+    "Cape4": {
+      "mismatched_genes": 0,
+      "maximum_absolute_difference": 0,
+      "reference_total": 27700170,
+      "candidate_total": 27700170
+    }
+  },
+  "exactly_equal": true
+}

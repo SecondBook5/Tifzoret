@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "reference_genes": 24903,
+  "candidate_genes": 24903,
+  "shared_genes": 24903,
+  "missing_candidate_genes": [],
+  "extra_candidate_genes": [],
+  "fields": {
+    "base_mean": {
+      "reference_source": "raw",
+      "reference_field": "baseMean",
+      "relative_tolerance": 1e-06,
+      "absolute_tolerance": 1e-10,
+      "mismatched_genes": 0,
+      "maximum_absolute_difference": 0.0
+    },
+    "log2_fold_change_raw": {
+      "reference_source": "raw",
+      "reference_field": "log2FoldChange",
+      "relative_tolerance": 1e-06,
+      "absolute_tolerance": 1e-05,
+      "mismatched_genes": 0,
+      "maximum_absolute_difference": 6.763003277399093e-07
+    },
+    "log2_fold_change": {
+      "reference_source": "shrunken",
+      "reference_field": "log2FoldChange",
+      "relative_tolerance": 1e-06,
+      "absolute_tolerance": 1e-05,
+      "mismatched_genes": 0,
+      "maximum_absolute_difference": 6.738177510012822e-06
+    },
+    "statistic": {
+      "reference_source": "raw",
+      "reference_field": "stat",
+      "relative_tolerance": 1e-06,
+      "absolute_tolerance": 1e-05,
+      "mismatched_genes": 0,
+      "maximum_absolute_difference": 3.181955861464303e-06
+    },
+    "p_value": {
+      "reference_source": "raw",
+      "reference_field": "pvalue",
+      "relative_tolerance": 1e-06,
+      "absolute_tolerance": 1e-06,
+      "mismatched_genes": 0,
+      "maximum_absolute_difference": 1.1926287368790867e-07
+    },
+    "adjusted_p_value": {
+      "reference_source": "raw",
+      "reference_field": "padj",
+      "relative_tolerance": 1e-06,
+      "absolute_tolerance": 1e-06,
+      "mismatched_genes": 0,
+      "maximum_absolute_difference": 3.585784957849114e-08
+    }
+  },
+  "decision_comparison": {
+    "fdr_threshold": 0.05,
+    "absolute_log2fc_threshold": 1.0,
+    "mismatched_genes": 0,
+    "examples": []
+  },
+  "within_tolerance": true
+}

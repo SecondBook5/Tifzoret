@@ -1,0 +1,9 @@
+=== Capturing evidence for rela_ko_vs_wt ===
+Study config: /home/ajbook/projects/lymphatic-flow-homeostasis/studies/rela_ko_vs_wt/config.yaml
+Timestamp: 2026-08-12T22:54:19Z
+
+No pre-existing comparison outputs found; attempting fresh bridge run
+
+--- Step 1: Validating study config ---
+Validation exit code: 2
+BLOCKED: Validation failed for rela_ko_vs_wt

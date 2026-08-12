@@ -1,0 +1,44 @@
+- id: evidence-001
+  track: A
+  area: config-migration
+  verdict: FIDELITY-GAP
+  severity: S2
+  summary: Three of four published cohorts cannot be re-run through current CLI due to unsupported config versions
+  detail: |
+    The ligation_vs_sham, old_vs_young, and rela_ko_vs_wt cohorts have config.yaml files
+    that lack a version field and use schema elements no longer supported by the current
+    bulk-rna-frame CLI. Validation fails with "unsupported project configuration version: None".
+
+    Cape_thoracic_duct succeeds because it was migrated during development, but the other
+    three cohorts were not. This means that published analyses cannot be numerically
+    reproduced without manual config migration.
+
+    A config migration tool exists (`bulk-rna migrate-config`) but was not applied to
+    these three cohorts. This creates a reproducibility gap where:
+    1. Track A numeric evidence must fall back to code-only inspection for these cohorts
+    2. Published results cannot be verified end-to-end in the current environment
+    3. Users attempting to reproduce published work will hit validation failures
+
+    The severity is S2 (moderate) because:
+    - A workaround exists (manual config migration)
+    - The failure is deterministic and clear (not silent)
+    - It only affects legacy configs, not new projects
+
+    However, it still represents a reproducibility regression since published work that
+    once ran can no longer run without intervention.
+  reference:
+    - file: lymphatic-flow-homeostasis/studies/ligation_vs_sham/config.yaml
+      line: 1
+    - file: lymphatic-flow-homeostasis/studies/old_vs_young/config.yaml
+      line: 1
+    - file: lymphatic-flow-homeostasis/studies/rela_ko_vs_wt/config.yaml
+      line: 1
+  frame:
+    - file: src/bulk_rna_frame/config.py
+      line: 1
+    - file: src/bulk_rna_frame/cli.py
+      line: 1
+  evidence: run
+  target: harness
+  status: open
+  commit: ""

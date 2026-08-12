@@ -1,0 +1,8 @@
+=== Capturing evidence for cape_thoracic_duct ===
+Study config: /home/ajbook/projects/lymphatic-flow-homeostasis/studies/cape_thoracic_duct/config.yaml
+Timestamp: 2026-08-12T22:54:09Z
+
+Found pre-existing comparison outputs in migration directory
+Copying: /home/ajbook/projects/lymphatic-flow-homeostasis/results/bulk_rna_frame/migration/cape_thoracic_duct_counts_equivalence.json
+Copying: /home/ajbook/projects/lymphatic-flow-homeostasis/results/bulk_rna_frame/migration/cape_thoracic_duct_de_equivalence.json
+SUCCESS: Pre-existing comparison outputs copied
