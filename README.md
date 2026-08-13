@@ -28,6 +28,9 @@ bulk-rna prepare my-study/project.yaml --cores 4
 bulk-rna dry-run my-study/project.yaml
 bulk-rna run my-study/project.yaml --cores 4
 bulk-rna report my-study/project.yaml
+bulk-rna figures init my-study/project.yaml
+bulk-rna figures build my-study/project.yaml --cores 4
+bulk-rna figures gallery my-study/project.yaml
 ```
 
 Input scaffolds are available for `counts`, `bam`, `nfcore-rnaseq`, and `archive`.
@@ -64,6 +67,7 @@ bulk-rna prepare
 bulk-rna run
 bulk-rna report
 bulk-rna assemble
+bulk-rna figures init|catalog|build|gallery
 bulk-rna verify
 bulk-rna migrate-config
 bulk-rna collection validate|run
@@ -106,4 +110,4 @@ results/<project>/<analysis_set>/
 
 Every rendered constructor declares PDF, PNG, and displayed-data artifacts. The release manifest records normalized configuration, inputs/results checksums, contrast semantics, provider receipts, random seeds, warnings, environment/container information, and repository revision.
 
-See [configuration](docs/configuration.md), [architecture](docs/architecture.md), [methods](docs/methods.md), [migration](docs/migration.md), and [troubleshooting](docs/troubleshooting.md).
+See [configuration](docs/configuration.md), [architecture](docs/architecture.md), [methods](docs/methods.md), [hypothesis-driven figures](docs/figures.md), [migration](docs/migration.md), the [full source-to-tool migration map](docs/full-migration-map.md), and [troubleshooting](docs/troubleshooting.md).

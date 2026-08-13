@@ -88,16 +88,25 @@ z-score limit, and pathway display counts are explicit configuration.
 Publication/full projects declare:
 
 - `hypotheses.claims`: statements, expected directions, and evidence panels;
-- `hypotheses.panels`: genes grouped into biological programs and selected
-  pathways. Optional `program_annotations` assigns a mutually exclusive
+- `hypotheses.panels`: first-class biological `programs` (preferred),
+  legacy-compatible grouped `gene_panels`, selected pathways, and expected
+  effects. Optional `program_annotations` assigns a mutually exclusive
   display program to each top-DE heatmap gene, while `program_colors` and
   `program_order` control its study-owned legend and grouped layout.
   Optional `gsea_programs` is an ordered list of gene-panel identifiers; each
   referenced panel is tested as a user-configured preranked gene program and
   receives a focused multi-track GSEA curve. Database pathways remain the
   automatic fallback when this list is absent;
-- `publication.recipe`: panel sources, letters, grid positions, dimensions,
-  variants, and legend policy.
+- `publication.recipe`: registered constructors or custom panel sources,
+  variants, contrast IDs, letters, grid positions, dimensions, and legend
+  policy.
+
+Run `bulk-rna figures init project.yaml` to scaffold all three publication
+files. Constructor-based recipes are validated against the enabled modules and
+declared contrasts. Run `bulk-rna figures catalog` to inspect the available
+constructors and `bulk-rna figures gallery project.yaml` to compare built
+variants. See [hypothesis-driven publication figures](figures.md) for the full
+contract.
 
 The recipe selects already declared workflow artifacts. It cannot execute
 arbitrary code or make an undeclared analysis direction.

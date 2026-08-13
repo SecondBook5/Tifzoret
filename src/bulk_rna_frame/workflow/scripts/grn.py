@@ -21,6 +21,7 @@ if str(SOURCE_ROOT) not in sys.path:
     sys.path.insert(0, str(SOURCE_ROOT))
 
 from bulk_rna_frame.config import load_project  # noqa: E402
+from bulk_rna_frame.figures import normalized_gene_panels  # noqa: E402
 
 
 def read_tsv(path: Path) -> list[dict[str, str]]:
@@ -40,9 +41,9 @@ def program_map(project) -> tuple[dict[str, str], dict[str, str]]:
     colors: dict[str, str] = {}
     palette = ["#D97706", "#0F9D78", "#C76C9E", "#167BB5", "#7A5195", "#6B8E23", "#8C8C8C"]
     if project.panel_config:
-        for panel_index, (panel_id, panel) in enumerate(project.panel_config["gene_panels"].items()):
+        for panel_index, (panel_id, panel) in enumerate(normalized_gene_panels(project.panel_config).items()):
             for group, genes in panel["groups"].items():
-                colors.setdefault(group, panel.get("color", palette[panel_index % len(palette)]))
+                colors.setdefault(group, panel.get("color") or palette[panel_index % len(palette)])
                 for gene in genes:
                     mapping.setdefault(gene.upper(), group)
     colors["Unassigned"] = "#A0A8AE"

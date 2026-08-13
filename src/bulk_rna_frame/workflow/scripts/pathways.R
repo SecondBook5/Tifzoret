@@ -157,9 +157,10 @@ if (!is.null(args$panels) && nzchar(args$panels)) {
   panel_cfg <- yaml::read_yaml(args$panels)
   requested_programs <- panel_cfg$gsea_programs
   symbol_lookup <- setNames(rownames(expression), toupper(rownames(expression)))
+  configured_panels <- configured_gene_panels(panel_cfg)
   if (length(requested_programs)) {
     for (panel_id in requested_programs) {
-      panel <- panel_cfg$gene_panels[[panel_id]]
+      panel <- configured_panels[[panel_id]]
       configured_id <- paste0("CONFIGURED_PROGRAM_", toupper(gsub("[^A-Za-z0-9]+", "_", panel_id)))
       configured_genes <- unique(unname(symbol_lookup[toupper(unlist(panel$groups, use.names = FALSE))]))
       configured_genes <- configured_genes[!is.na(configured_genes)]

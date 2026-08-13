@@ -475,6 +475,8 @@ def load_project(config_path: str | Path) -> ResolvedProject:
         errors.append("composition, regulators, and hypotheses require modules.qc")
     if modules["hypotheses"] and (not modules["de"] or not modules["pathways"]):
         errors.append("modules.hypotheses requires modules.de and modules.pathways")
+    if modules["publication"] and (not modules["qc"] or not modules["de"]):
+        errors.append("modules.publication requires modules.qc and modules.de")
     if any(modules[name] for name in ("regulators", "networks")) and not modules["de"]:
         errors.append("regulators and networks require modules.de")
     if modules["networks"] and not modules["ontology"]:
@@ -526,25 +528,30 @@ def load_project(config_path: str | Path) -> ResolvedProject:
     hypothesis_config: dict[str, Any] | None = None
     panel_config: dict[str, Any] | None = None
     recipe_config: dict[str, Any] | None = None
-    if modules["hypotheses"]:
+    if modules["hypotheses"] or modules["publication"]:
         if "hypotheses" not in config:
-            errors.append("modules.hypotheses requires hypotheses.claims and hypotheses.panels")
+            errors.append(
+                "hypothesis/publication modules require hypotheses.panels; the hypothesis "
+                "module also requires hypotheses.claims"
+            )
         else:
-            hypothesis_path = _resolve(base, config["hypotheses"]["claims"])
             panel_path = _resolve(base, config["hypotheses"]["panels"])
-            for name, candidate in (("hypothesis claims", hypothesis_path), ("hypothesis panels", panel_path)):
-                if not candidate.is_file():
-                    errors.append(f"{name} file does not exist: {candidate}")
-            if hypothesis_path.is_file():
-                hypothesis_config, document_errors = _load_schema_document(
-                    hypothesis_path, "hypotheses"
-                )
-                errors.extend(document_errors)
-            if panel_path.is_file():
+            if not panel_path.is_file():
+                errors.append(f"hypothesis panels file does not exist: {panel_path}")
+            else:
                 panel_config, document_errors = _load_schema_document(
                     panel_path, "hypothesis_panels"
                 )
                 errors.extend(document_errors)
+            if modules["hypotheses"]:
+                hypothesis_path = _resolve(base, config["hypotheses"]["claims"])
+                if not hypothesis_path.is_file():
+                    errors.append(f"hypothesis claims file does not exist: {hypothesis_path}")
+                else:
+                    hypothesis_config, document_errors = _load_schema_document(
+                        hypothesis_path, "hypotheses"
+                    )
+                    errors.extend(document_errors)
     if modules["publication"]:
         if "publication" not in config:
             errors.append("modules.publication requires publication.recipe")
@@ -559,6 +566,9 @@ def load_project(config_path: str | Path) -> ResolvedProject:
                 errors.extend(document_errors)
     if hypothesis_config is not None:
         known_contrasts = set(contrast_ids)
+        known_gene_panels = set((panel_config or {}).get("gene_panels", {})) | set(
+            (panel_config or {}).get("programs", {})
+        )
         hypothesis_ids = [item["id"] for item in hypothesis_config["hypotheses"]]
         if len(hypothesis_ids) != len(set(hypothesis_ids)):
             errors.append("hypothesis ids must be unique")
@@ -569,27 +579,41 @@ def load_project(config_path: str | Path) -> ResolvedProject:
                 )
             if panel_config is not None:
                 for panel in item.get("gene_panels", []):
-                    if panel not in panel_config["gene_panels"]:
+                    if panel not in known_gene_panels:
                         errors.append(f"hypothesis {item['id']}: unknown gene panel {panel!r}")
                 for panel in item.get("pathway_panels", []):
-                    if panel not in panel_config["pathway_panels"]:
+                    if panel not in panel_config.get("pathway_panels", {}):
                         errors.append(f"hypothesis {item['id']}: unknown pathway panel {panel!r}")
     if panel_config is not None:
+        known_gene_panels = set(panel_config.get("gene_panels", {})) | set(
+            panel_config.get("programs", {})
+        )
+        known_pathway_panels = set(panel_config.get("pathway_panels", {}))
         order = panel_config.get("figure_order", {})
         for panel in order.get("gene_panels", []):
-            if panel not in panel_config["gene_panels"]:
+            if panel not in known_gene_panels:
                 errors.append(f"figure_order references unknown gene panel {panel!r}")
         for panel in order.get("pathway_panels", []):
-            if panel not in panel_config["pathway_panels"]:
+            if panel not in known_pathway_panels:
                 errors.append(f"figure_order references unknown pathway panel {panel!r}")
         for panel in panel_config.get("gsea_programs", []):
-            if panel not in panel_config["gene_panels"]:
+            if panel not in known_gene_panels:
                 errors.append(f"gsea_programs references unknown gene panel {panel!r}")
+        for effect_id, effect in panel_config.get("expected_effects", {}).items():
+            if effect["contrast"] not in set(contrast_ids):
+                errors.append(f"expected_effects {effect_id!r}: unknown contrast {effect['contrast']!r}")
+            if effect["target_type"] == "program" and effect["target"] not in known_gene_panels:
+                errors.append(f"expected_effects {effect_id!r}: unknown program {effect['target']!r}")
+            if effect["target_type"] == "pathway" and effect["target"] not in known_pathway_panels:
+                errors.append(f"expected_effects {effect_id!r}: unknown pathway panel {effect['target']!r}")
     if recipe_config is not None:
         for figure_set, recipe in recipe_config["figure_sets"].items():
             panel_ids = [panel["id"] for panel in recipe["panels"]]
             if len(panel_ids) != len(set(panel_ids)):
                 errors.append(f"figure set {figure_set!r} contains duplicate panel ids")
+        from .figures import validate_recipe_contract
+
+        errors.extend(validate_recipe_contract(recipe_config, (name for name, enabled in modules.items() if enabled), contrast_ids))
     valid_gmt_lines = 0
     with gmt_path.open(encoding="utf-8") as handle:
         for line_number, line in enumerate(handle, start=1):

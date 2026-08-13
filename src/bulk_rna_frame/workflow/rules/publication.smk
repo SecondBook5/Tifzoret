@@ -29,7 +29,8 @@ rule assemble_figure:
     output:
         pdf=str(RESULTS / "publication" / "{figure_set}" / "assembled" / "{figure_set}.pdf"),
         png=str(RESULTS / "publication" / "{figure_set}" / "assembled" / "{figure_set}.png"),
-        metadata=str(RESULTS / "publication" / "{figure_set}" / "assembled" / "assembly.json")
+        metadata=str(RESULTS / "publication" / "{figure_set}" / "assembled" / "assembly.json"),
+        panel_index=str(RESULTS / "publication" / "{figure_set}" / "panels" / "index.json")
     log:
         str(RESULTS / "publication" / "{figure_set}" / "assembled" / "assembly.log")
     conda:
@@ -37,7 +38,8 @@ rule assemble_figure:
     shell:
         "python {WORKFLOW_ROOT}/scripts/assemble.py --project-config {input.config:q} "
         "--results {RESULTS:q} --figure-set {wildcards.figure_set:q} "
-        "--pdf {output.pdf:q} --png {output.png:q} --metadata {output.metadata:q} > {log:q} 2>&1"
+        "--pdf {output.pdf:q} --png {output.png:q} --metadata {output.metadata:q} "
+        "--panel-index {output.panel_index:q} > {log:q} 2>&1"
 
 rule assemble_publication:
     input:

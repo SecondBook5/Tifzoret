@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import shutil
 import subprocess
 import sys
@@ -20,6 +21,7 @@ from .config import (
     report_json,
 )
 from .collection import run_collection
+from .figures import build_gallery, constructor_catalog, initialize_figure_workflow
 from .verification import verify_project, write_verification
 
 
@@ -98,6 +100,52 @@ def command_assemble(args: argparse.Namespace) -> int:
     if project.figure_recipe is None:
         raise ProjectValidationError("assemble requires publication.recipe in project.yaml")
     return _snakemake(args, dry_run=False, targets=("assemble_publication",))
+
+
+def command_figures_init(args: argparse.Namespace) -> int:
+    try:
+        outputs = initialize_figure_workflow(args.project, force=args.force)
+        project = load_project(args.project)
+    except (OSError, ValueError, yaml.YAMLError) as error:
+        raise ProjectValidationError(str(error)) from error
+    print("Initialized hypothesis-driven publication files:")
+    for output in outputs:
+        print(f"  {output}")
+    print(f"Validated constructor recipe for: {project.project_id}")
+    return 0
+
+
+def command_figures_catalog(args: argparse.Namespace) -> int:
+    catalog = constructor_catalog()
+    if args.json:
+        print(json.dumps({"constructors": catalog}, indent=2))
+    else:
+        for constructor in catalog:
+            variants = ", ".join(constructor["variants"])
+            scope = "contrast" if constructor["contrast_specific"] else "study"
+            print(f"{constructor['id']:<28} {scope:<8} {variants}")
+    return 0
+
+
+def command_figures_build(args: argparse.Namespace) -> int:
+    project = load_project(args.project)
+    if project.figure_recipe is None:
+        raise ProjectValidationError("figures build requires publication.recipe in project.yaml")
+    if args.figure_set:
+        if args.figure_set not in project.recipe_config["figure_sets"]:
+            raise ProjectValidationError(f"unknown figure set: {args.figure_set}")
+        target = project.result_root / "publication" / args.figure_set / "panels" / "index.json"
+        return _snakemake(args, dry_run=False, targets=(str(target),))
+    return _snakemake(args, dry_run=False, targets=("assemble_publication",))
+
+
+def command_figures_gallery(args: argparse.Namespace) -> int:
+    project = load_project(args.project)
+    if project.figure_recipe is None:
+        raise ProjectValidationError("figures gallery requires publication.recipe in project.yaml")
+    output = build_gallery(project, args.output)
+    print(f"Figure review gallery written: {output}")
+    return 0
 
 
 def command_verify(args: argparse.Namespace) -> int:
@@ -207,6 +255,37 @@ def build_parser() -> argparse.ArgumentParser:
     assemble_parser.add_argument("--snakemake", default="snakemake")
     assemble_parser.add_argument("--no-conda", action="store_true")
     assemble_parser.set_defaults(handler=command_assemble)
+
+    figures_parser = commands.add_parser(
+        "figures", help="initialize, build, and review hypothesis-driven publication figures"
+    )
+    figure_commands = figures_parser.add_subparsers(dest="figures_command", required=True)
+    figures_init = figure_commands.add_parser(
+        "init", help="scaffold hypothesis, program, and constructor recipe files"
+    )
+    figures_init.add_argument("project")
+    figures_init.add_argument("--force", action="store_true")
+    figures_init.set_defaults(handler=command_figures_init)
+    figures_catalog = figure_commands.add_parser(
+        "catalog", help="list registered publication constructors and variants"
+    )
+    figures_catalog.add_argument("--json", action="store_true")
+    figures_catalog.set_defaults(handler=command_figures_catalog)
+    figures_build = figure_commands.add_parser(
+        "build", help="render configured panels and assemble publication figure sets"
+    )
+    figures_build.add_argument("project")
+    figures_build.add_argument("--figure-set")
+    figures_build.add_argument("--cores", type=int, default=1)
+    figures_build.add_argument("--snakemake", default="snakemake")
+    figures_build.add_argument("--no-conda", action="store_true")
+    figures_build.set_defaults(handler=command_figures_build)
+    figures_gallery = figure_commands.add_parser(
+        "gallery", help="create an HTML/contact-sheet review of all built variants"
+    )
+    figures_gallery.add_argument("project")
+    figures_gallery.add_argument("--output")
+    figures_gallery.set_defaults(handler=command_figures_gallery)
 
     verify_parser = commands.add_parser("verify", help="compare a project result with a reference run")
     verify_parser.add_argument("project", help="project.yaml whose resolved result is the candidate")

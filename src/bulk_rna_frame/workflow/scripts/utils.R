@@ -218,3 +218,23 @@ empty_plot <- function(title, subtitle = "No displayable results for the configu
       plot.background = element_rect(fill = "white", colour = NA)
     )
 }
+
+configured_gene_panels <- function(panel_cfg) {
+  panels <- panel_cfg$gene_panels
+  if (is.null(panels)) panels <- list()
+  programs <- panel_cfg$programs
+  if (!is.null(programs)) {
+    for (program_id in names(programs)) {
+      program <- programs[[program_id]]
+      label <- if (is.null(program$label)) clean_term(program_id) else program$label
+      panels[[program_id]] <- list(
+        description = if (is.null(program$description)) label else program$description,
+        color = program$color,
+        groups = stats::setNames(list(unlist(program$genes, use.names = FALSE)), label),
+        expected_direction = program$expected_direction,
+        contrast = program$contrast
+      )
+    }
+  }
+  panels
+}

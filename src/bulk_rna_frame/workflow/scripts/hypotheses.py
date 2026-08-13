@@ -17,6 +17,7 @@ if str(SOURCE_ROOT) not in sys.path:
     sys.path.insert(0, str(SOURCE_ROOT))
 
 from bulk_rna_frame.config import load_project  # noqa: E402
+from bulk_rna_frame.figures import normalized_gene_panels  # noqa: E402
 
 h = getattr(markup, "es" + "ca" + "pe")
 
@@ -71,6 +72,7 @@ def main() -> None:
     project = load_project(args.project_config)
     claims = [claim for claim in project.hypothesis_config["hypotheses"] if claim["contrast"] == args.contrast_id]
     panels = project.panel_config
+    gene_panels = normalized_gene_panels(panels)
     de_rows = read_tsv(args.de); fgsea_rows = read_tsv(args.fgsea); gsva_rows = read_tsv(args.gsva); regulator_rows = read_tsv(args.regulators)
     de = {row.get("gene_symbol", "").upper(): row for row in de_rows}
     fgsea = {row.get("pathway", ""): row for row in fgsea_rows}
@@ -80,7 +82,7 @@ def main() -> None:
     for claim in claims:
         expected = claim["expected_direction"]
         for panel_id in claim.get("gene_panels", []):
-            panel = panels["gene_panels"][panel_id]
+            panel = gene_panels[panel_id]
             for group, genes in panel["groups"].items():
                 for gene in genes:
                     row = de.get(gene.upper())

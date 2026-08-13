@@ -27,13 +27,21 @@ OTHER_PROGRAM_COLOR <- "#969696"
 panel_rows <- list(); panel_colors <- c(`Other / poorly characterized` = OTHER_PROGRAM_COLOR)
 default_colors <- c("#D97706", "#E9A300", "#0F9D78", "#C76C9E", "#167BB5", "#53A7D8", "#7A5195", "#8C8C8C")
 panel_index <- 0L
-for (panel_id in names(panel_cfg$gene_panels)) {
+configured_panels <- configured_gene_panels(panel_cfg)
+for (panel_id in names(configured_panels)) {
   panel_index <- panel_index + 1L
-  panel <- panel_cfg$gene_panels[[panel_id]]
+  panel <- configured_panels[[panel_id]]
   color <- if (is.null(panel$color)) default_colors[[1 + (panel_index - 1L) %% length(default_colors)]] else panel$color
   for (group in names(panel$groups)) {
     panel_colors[[group]] <- color
-    panel_rows[[length(panel_rows) + 1L]] <- data.frame(panel = panel_id, program = group, gene_symbol = unlist(panel$groups[[group]]), program_color = color)
+    panel_rows[[length(panel_rows) + 1L]] <- data.frame(
+      panel = panel_id,
+      program = group,
+      gene_symbol = unlist(panel$groups[[group]]),
+      program_color = color,
+      expected_direction = if (is.null(panel$expected_direction)) "not_specified" else panel$expected_direction,
+      expected_contrast = if (is.null(panel$contrast)) NA_character_ else panel$contrast
+    )
   }
 }
 panel_definitions <- bind_rows(panel_rows) %>% distinct(gene_symbol, .keep_all = TRUE)
@@ -43,6 +51,17 @@ if (!is.null(panel_cfg$program_colors)) {
 }
 panel_definitions <- panel_definitions %>%
   mutate(program_color = ifelse(program %in% names(panel_colors), unname(panel_colors[program]), program_color))
+configured_program_definitions <- panel_definitions %>%
+  mutate(
+    configured_gene_symbol = gene_symbol,
+    measured_gene_symbol = unname(symbol_lookup[toupper(gene_symbol)]),
+    measured = !is.na(measured_gene_symbol)
+  )
+readr::write_tsv(
+  configured_program_definitions,
+  file.path(dirs$tables, "program_definitions.tsv"),
+  na = "NA"
+)
 heatmap_definitions <- panel_definitions
 if (!is.null(panel_cfg$program_annotations)) {
   annotations <- data.frame(gene_symbol = names(panel_cfg$program_annotations), program = unlist(panel_cfg$program_annotations), stringsAsFactors = FALSE)
@@ -126,6 +145,12 @@ configured_genes <- unique(panel_definitions$gene_symbol)
 configured_genes <- configured_genes[configured_genes %in% rownames(expression)]
 program_data <- panel_definitions %>% filter(gene_symbol %in% configured_genes) %>% distinct(gene_symbol, .keep_all = TRUE)
 program_order_genes <- unlist(lapply(unique(program_data$program), function(program) program_data$gene_symbol[program_data$program == program]))
+if (!length(program_order_genes)) {
+  stop(
+    "No configured biological-program genes matched measured gene symbols. Review tables/program_definitions.tsv and hypothesis_panels.yaml.",
+    call. = FALSE
+  )
+}
 program_z <- row_zscore(expression[program_order_genes, column_order, drop = FALSE], cfg$figures$de$z_limit)
 program_long <- as.data.frame(program_z, check.names = FALSE) %>% tibble::rownames_to_column("gene_symbol") %>% pivot_longer(-gene_symbol, names_to = "sample_id", values_to = "row_z_score") %>%
   left_join(program_data, by = "gene_symbol") %>% left_join(de %>% select(gene_symbol, log2_fold_change, lfc_se, adjusted_p_value), by = "gene_symbol") %>%
@@ -166,8 +191,14 @@ save_plot_pair(violin_plot, file.path(dirs$figures, "program_violins"), 13.0, ma
 
 write_json_file(list(
   contrast_id = args[["contrast-id"]],
+  hypothesis_panel_source = normalizePath(args$panels, mustWork = TRUE),
   de_heatmap_variants = c("global", "program_grouped", "compact_direct_labels"),
+  registered_constructor_ids = c("de_heatmap", "program_heatmap_effects", "program_violins"),
   configured_program_genes = length(program_order_genes),
+  configured_program_genes_requested = nrow(configured_program_definitions),
+  configured_program_genes_measured = sum(configured_program_definitions$measured),
+  expected_effects = panel_cfg$expected_effects,
+  constructor_defaults = panel_cfg$constructor_defaults,
   figures = list(
     de_heatmap_global = list(displayed_data = "tables/de_heatmap_global_displayed.tsv"),
     de_heatmap_program_grouped = list(displayed_data = "tables/de_heatmap_program_grouped_displayed.tsv"),

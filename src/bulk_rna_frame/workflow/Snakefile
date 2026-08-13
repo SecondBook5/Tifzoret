@@ -4,6 +4,7 @@ import shlex
 
 from snakemake.utils import min_version
 from bulk_rna_frame.config import load_project
+from bulk_rna_frame.figures import resolve_panel
 
 min_version("8.0")
 
@@ -196,6 +197,7 @@ HYPOTHESIS_PATTERNS = [
 ]
 
 PUBLICATION_PATTERNS = [
+    analysis("publication", "tables/program_definitions.tsv"),
     analysis("publication", "tables/de_gene_program_assignments.tsv"),
     analysis("publication", "tables/de_heatmap_global_displayed.tsv"),
     analysis("publication", "tables/de_heatmap_program_grouped_displayed.tsv"),
@@ -252,6 +254,7 @@ ASSEMBLY_PATTERNS = [
     str(RESULTS / "publication" / "{figure_set}" / "assembled" / "{figure_set}.pdf"),
     str(RESULTS / "publication" / "{figure_set}" / "assembled" / "{figure_set}.png"),
     str(RESULTS / "publication" / "{figure_set}" / "assembled" / "assembly.json"),
+    str(RESULTS / "publication" / "{figure_set}" / "panels" / "index.json"),
 ]
 ASSEMBLY_OUTPUTS = expand(ASSEMBLY_PATTERNS, figure_set=FIGURE_SET_IDS)
 if MODULES["publication"]:
@@ -272,9 +275,7 @@ def figure_panel_inputs(wildcards):
     recipe = PROJECT.recipe_config["figure_sets"][wildcards.figure_set]
     paths = []
     for panel in recipe["panels"]:
-        source = Path(panel["source"]).expanduser()
-        source = source if source.is_absolute() else RESULTS / source
-        stem = source.with_suffix("") if source.suffix.lower() in {".pdf", ".png"} else source
+        stem = resolve_panel(PROJECT, panel).source
         paths.extend([str(stem.with_suffix(".pdf")), str(stem.with_suffix(".png"))])
     return paths
 
