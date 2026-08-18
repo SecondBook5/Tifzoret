@@ -50,8 +50,24 @@ def resolve_panel_sources(project, root: Path) -> list[tuple[str, Path, dict]]:
     selected: list[tuple[str, Path, dict]] = []
     recipe = project.recipe_config or {}
     for figure_set, spec in recipe.get("figure_sets", {}).items():
+        # front_door runs after assembly, so the assembled panel index is the
+        # source of truth for where each rendered panel artifact lives.
+        # Constructor-based recipes carry no "source" key on their panels, so we
+        # resolve the staged panel paths from that index (falling back to a
+        # legacy "source" key when present).
+        panel_index_path = root / "publication" / figure_set / "panels" / "index.json"
+        indexed_panels: dict[str, dict] = {}
+        if panel_index_path.is_file():
+            panel_index = json.loads(panel_index_path.read_text(encoding="utf-8"))
+            indexed_panels = {
+                str(entry.get("id")): entry for entry in panel_index.get("panels", [])
+            }
         for panel in spec.get("panels", []):
-            source = Path(panel["source"]).expanduser()
+            indexed = indexed_panels.get(str(panel.get("id")), {})
+            staged = indexed.get("staged_png") or indexed.get("staged_pdf") or panel.get("source")
+            if not staged:
+                continue
+            source = Path(staged).expanduser()
             source = source if source.is_absolute() else root / source
             stem = source.with_suffix("") if source.suffix.lower() in {".pdf", ".png"} else source
             selected.append((f"{figure_set}__panel_{panel['id']}", stem, panel))
