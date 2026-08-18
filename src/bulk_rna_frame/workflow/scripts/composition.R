@@ -17,7 +17,13 @@ annotation <- read_annotation_contract(args$annotation)
 contrasts <- readr::read_tsv(args$contrasts, show_col_types = FALSE, progress = FALSE)
 contrast <- contrasts[contrasts$contrast_id == args[["contrast-id"]], , drop = FALSE]
 if (nrow(contrast) != 1L) stop("Could not resolve contrast", call. = FALSE)
-factor_name <- contrast$factor[[1]]; numerator <- contrast$numerator[[1]]; denominator <- contrast$denominator[[1]]
+# Route direction resolution through the shared resolver used by de.R/pathways.R
+# so the relevel reference and numerator identity come from one code path. This
+# stage only ever runs on pairwise contrasts (PAIRWISE_CONTRAST_IDS gate), so the
+# guard is a documented assertion and cannot fire in practice.
+resolved <- resolve_contrast(contrast, cfg$design$formula)
+if (!identical(resolved$type, "pairwise")) stop("composition stage supports pairwise contrasts only", call. = FALSE)
+factor_name <- resolved$factor_name; numerator <- resolved$numerator; denominator <- resolved$denominator
 
 definition <- yaml::read_yaml(args$signatures)$signatures
 signature_table <- bind_rows(lapply(definition, function(item) data.frame(
@@ -45,7 +51,7 @@ scores <- GSVA::gsva(parameter, verbose = FALSE, BPPARAM = BiocParallel::SerialP
 score_table <- as.data.frame(scores, check.names = FALSE) %>% tibble::rownames_to_column("signature_id")
 readr::write_tsv(score_table, file.path(dirs$tables, "cell_state_scores.tsv"))
 
-metadata$contrast_group <- stats::relevel(factor(metadata[[factor_name]]), ref = denominator)
+metadata$contrast_group <- stats::relevel(factor(metadata[[factor_name]]), ref = resolved$reference_levels[[factor_name]])
 formula_text <- gsub(paste0("\\b", factor_name, "\\b"), "contrast_group", cfg$design$formula)
 design <- stats::model.matrix(stats::as.formula(formula_text), metadata)
 coefficient <- grep(paste0("^contrast_group", make.names(numerator), "$"), colnames(design), value = TRUE)
