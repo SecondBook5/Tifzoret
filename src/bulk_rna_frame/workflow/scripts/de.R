@@ -25,14 +25,17 @@ contrasts <- readr::read_tsv(cfg$.contrasts, show_col_types = FALSE, progress = 
 contrast <- contrasts[contrasts$contrast_id == args[["contrast-id"]], , drop = FALSE]
 if (nrow(contrast) != 1L) stop("Could not resolve exactly one contrast: ", args[["contrast-id"]], call. = FALSE)
 
-factor_name <- contrast$factor[[1]]
-numerator <- contrast$numerator[[1]]
-denominator <- contrast$denominator[[1]]
+resolved <- resolve_contrast(contrast, cfg$design$formula)
+factor_name <- resolved$factor_name
+numerator <- resolved$numerator
+denominator <- resolved$denominator
+design_formula <- resolved$design_formula
 metadata <- metadata[match(colnames(counts), metadata$sample_id), , drop = FALSE]
 rownames(metadata) <- metadata$sample_id
-design_formula <- stats::as.formula(cfg$design$formula)
 for (field in all.vars(design_formula)) metadata[[field]] <- factor(metadata[[field]])
-metadata[[factor_name]] <- stats::relevel(factor(metadata[[factor_name]]), ref = denominator)
+for (relevel_factor in names(resolved$reference_levels)) {
+  metadata[[relevel_factor]] <- stats::relevel(factor(metadata[[relevel_factor]]), ref = resolved$reference_levels[[relevel_factor]])
+}
 
 keep <- rowSums(counts) >= 10L
 dds <- DESeq2::DESeqDataSetFromMatrix(countData = counts[keep, , drop = FALSE], colData = metadata, design = design_formula)
@@ -51,11 +54,10 @@ dds <- tryCatch(
     DESeq2::nbinomWaldTest(fallback, quiet = TRUE)
   }
 )
-coefficient_pattern <- paste0("^", factor_name, "_", numerator, "_vs_", denominator, "$")
-coefficient <- grep(coefficient_pattern, DESeq2::resultsNames(dds), value = TRUE)
-if (length(coefficient) != 1L) {
+coefficient <- resolved$coefficient_name
+if (!coefficient %in% DESeq2::resultsNames(dds)) {
   stop(
-    "Could not resolve coefficient ", coefficient_pattern,
+    "Could not resolve coefficient ", coefficient,
     "; available: ", paste(DESeq2::resultsNames(dds), collapse = ", "),
     call. = FALSE
   )
@@ -89,6 +91,12 @@ result_table <- data.frame(
       !is.na(adjusted_p_value) & adjusted_p_value < cfg$figures$de$fdr & log2_fold_change <= -cfg$figures$de$abs_log2fc ~ "down_in_numerator",
       TRUE ~ "not_significant"
     ),
+    # Paper's 5-class scheme for volcano/MA colouring. Kept SEPARATE from the
+    # `direction` column above (consumed byte-identically by networks.py);
+    # thresholds are the same config-driven cfg$figures$de$fdr / abs_log2fc.
+    significance_class = classify_significance(
+      adjusted_p_value, log2_fold_change, cfg$figures$de$fdr, cfg$figures$de$abs_log2fc
+    ),
     contrast_id = args[["contrast-id"]],
     numerator = numerator,
     denominator = denominator
@@ -104,12 +112,7 @@ volcano_table <- result_table %>%
   mutate(label = ifelse(gene_id %in% label_table$gene_id, gene_symbol, NA_character_))
 readr::write_tsv(volcano_table, file.path(dirs$tables, "volcano_displayed.tsv"), na = "NA")
 
-direction_colors <- c(
-  down_in_numerator = "#39799C",
-  not_significant = "#B8C1C8",
-  up_in_numerator = "#B55252"
-)
-volcano_plot <- ggplot(volcano_table, aes(log2_fold_change, negative_log10_p, colour = direction)) +
+volcano_plot <- ggplot(volcano_table, aes(log2_fold_change, negative_log10_p, colour = significance_class)) +
   annotate("rect", xmin = cfg$figures$de$abs_log2fc, xmax = Inf, ymin = -Inf, ymax = Inf, fill = "#F4A6A6", alpha = 0.10) +
   annotate("rect", xmin = -Inf, xmax = -cfg$figures$de$abs_log2fc, ymin = -Inf, ymax = Inf, fill = "#A6CEE3", alpha = 0.10) +
   geom_vline(xintercept = c(-cfg$figures$de$abs_log2fc, cfg$figures$de$abs_log2fc), colour = "#9AA4AC", linetype = 3, linewidth = 0.35) +
@@ -119,11 +122,18 @@ volcano_plot <- ggplot(volcano_table, aes(log2_fold_change, negative_log10_p, co
     aes(label = label), size = 2.35, label.size = 0.15, fill = scales::alpha("white", 0.90),
     box.padding = 0.26, point.padding = 0.18, max.overlaps = Inf, show.legend = FALSE
   ) +
-  scale_colour_manual(values = direction_colors, breaks = names(direction_colors), labels = c(
-    down_in_numerator = paste0("Downregulated in ", numerator),
-    not_significant = "Not significant",
-    up_in_numerator = paste0("Upregulated in ", numerator)
-  )) +
+  scale_colour_manual(
+    values = SIGNIFICANCE_PALETTE,
+    breaks = SIGNIFICANCE_CLASSES,
+    drop = FALSE,
+    labels = c(
+      significant_up = paste0("Upregulated in ", numerator),
+      significant_down = paste0("Downregulated in ", numerator),
+      padj_only = sprintf("FDR < %.2g only", cfg$figures$de$fdr),
+      lfc_only = sprintf("|log2FC| ≥ %.2g only", cfg$figures$de$abs_log2fc),
+      ns = "Not significant"
+    )
+  ) +
   labs(
     title = paste0(numerator, " versus ", denominator),
     subtitle = sprintf("DESeq2 with apeglm shrinkage; FDR < %.2g and |log2FC| ≥ %.2g", cfg$figures$de$fdr, cfg$figures$de$abs_log2fc),
@@ -136,13 +146,13 @@ volcano_plot <- ggplot(volcano_table, aes(log2_fold_change, negative_log10_p, co
 save_plot_pair(volcano_plot, file.path(dirs$figures, "volcano"), 6.4, 5.4)
 
 ma_table <- result_table %>%
-  select(gene_id, gene_symbol, base_mean, log2_fold_change, adjusted_p_value, direction, contrast_id)
+  select(gene_id, gene_symbol, base_mean, log2_fold_change, adjusted_p_value, direction, significance_class, contrast_id)
 readr::write_tsv(ma_table, file.path(dirs$tables, "ma_displayed.tsv"), na = "NA")
-ma_plot <- ggplot(ma_table, aes(base_mean, log2_fold_change, colour = direction)) +
+ma_plot <- ggplot(ma_table, aes(base_mean, log2_fold_change, colour = significance_class)) +
   geom_hline(yintercept = 0, colour = "#8B979F", linewidth = 0.35) +
   geom_point(size = 1.05, alpha = 0.72) +
   scale_x_log10(labels = scales::label_number()) +
-  scale_colour_manual(values = direction_colors, guide = "none") +
+  scale_colour_manual(values = SIGNIFICANCE_PALETTE, drop = FALSE, guide = "none") +
   labs(title = "MA plot", subtitle = "Shrunken effects versus mean normalized abundance", x = "Mean normalized count", y = "Shrunken log2 fold-change") +
   theme_publication(8.8)
 save_plot_pair(ma_plot, file.path(dirs$figures, "ma"), 6.2, 4.9)
@@ -178,21 +188,35 @@ vst_contrast <- if (dispersion_fit == "parametric") {
   DESeq2::normTransform(dds)
 }
 expression <- SummarizedExperiment::assay(vst_contrast)
-display_samples <- metadata[[factor_name]] %in% c(denominator, numerator)
+# Pairwise contrasts display only their two factor levels (unchanged). A
+# coefficient (interaction) contrast spans every group in the design, so it
+# displays all samples and colours by the palette's canonical grouping
+# (figures.group) rather than the label factor, which has no palette entries.
+if (identical(resolved$type, "pairwise")) {
+  display_samples <- metadata[[factor_name]] %in% c(denominator, numerator)
+  display_group_col <- factor_name
+  display_palette <- condition_palette(cfg, c(denominator, numerator))
+  display_subtitle <- paste(numerator, "and", denominator, "samples")
+} else {
+  display_samples <- rep(TRUE, nrow(metadata))
+  display_group_col <- cfg$figures$group
+  display_palette <- condition_palette(cfg, levels(factor(metadata[[display_group_col]])))
+  display_subtitle <- "All design groups (interaction contrast)"
+}
 de_pca <- stats::prcomp(t(expression[, display_samples, drop = FALSE]), center = TRUE, scale. = FALSE)
 de_pca_variance <- 100 * de_pca$sdev^2 / sum(de_pca$sdev^2)
 de_pca_table <- as.data.frame(de_pca$x[, 1:2, drop = FALSE]) %>%
   tibble::rownames_to_column("sample_id") %>%
   left_join(metadata %>% tibble::rownames_to_column("metadata_row") %>% select(-metadata_row), by = "sample_id")
-de_pca_ellipses <- ellipse_coordinates(de_pca_table, factor_name, cfg$figures$pca$ellipse_level)
+de_pca_ellipses <- ellipse_coordinates(de_pca_table, display_group_col, cfg$figures$pca$ellipse_level)
 readr::write_tsv(de_pca_table, file.path(dirs$tables, "de_pca_coordinates.tsv"))
 readr::write_tsv(de_pca_ellipses, file.path(dirs$tables, "de_pca_ellipses.tsv"))
-de_pca_plot <- ggplot(de_pca_table, aes(PC1, PC2, colour = .data[[factor_name]])) +
+de_pca_plot <- ggplot(de_pca_table, aes(PC1, PC2, colour = .data[[display_group_col]])) +
   {if (nrow(de_pca_ellipses)) geom_path(data = de_pca_ellipses, aes(PC1, PC2, colour = ellipse_group, group = ellipse_group), inherit.aes = FALSE, linewidth = 0.8)} +
   geom_point(size = 3.1) +
   ggrepel::geom_text_repel(aes(label = sample_id), size = 2.5, show.legend = FALSE, max.overlaps = Inf) +
-  scale_colour_manual(values = condition_palette(cfg, c(denominator, numerator)), drop = FALSE) +
-  labs(title = "Contrast PCA", subtitle = paste(numerator, "and", denominator, "samples"), x = sprintf("PC1 (%.1f%%)", de_pca_variance[[1]]), y = sprintf("PC2 (%.1f%%)", de_pca_variance[[2]]), colour = NULL) +
+  scale_colour_manual(values = display_palette, drop = FALSE) +
+  labs(title = "Contrast PCA", subtitle = display_subtitle, x = sprintf("PC1 (%.1f%%)", de_pca_variance[[1]]), y = sprintf("PC2 (%.1f%%)", de_pca_variance[[2]]), colour = NULL) +
   theme_publication(8.8) + theme(legend.position = "top")
 save_plot_pair(de_pca_plot, file.path(dirs$figures, "de_pca"), 6.1, 5.0)
 expression <- expression[selected_genes$gene_id, display_samples, drop = FALSE]
@@ -209,20 +233,24 @@ heatmap_table <- heatmap$table %>%
   )
 readr::write_tsv(heatmap_table, file.path(dirs$tables, "de_heatmap_displayed.tsv"))
 
-palette <- condition_palette(cfg, c(denominator, numerator))
 annotation_plot <- data.frame(
   sample_id = factor(column_order, levels = column_order),
-  condition = metadata[column_order, factor_name]
+  condition = metadata[column_order, display_group_col]
 ) %>%
   ggplot(aes(sample_id, 1, fill = condition)) +
   geom_tile() +
-  scale_fill_manual(values = palette, drop = FALSE) +
+  scale_fill_manual(values = display_palette, drop = FALSE) +
   theme_void() +
   theme(legend.position = "top", plot.margin = margin(0, 55, 0, 35))
+heatmap_subtitle <- if (identical(resolved$type, "pairwise")) {
+  paste0("Displayed samples are limited to ", denominator, " and ", numerator, "; row z-scores clipped at ±", cfg$figures$de$z_limit)
+} else {
+  paste0("All design groups shown; row z-scores clipped at ±", cfg$figures$de$z_limit)
+}
 heatmap$plot <- heatmap$plot +
   labs(
     title = "Top DE genes with global hierarchical clustering",
-    subtitle = paste0("Displayed samples are limited to ", denominator, " and ", numerator, "; row z-scores clipped at ±", cfg$figures$de$z_limit)
+    subtitle = heatmap_subtitle
   )
 combined_heatmap <- annotation_plot / heatmap$plot + patchwork::plot_layout(heights = c(0.07, 1))
 save_plot_pair(combined_heatmap, file.path(dirs$figures, "de_heatmap"), 7.3, max(6.0, 0.18 * nrow(z) + 2.2))
@@ -238,7 +266,8 @@ write_json_file(
     factor = factor_name,
     numerator = numerator,
     denominator = denominator,
-    design = cfg$design$formula,
+    design = resolved$design_text,
+    contrast_type = resolved$type,
     coefficient = coefficient,
     dispersion_fit = dispersion_fit,
     expression_transform = expression_transform,

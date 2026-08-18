@@ -430,10 +430,21 @@ def load_project(config_path: str | Path) -> ResolvedProject:
     contrast_ids = [row.get("contrast_id", "").strip() for row in contrasts]
     if len(contrast_ids) != len(set(contrast_ids)):
         errors.append("contrast_id values must be unique")
+    design_default = config["analysis"]["design"]
+
+    def _formula_vars(formula: str) -> set:
+        body = formula.split("~", 1)[-1]
+        tokens = re.split(r"[^0-9A-Za-z_.]+", body)
+        return {t for t in tokens if t and not t.isdigit() and t != "."}
+
     for row in contrasts:
         contrast_id = row.get("contrast_id", "<missing>")
         if not re.fullmatch(r"[a-z0-9][a-z0-9_-]*", contrast_id):
             errors.append(f"invalid contrast_id {contrast_id!r}")
+        contrast_type = (row.get("type", "") or "").strip() or "pairwise"
+        if contrast_type not in {"pairwise", "coefficient"}:
+            errors.append(f"contrast {contrast_id}: type {contrast_type!r} must be 'pairwise' or 'coefficient'")
+            continue
         factor = row.get("factor", "")
         if factor not in sample_header:
             errors.append(f"contrast {contrast_id}: factor {factor!r} is absent from samples.tsv")
@@ -443,11 +454,45 @@ def load_project(config_path: str | Path) -> ResolvedProject:
         denominator = row.get("denominator", "")
         if numerator == denominator:
             errors.append(f"contrast {contrast_id}: numerator and denominator must differ")
-        for level in (numerator, denominator):
-            if level not in levels:
-                errors.append(f"contrast {contrast_id}: level {level!r} is absent from {factor}")
-        if not re.search(rf"\b{re.escape(factor)}\b", config["analysis"]["design"]):
-            errors.append(f"contrast {contrast_id}: factor {factor!r} is absent from design formula")
+
+        if contrast_type == "pairwise":
+            # numerator/denominator are levels of `factor`, extracted from the
+            # global design as `factor_numerator_vs_denominator`.
+            for level in (numerator, denominator):
+                if level not in levels:
+                    errors.append(f"contrast {contrast_id}: level {level!r} is absent from {factor}")
+            if not re.search(rf"\b{re.escape(factor)}\b", design_default):
+                errors.append(f"contrast {contrast_id}: factor {factor!r} is absent from design formula")
+        else:
+            # Coefficient (interaction) contrast: factor/numerator/denominator are
+            # labels only, so they need not be levels of `factor` and `factor`
+            # need not appear in the design. The effect comes from a named
+            # resultsNames() coefficient under a (possibly per-row) design. The
+            # mis-typed-coefficient case is caught at DE time with the available
+            # names, because resultsNames() needs the fitted model.
+            if not (row.get("coefficient", "") or "").strip():
+                errors.append(f"contrast {contrast_id}: coefficient contrast requires a non-empty coefficient")
+            design = (row.get("design", "") or "").strip() or design_default
+            design_vars = _formula_vars(design)
+            if not design_vars:
+                errors.append(f"contrast {contrast_id}: design {design!r} has no usable variables")
+            for var in sorted(design_vars):
+                if var not in sample_header:
+                    errors.append(f"contrast {contrast_id}: design variable {var!r} is absent from samples.tsv")
+            references = (row.get("reference_levels", "") or "").strip()
+            if references:
+                for piece in references.split(";"):
+                    piece = piece.strip()
+                    if not piece:
+                        continue
+                    if piece.count("=") != 1:
+                        errors.append(f"contrast {contrast_id}: reference_levels entry {piece!r} must be factor=level")
+                        continue
+                    reference_factor, reference_level = (part.strip() for part in piece.split("="))
+                    if reference_factor not in design_vars:
+                        errors.append(f"contrast {contrast_id}: reference_levels factor {reference_factor!r} is not a design variable")
+                    elif reference_level not in {sample.get(reference_factor, "") for sample in samples}:
+                        errors.append(f"contrast {contrast_id}: reference_levels level {reference_level!r} is absent from {reference_factor}")
 
     group = config["figures"]["group"]
     if group not in sample_header:

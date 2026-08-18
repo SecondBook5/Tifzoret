@@ -122,9 +122,10 @@ metadata <- readr::read_tsv(cfg$.samples, show_col_types = FALSE, progress = FAL
 contrasts <- readr::read_tsv(cfg$.contrasts, show_col_types = FALSE, progress = FALSE)
 contrast <- contrasts[contrasts$contrast_id == args[["contrast-id"]], , drop = FALSE]
 if (nrow(contrast) != 1L) stop("Could not resolve contrast: ", args[["contrast-id"]], call. = FALSE)
-factor_name <- contrast$factor[[1]]
-numerator <- contrast$numerator[[1]]
-denominator <- contrast$denominator[[1]]
+resolved <- resolve_contrast(contrast, cfg$design$formula)
+factor_name <- resolved$factor_name
+numerator <- resolved$numerator
+denominator <- resolved$denominator
 
 vst <- readRDS(args$vst)
 expression <- SummarizedExperiment::assay(vst)
@@ -281,13 +282,29 @@ gsva_matrix <- GSVA::gsva(ssgsea_parameter, verbose = FALSE, BPPARAM = BiocParal
 gsva_wide <- as.data.frame(gsva_matrix, check.names = FALSE) %>% tibble::rownames_to_column("pathway")
 readr::write_tsv(gsva_wide, file.path(dirs$tables, "gsva_scores.tsv"))
 
-metadata$contrast_group <- stats::relevel(factor(metadata[[factor_name]]), ref = denominator)
-gsva_formula_text <- gsub(paste0("\\b", factor_name, "\\b"), "contrast_group", cfg$design$formula)
-gsva_design <- stats::model.matrix(stats::as.formula(gsva_formula_text), data = metadata)
-coefficient_pattern <- paste0("^contrast_group", make.names(numerator), "$")
-gsva_coefficient <- grep(coefficient_pattern, colnames(gsva_design), value = TRUE)
-if (length(gsva_coefficient) != 1L) {
-  stop("Could not resolve GSVA coefficient; available: ", paste(colnames(gsva_design), collapse = ", "), call. = FALSE)
+if (identical(resolved$type, "pairwise")) {
+  metadata$contrast_group <- stats::relevel(factor(metadata[[factor_name]]), ref = denominator)
+  gsva_formula_text <- gsub(paste0("\\b", factor_name, "\\b"), "contrast_group", cfg$design$formula)
+  gsva_design <- stats::model.matrix(stats::as.formula(gsva_formula_text), data = metadata)
+  coefficient_pattern <- paste0("^contrast_group", make.names(numerator), "$")
+  gsva_coefficient <- grep(coefficient_pattern, colnames(gsva_design), value = TRUE)
+  if (length(gsva_coefficient) != 1L) {
+    stop("Could not resolve GSVA coefficient; available: ", paste(colnames(gsva_design), collapse = ", "), call. = FALSE)
+  }
+} else {
+  # Interaction / named-coefficient contrast: build the per-row design directly
+  # and extract the named coefficient (model.matrix renames ":" to "." so match
+  # on the make.names-normalized column set, then fit by column index).
+  for (field in all.vars(resolved$design_formula)) metadata[[field]] <- factor(metadata[[field]])
+  for (relevel_factor in names(resolved$reference_levels)) {
+    metadata[[relevel_factor]] <- stats::relevel(factor(metadata[[relevel_factor]]), ref = resolved$reference_levels[[relevel_factor]])
+  }
+  gsva_design <- stats::model.matrix(resolved$design_formula, data = metadata)
+  matched <- which(make.names(colnames(gsva_design)) == make.names(resolved$coefficient_name))
+  if (length(matched) != 1L) {
+    stop("Could not resolve GSVA coefficient ", resolved$coefficient_name, "; available: ", paste(colnames(gsva_design), collapse = ", "), call. = FALSE)
+  }
+  gsva_coefficient <- matched
 }
 gsva_fit <- limma::eBayes(limma::lmFit(gsva_matrix, gsva_design))
 gsva_diff <- limma::topTable(gsva_fit, coef = gsva_coefficient, number = Inf, sort.by = "P") %>%
@@ -306,7 +323,17 @@ selected_pathways <- gsva_diff %>%
   arrange(adj.P.Val, desc(abs(logFC))) %>%
   slice_head(n = cfg$figures$pathways$top_gsva_terms) %>%
   pull(pathway)
-display_samples <- metadata[[factor_name]] %in% c(denominator, numerator)
+if (identical(resolved$type, "pairwise")) {
+  display_samples <- metadata[[factor_name]] %in% c(denominator, numerator)
+  display_group_col <- factor_name
+  display_palette <- condition_palette(cfg, c(denominator, numerator))
+  display_breaks <- c(denominator, numerator)
+} else {
+  display_samples <- rep(TRUE, nrow(metadata))
+  display_group_col <- cfg$figures$group
+  display_breaks <- levels(factor(metadata[[display_group_col]]))
+  display_palette <- condition_palette(cfg, display_breaks)
+}
 gsva_display <- gsva_matrix[selected_pathways, display_samples, drop = FALSE]
 gsva_z <- row_zscore(gsva_display, 1.5)
 row_order <- rownames(gsva_z)[stats::hclust(stats::dist(gsva_z), method = "complete")$order]
@@ -319,18 +346,17 @@ gsva_heatmap$plot <- gsva_heatmap$plot + scale_y_discrete(labels = function(valu
 gsva_displayed <- gsva_heatmap$table %>%
   mutate(
     pathway_id = names(display_labels)[match(as.character(feature), display_labels)],
-    condition = metadata[as.character(sample_id), factor_name],
+    condition = metadata[as.character(sample_id), display_group_col],
     contrast_id = args[["contrast-id"]]
   )
 readr::write_tsv(gsva_displayed, file.path(dirs$tables, "gsva_heatmap_displayed.tsv"))
-palette <- condition_palette(cfg, c(denominator, numerator))
 annotation_plot <- data.frame(
   sample_id = factor(column_order, levels = column_order),
-  condition = metadata[column_order, factor_name]
+  condition = metadata[column_order, display_group_col]
 ) %>%
   ggplot(aes(sample_id, 1, fill = condition)) +
   geom_tile() +
-  scale_fill_manual(values = palette, breaks = c(denominator, numerator), drop = FALSE) +
+  scale_fill_manual(values = display_palette, breaks = display_breaks, drop = FALSE) +
   theme_void() +
   theme(legend.position = "top", plot.margin = margin(0, 55, 0, 35))
 gsva_heatmap$plot <- gsva_heatmap$plot +

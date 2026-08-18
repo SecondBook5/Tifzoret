@@ -13,6 +13,43 @@ NAVY <- "#183B56"
 MID_GREY <- "#697783"
 LIGHT_GREY <- "#E7ECF0"
 
+# ---------------------------------------------------------------------------
+# Differential-expression significance scheme (shared by de.R volcano + MA).
+# ---------------------------------------------------------------------------
+# Five-class palette copied byte-for-byte from the old pipeline's
+# SIGNIFICANCE_PALETTE (workflow/stages/de/de_packages.R) so the engine's DE
+# plots match the published figures exactly. Single source of truth: both the
+# volcano and MA constructors in de.R (and therefore de_overview) consume this
+# palette together with classify_significance() below.
+SIGNIFICANCE_PALETTE <- c(
+  significant_up = "#B22222",
+  significant_down = "#2166AC",
+  padj_only = "#2A9D8F",
+  lfc_only = "#F4A261",
+  ns = "#C7CDD4"
+)
+
+# Canonical class order, reused for the factor levels and the legend breaks.
+SIGNIFICANCE_CLASSES <- c("significant_up", "significant_down", "padj_only", "lfc_only", "ns")
+
+# Classify each gene into one of the five significance classes from its adjusted
+# p-value and shrunken log2 fold-change, given the FDR and |log2FC| thresholds
+# (cfg$figures$de$fdr / cfg$figures$de$abs_log2fc). Mirrors the paper's de_class
+# rule exactly: FDR-significant genes split by fold-change sign into up/down,
+# FDR-significant but sub-threshold fold-change is padj_only, genes clearing the
+# fold-change cutoff without FDR significance (or with NA padj) are lfc_only, and
+# everything else is ns. Vectorised; returns a factor in the canonical order.
+classify_significance <- function(adjusted_p_value, log2_fold_change, fdr, abs_log2fc) {
+  classes <- dplyr::case_when(
+    !is.na(adjusted_p_value) & adjusted_p_value < fdr & !is.na(log2_fold_change) & log2_fold_change >= abs_log2fc ~ "significant_up",
+    !is.na(adjusted_p_value) & adjusted_p_value < fdr & !is.na(log2_fold_change) & log2_fold_change <= -abs_log2fc ~ "significant_down",
+    !is.na(adjusted_p_value) & adjusted_p_value < fdr ~ "padj_only",
+    !is.na(log2_fold_change) & abs(log2_fold_change) >= abs_log2fc ~ "lfc_only",
+    TRUE ~ "ns"
+  )
+  factor(classes, levels = SIGNIFICANCE_CLASSES)
+}
+
 parse_cli <- function(required) {
   args <- commandArgs(trailingOnly = TRUE)
   result <- list()
@@ -64,6 +101,80 @@ read_project <- function(path) {
   cfg$.contrasts <- resolve_path(base, cfg$contrasts)
   cfg$.gmt <- resolve_path(base, cfg$gene_sets$gmt)
   cfg
+}
+
+# Safely read one cell from a single-row contrast tibble. Returns "" when the
+# column is absent (optional columns do not exist in pairwise-only studies) or
+# when the value is NA/blank, so callers can treat "absent" and "empty" alike.
+contrast_field <- function(contrast_row, column) {
+  if (!column %in% names(contrast_row)) return("")
+  value <- contrast_row[[column]][[1]]
+  if (is.null(value) || (length(value) == 1L && is.na(value))) return("")
+  trimws(as.character(value))
+}
+
+# Parse "factorA=level1;factorB=level2" into a named list keyed by factor. An
+# empty string yields an empty list. Each entry must be a single factor=level.
+parse_reference_levels <- function(text) {
+  text <- trimws(text)
+  if (!nzchar(text)) return(list())
+  pieces <- trimws(strsplit(text, ";", fixed = TRUE)[[1]])
+  pieces <- pieces[nzchar(pieces)]
+  result <- list()
+  for (piece in pieces) {
+    kv <- strsplit(piece, "=", fixed = TRUE)[[1]]
+    if (length(kv) != 2L || !nzchar(trimws(kv[[1]])) || !nzchar(trimws(kv[[2]]))) {
+      stop("reference_levels entry must be 'factor=level': ", piece, call. = FALSE)
+    }
+    result[[trimws(kv[[1]])]] <- trimws(kv[[2]])
+  }
+  result
+}
+
+# Single source of truth for interpreting one contrast row, shared by de.R and
+# pathways.R. Pairwise rows (the default, and every row in a study without the
+# optional columns) reproduce historical behavior exactly: the global design,
+# relevel `factor` to `denominator`, extract `factor_numerator_vs_denominator`.
+# Coefficient rows carry a per-row design, explicit reference levels, and a
+# named resultsNames() coefficient (a difference-in-differences interaction).
+resolve_contrast <- function(contrast_row, global_design) {
+  type <- contrast_field(contrast_row, "type")
+  if (!nzchar(type)) type <- "pairwise"
+  if (!type %in% c("pairwise", "coefficient")) {
+    stop("contrast 'type' must be 'pairwise' or 'coefficient', got: ", type, call. = FALSE)
+  }
+  factor_name <- contrast_field(contrast_row, "factor")
+  numerator <- contrast_field(contrast_row, "numerator")
+  denominator <- contrast_field(contrast_row, "denominator")
+
+  design_text <- contrast_field(contrast_row, "design")
+  if (!nzchar(design_text)) design_text <- global_design
+  design_formula <- stats::as.formula(design_text)
+
+  reference_levels <- parse_reference_levels(contrast_field(contrast_row, "reference_levels"))
+  coefficient_name <- contrast_field(contrast_row, "coefficient")
+
+  if (identical(type, "pairwise")) {
+    # Encode today's implicit relevel (factor -> denominator) so both branches
+    # share one relevel path, and reconstruct the DESeq2 coefficient name.
+    if (is.null(reference_levels[[factor_name]])) {
+      reference_levels[[factor_name]] <- denominator
+    }
+    coefficient_name <- paste0(factor_name, "_", numerator, "_vs_", denominator)
+  } else if (!nzchar(coefficient_name)) {
+    stop("coefficient contrast requires a non-empty 'coefficient' column", call. = FALSE)
+  }
+
+  list(
+    type = type,
+    factor_name = factor_name,
+    numerator = numerator,
+    denominator = denominator,
+    design_formula = design_formula,
+    design_text = design_text,
+    reference_levels = reference_levels,
+    coefficient_name = coefficient_name
+  )
 }
 
 ensure_output_dirs <- function(outdir) {

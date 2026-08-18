@@ -46,6 +46,16 @@ MODULES = {
 with open(SOURCE_CONTRASTS, newline="") as handle:
     CONTRAST_ROWS = list(csv.DictReader(handle, delimiter="\t"))
 CONTRAST_IDS = [row["contrast_id"] for row in CONTRAST_ROWS]
+# DE and pathways understand both pairwise and coefficient (difference-in-
+# differences) contrasts. The remaining per-contrast modules assume a two-group
+# design and would mis-specify or fail on a coefficient contrast, so they expand
+# over pairwise contrasts only. A row is pairwise when its optional `type` column
+# is absent, empty, or the literal "pairwise" (every row in a pairwise-only study).
+PAIRWISE_CONTRAST_IDS = [
+    row["contrast_id"]
+    for row in CONTRAST_ROWS
+    if (row.get("type") or "pairwise").strip().lower() == "pairwise"
+]
 
 R_ENV = str(WORKFLOW_ROOT / "envs" / "r.yaml")
 CORE_ENV = str(WORKFLOW_ROOT / "envs" / "core.yaml")
@@ -229,25 +239,25 @@ if MODULES["de"]:
 if MODULES["pathways"]:
     FINAL_OUTPUTS.extend(expand(PATHWAY_PATTERNS, contrast_id=CONTRAST_IDS))
 if MODULES["ontology"]:
-    FINAL_OUTPUTS.extend(expand(ONTOLOGY_PATTERNS, contrast_id=CONTRAST_IDS))
+    FINAL_OUTPUTS.extend(expand(ONTOLOGY_PATTERNS, contrast_id=PAIRWISE_CONTRAST_IDS))
 if MODULES["composition"]:
-    FINAL_OUTPUTS.extend(expand(COMPOSITION_PATTERNS, contrast_id=CONTRAST_IDS))
+    FINAL_OUTPUTS.extend(expand(COMPOSITION_PATTERNS, contrast_id=PAIRWISE_CONTRAST_IDS))
 if MODULES["regulators"]:
-    FINAL_OUTPUTS.extend(expand(REGULATOR_PATTERNS, contrast_id=CONTRAST_IDS))
+    FINAL_OUTPUTS.extend(expand(REGULATOR_PATTERNS, contrast_id=PAIRWISE_CONTRAST_IDS))
 if MODULES["networks"]:
-    FINAL_OUTPUTS.extend(expand(NETWORK_PATTERNS, contrast_id=CONTRAST_IDS))
+    FINAL_OUTPUTS.extend(expand(NETWORK_PATTERNS, contrast_id=PAIRWISE_CONTRAST_IDS))
 if MODULES["hypotheses"]:
-    FINAL_OUTPUTS.extend(expand(HYPOTHESIS_PATTERNS, contrast_id=CONTRAST_IDS))
+    FINAL_OUTPUTS.extend(expand(HYPOTHESIS_PATTERNS, contrast_id=PAIRWISE_CONTRAST_IDS))
 if MODULES["publication"]:
-    FINAL_OUTPUTS.extend(expand(PUBLICATION_PATTERNS, contrast_id=CONTRAST_IDS))
+    FINAL_OUTPUTS.extend(expand(PUBLICATION_PATTERNS, contrast_id=PAIRWISE_CONTRAST_IDS))
 if MODULES["sva"]:
-    FINAL_OUTPUTS.extend(expand(SVA_PATTERNS, contrast_id=CONTRAST_IDS))
+    FINAL_OUTPUTS.extend(expand(SVA_PATTERNS, contrast_id=PAIRWISE_CONTRAST_IDS))
 if MODULES["wgcna"]:
-    FINAL_OUTPUTS.extend(expand(WGCNA_PATTERNS, contrast_id=CONTRAST_IDS))
+    FINAL_OUTPUTS.extend(expand(WGCNA_PATTERNS, contrast_id=PAIRWISE_CONTRAST_IDS))
 if MODULES["mediation"]:
-    FINAL_OUTPUTS.extend(expand(MEDIATION_PATTERNS, contrast_id=CONTRAST_IDS))
+    FINAL_OUTPUTS.extend(expand(MEDIATION_PATTERNS, contrast_id=PAIRWISE_CONTRAST_IDS))
 if MODULES["multilayer"]:
-    FINAL_OUTPUTS.extend(expand(MULTILAYER_PATTERNS, contrast_id=CONTRAST_IDS))
+    FINAL_OUTPUTS.extend(expand(MULTILAYER_PATTERNS, contrast_id=PAIRWISE_CONTRAST_IDS))
 
 FIGURE_SET_IDS = list((PROJECT.recipe_config or {}).get("figure_sets", {}))
 ASSEMBLY_PATTERNS = [
