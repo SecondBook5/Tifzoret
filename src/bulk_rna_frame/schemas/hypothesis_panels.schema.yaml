@@ -84,6 +84,10 @@ properties:
     type: array
     uniqueItems: true
     items: {type: string, minLength: 1}
+  program_short_labels:
+    description: Compact per-program labels for the direct-label DE-heatmap variant (Panel D), keyed by full program name. Falls back to the text before the first "/" when absent.
+    type: object
+    additionalProperties: {type: string, minLength: 1}
   gsea_programs:
     description: Ordered gene-panel identifiers to test and display as focused preranked GSEA curves.
     type: array

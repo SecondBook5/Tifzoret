@@ -93,60 +93,149 @@ assignments <- top %>% select(gene_symbol, gene_id, log2_fold_change, adjusted_p
     program_color = dplyr::coalesce(as.character(program_color), OTHER_PROGRAM_COLOR)
   )
 readr::write_tsv(assignments, file.path(dirs$tables, "de_gene_program_assignments.tsv"), na = "NA")
-z <- row_zscore(expression[assignments$gene_symbol, , drop = FALSE], cfg$figures$de$z_limit)
-column_order <- colnames(z)[stats::hclust(stats::as.dist(1 - stats::cor(z)), method = "average")$order]
-global_order <- rownames(z)[stats::hclust(stats::dist(z), method = "complete")$order]
+# ---------------------------------------------------------------------------
+# Panel D -- top differentially-expressed genes as a ComplexHeatmap. Three
+# editorial variants share one row-scaled expression matrix and one sample
+# dendrogram, differing only in how biological-program membership is shown:
+#   global_clustered -- one global row tree, side strip + one-column legend
+#   program_grouped  -- rows split by program, side strip + one-column legend
+#   compact_direct   -- rows split by program, direct block labels (no strip)
+# Colours, program order and short labels all come from the study's panel
+# config, so the constructor generalises to any dataset (falls back to a single
+# "Other" program when none is configured).
+# ---------------------------------------------------------------------------
+z <- t(scale(t(expression[assignments$gene_symbol, , drop = FALSE])))
+z[!is.finite(z)] <- 0
+z_limit <- cfg$figures$de$z_limit
+
 program_levels <- if (is.null(panel_cfg$program_order)) unique(assignments$program) else {
   c(intersect(panel_cfg$program_order, unique(assignments$program)), setdiff(unique(assignments$program), panel_cfg$program_order))
 }
-program_order <- unlist(lapply(program_levels, function(program) {
-  genes <- assignments$gene_symbol[assignments$program == program]
-  if (length(genes) < 2L) genes else genes[stats::hclust(stats::dist(z[genes, , drop = FALSE]), method = "complete")$order]
-}))
+program_vector <- factor(assignments$program, levels = program_levels)
+names(program_vector) <- assignments$gene_symbol
 
-condition_plot <- data.frame(
-  sample_id = factor(column_order, levels = column_order),
-  condition = factor(metadata[column_order, factor_name], levels = c(denominator, numerator))
-) %>%
-  ggplot(aes(sample_id, 1, fill = condition)) + geom_tile() +
-  geom_text(aes(label = sample_id), angle = 45, hjust = 0, nudge_y = -0.06, size = 2.5, colour = NAVY) +
-  scale_fill_manual(values = condition_palette(cfg, c(denominator, numerator)), breaks = c(denominator, numerator), drop = FALSE) +
-  coord_cartesian(clip = "off") + theme_void() + theme(legend.position = "top", plot.margin = margin(2, 25, 25, 0))
+# Compact per-program labels for the direct-label variant. Optional config map
+# (program_short_labels); otherwise the text before the first "/" (e.g.
+# "Matrix / remodeling" -> "Matrix").
+short_label_cfg <- panel_cfg$program_short_labels
+short_label <- function(program) {
+  if (!is.null(short_label_cfg) && !is.null(short_label_cfg[[program]])) return(short_label_cfg[[program]])
+  trimws(strsplit(program, "/", fixed = TRUE)[[1]][[1]])
+}
+program_short_levels <- unique(vapply(program_levels, short_label, character(1)))
+program_short_vector <- factor(vapply(as.character(program_vector), short_label, character(1)), levels = program_short_levels)
+names(program_short_vector) <- assignments$gene_symbol
 
-heatmap_variant <- function(row_order, stem, title, direct_labels = FALSE) {
-  table <- as.data.frame(z[row_order, column_order, drop = FALSE], check.names = FALSE) %>%
-    tibble::rownames_to_column("gene_symbol") %>% pivot_longer(-gene_symbol, names_to = "sample_id", values_to = "row_z_score") %>%
+# Sample dendrogram: Euclidean/complete clustering rotated so the denominator
+# samples precede the numerator samples (e.g. control -> CAPE) for a stable
+# left-to-right reading order, without discarding the clustering structure.
+ordered_samples <- c(
+  colnames(z)[metadata[colnames(z), factor_name] == denominator],
+  colnames(z)[metadata[colnames(z), factor_name] == numerator]
+)
+sample_dend <- dendextend::rotate(
+  stats::as.dendrogram(stats::hclust(stats::dist(t(z)), method = "complete")),
+  order = ordered_samples
+)
+
+condition_levels <- c(denominator, numerator)
+condition_vector <- factor(metadata[colnames(z), factor_name], levels = condition_levels)
+names(condition_vector) <- colnames(z)
+condition_fill <- condition_palette(cfg, condition_levels)
+
+program_colours <- panel_colors[program_levels]
+program_colours[is.na(program_colours)] <- OTHER_PROGRAM_COLOR
+names(program_colours) <- program_levels
+
+color_function <- circlize::colorRamp2(c(-z_limit, 0, z_limit), c("#356D9A", "#F8F7F3", "#C94F4F"))
+column_labels <- sample_display_labels(colnames(z), metadata[colnames(z), factor_name])
+
+render_de_heatmap <- function(row_mode, stem, title, width, height) {
+  grouped_mode <- row_mode %in% c("program_grouped", "compact_direct")
+  direct_mode  <- row_mode == "compact_direct"
+
+  top_annotation <- ComplexHeatmap::HeatmapAnnotation(
+    Condition = condition_vector,
+    col = list(Condition = condition_fill),
+    show_legend = FALSE,
+    simple_anno_size = grid::unit(3.8, "mm"),
+    annotation_name_side = "left",
+    annotation_name_gp = grid::gpar(fontface = "bold", fontsize = 7.5, col = NAVY)
+  )
+  program_annotation <- ComplexHeatmap::rowAnnotation(
+    Program = program_vector,
+    col = list(Program = program_colours),
+    simple_anno_size = grid::unit(3.2, "mm"),
+    show_annotation_name = FALSE,
+    annotation_legend_param = list(Program = list(
+      title_gp = grid::gpar(fontface = "bold", fontsize = 7.5, col = NAVY),
+      labels_gp = grid::gpar(fontsize = 6.8, col = NAVY),
+      ncol = 1, direction = "vertical"
+    ))
+  )
+  row_split <- if (direct_mode) program_short_vector else if (grouped_mode) program_vector else NULL
+  left_annotation <- if (direct_mode) NULL else program_annotation
+
+  ht <- ComplexHeatmap::Heatmap(
+    z,
+    name = "Row\nz-score",
+    col = color_function,
+    left_annotation = left_annotation,
+    top_annotation = top_annotation,
+    cluster_columns = sample_dend,
+    cluster_rows = TRUE,
+    row_split = row_split,
+    cluster_row_slices = FALSE,
+    row_gap = grid::unit(if (direct_mode) 0.65 else if (grouped_mode) 1.05 else 0, "mm"),
+    show_row_dend = !direct_mode,
+    show_column_dend = TRUE,
+    column_dend_height = grid::unit(11, "mm"),
+    row_dend_width = grid::unit(9, "mm"),
+    row_names_gp = grid::gpar(fontsize = 6.7, fontface = "italic", col = NAVY),
+    column_names_gp = grid::gpar(fontsize = 7.2, col = NAVY),
+    column_labels = column_labels,
+    column_names_rot = 45,
+    row_title = if (direct_mode) "%s" else NULL,
+    row_title_side = "left",
+    row_title_rot = 0,
+    row_title_gp = grid::gpar(fontface = "bold", fontsize = 7, col = NAVY),
+    column_title = title,
+    column_title_gp = grid::gpar(fontface = "bold", fontsize = 10, col = NAVY),
+    border = FALSE,
+    rect_gp = grid::gpar(col = "white", lwd = 0.32),
+    use_raster = FALSE,
+    heatmap_legend_param = list(
+      at = c(-z_limit, 0, z_limit),
+      labels = c(sprintf("−%.1f", z_limit), "0", sprintf("%.1f", z_limit)),
+      direction = if (direct_mode) "horizontal" else "vertical",
+      title_gp = grid::gpar(fontface = "bold", fontsize = 7.5, col = NAVY),
+      labels_gp = grid::gpar(fontsize = 7, col = NAVY),
+      legend_height = grid::unit(23, "mm"),
+      legend_width = grid::unit(29, "mm")
+    )
+  )
+  drawn <- save_complexheatmap_pair(
+    ht, file.path(dirs$figures, stem), width = width, height = height,
+    heatmap_legend_side = if (direct_mode) "bottom" else "right",
+    annotation_legend_side = "right"
+  )
+  ordered_genes <- rownames(z)[complexheatmap_order(ComplexHeatmap::row_order(drawn))]
+  ordered_cols <- colnames(z)[complexheatmap_order(ComplexHeatmap::column_order(drawn))]
+  table <- as.data.frame(z[ordered_genes, ordered_cols, drop = FALSE], check.names = FALSE) %>%
+    tibble::rownames_to_column("gene_symbol") %>%
+    pivot_longer(-gene_symbol, names_to = "sample_id", values_to = "row_z_score") %>%
     left_join(assignments %>% select(gene_symbol, program, program_color, log2_fold_change, adjusted_p_value), by = "gene_symbol") %>%
-    mutate(gene_symbol = factor(gene_symbol, levels = rev(row_order)), sample_id = factor(sample_id, levels = column_order), variant = stem, condition = metadata[as.character(sample_id), factor_name])
+    mutate(
+      gene_symbol = factor(gene_symbol, levels = ordered_genes),
+      sample_id = factor(sample_id, levels = ordered_cols),
+      variant = stem, condition = metadata[as.character(sample_id), factor_name]
+    )
   readr::write_tsv(table, file.path(dirs$tables, paste0(stem, "_displayed.tsv")), na = "NA")
-  heat <- ggplot(table, aes(sample_id, gene_symbol, fill = row_z_score)) + geom_tile(colour = "white", linewidth = 0.18) +
-    scale_fill_gradient2(low = "#4C78A8", mid = "#F7F4EE", high = "#D95F5F", midpoint = 0, limits = c(-cfg$figures$de$z_limit, cfg$figures$de$z_limit), name = "Row z-score") +
-    labs(title = title, x = NULL, y = NULL) + theme_publication(7.5) +
-    theme(panel.grid = element_blank(), axis.text.x = element_blank(), axis.ticks = element_blank(), legend.position = "right")
-  strip_data <- assignments %>% filter(gene_symbol %in% row_order) %>% mutate(gene_symbol = factor(gene_symbol, levels = rev(row_order)))
-  if (direct_labels) {
-    label_data <- strip_data %>%
-      mutate(row_number = match(as.character(gene_symbol), levels(gene_symbol))) %>%
-      group_by(program) %>%
-      summarize(mid = mean(row_number), color = as.character(program_color[[1]]), .groups = "drop")
-    left <- ggplot(label_data, aes(1, mid, label = stringr::str_replace_all(program, "_", " "), colour = program)) + geom_text(hjust = 1, fontface = "bold", size = 3) +
-      scale_colour_manual(values = setNames(label_data$color, label_data$program), guide = "none") + scale_y_continuous(limits = c(0.5, length(row_order) + 0.5)) + coord_cartesian(clip = "off") + theme_void() + theme(plot.margin = margin(0, 8, 0, 0))
-  } else {
-    left <- ggplot(strip_data, aes(1, gene_symbol, fill = program)) + geom_tile() +
-      scale_fill_manual(values = panel_colors, guide = guide_legend(ncol = 1, title = "Program")) +
-      labs(x = NULL, y = NULL) + theme_void() + theme(legend.position = "right", legend.text = element_text(size = 7), plot.margin = margin(0, 4, 0, 0))
-  }
-  body <- left | heat
-  body <- body + plot_layout(widths = if (direct_labels) c(0.24, 1) else c(0.06, 1))
-  top <- plot_spacer() | condition_plot
-  top <- top + plot_layout(widths = if (direct_labels) c(0.24, 1) else c(0.06, 1))
-  combined <- top / body + plot_layout(heights = c(0.10, 1))
-  save_plot_pair(combined, file.path(dirs$figures, stem), if (direct_labels) 9.2 else 10.2, max(7.0, 0.19 * length(row_order) + 2.5))
 }
 
-heatmap_variant(global_order, "de_heatmap_global", "Top DE genes with global hierarchical clustering")
-heatmap_variant(program_order, "de_heatmap_program_grouped", "Top DE genes grouped by biological program")
-heatmap_variant(program_order, "de_heatmap_compact", "Top DE genes grouped by biological program", TRUE)
+render_de_heatmap("global_clustered", "de_heatmap_global", "Top DE genes with global hierarchical clustering", 5.7, 7.0)
+render_de_heatmap("program_grouped", "de_heatmap_program_grouped", "Top DE genes grouped by biological program", 5.9, 7.0)
+render_de_heatmap("compact_direct", "de_heatmap_compact", "Top DE genes grouped by biological program", 5.4, 6.35)
 
 configured_genes <- unique(panel_definitions$gene_symbol)
 configured_genes <- configured_genes[configured_genes %in% rownames(expression)]

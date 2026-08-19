@@ -212,6 +212,38 @@ save_plot_pair <- function(plot, stem, width, height, dpi = 300) {
   invisible(paste0(stem, c(".pdf", ".png")))
 }
 
+# ComplexHeatmap analogue of save_plot_pair. ComplexHeatmap draws through grid
+# rather than ggplot's device abstraction, so we open a cairo PDF and a cairo
+# PNG explicitly and call draw() into each (same width/height/dpi contract as
+# save_plot_pair). Returns the drawn HeatmapList so callers can recover the
+# realized row/column order for their displayed-data table. legend sides mirror
+# ComplexHeatmap::draw().
+save_complexheatmap_pair <- function(ht, stem, width, height, dpi = 300,
+                                     heatmap_legend_side = "right",
+                                     annotation_legend_side = "right",
+                                     merge_legends = FALSE) {
+  dir.create(dirname(stem), recursive = TRUE, showWarnings = FALSE)
+  render <- function() ComplexHeatmap::draw(
+    ht,
+    heatmap_legend_side = heatmap_legend_side,
+    annotation_legend_side = annotation_legend_side,
+    merge_legends = merge_legends
+  )
+  grDevices::cairo_pdf(paste0(stem, ".pdf"), width = width, height = height, bg = "white")
+  drawn <- render(); grDevices::dev.off()
+  grDevices::png(paste0(stem, ".png"), width = width, height = height,
+                 units = "in", res = dpi, bg = "white", type = "cairo")
+  render(); grDevices::dev.off()
+  invisible(drawn)
+}
+
+# Recover the realized top-to-bottom (or left-to-right) index order from a drawn
+# ComplexHeatmap. Split heatmaps return a per-slice list in slice order; flatten
+# it so the caller sees one contiguous display order.
+complexheatmap_order <- function(order_value) {
+  if (is.list(order_value)) unlist(order_value, use.names = FALSE) else order_value
+}
+
 read_counts_contract <- function(path) {
   tab <- readr::read_tsv(path, show_col_types = FALSE, progress = FALSE)
   ids <- tab$gene_id
