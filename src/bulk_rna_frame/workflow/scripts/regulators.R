@@ -4,7 +4,10 @@ script_arg <- grep("^--file=", commandArgs(FALSE), value = TRUE)[1]
 script_path <- normalizePath(sub("^--file=", "", script_arg), mustWork = TRUE)
 source(file.path(dirname(script_path), "utils.R"), local = FALSE)
 
-suppressPackageStartupMessages(library(limma))
+suppressPackageStartupMessages({
+  library(limma)
+  library(patchwork)
+})
 
 args <- parse_cli(c("project-config", "samples", "annotation", "contrasts", "contrast-id", "vst", "outdir"))
 cfg <- read_project(args[["project-config"]])
@@ -123,8 +126,202 @@ column_order <- colnames(display)[order(metadata[colnames(display), factor_name]
 heatmap <- tile_heatmap(display, row_order, column_order, legend_title = "Row-scaled\nactivity", base_size = 7.6)
 displayed <- heatmap$table %>% mutate(condition = metadata[as.character(sample_id), factor_name], contrast_id = args[["contrast-id"]], method = method)
 readr::write_tsv(displayed, file.path(dirs$tables, "regulator_activity_displayed.tsv"))
-heatmap$plot <- heatmap$plot + labs(title = "Regulator activity", subtitle = paste0(method, "; top regulators by differential activity"))
-save_plot_pair(heatmap$plot, file.path(dirs$figures, "regulator_activity"), 7.6, max(5.2, 0.34 * length(selected) + 2.0))
+# ---------------------------------------------------------------------------
+# Publication panel (Figure 2, Panel D): signed regulator activity.
+# ---------------------------------------------------------------------------
+# Presentation parity with the finalized paper panel. The reference styling
+# library (analysis/cape_xizhao_edits/publication_figure_functions.R,
+# prepare_regulator_activity_panel ~L1839 / make_regulator_activity_panel
+# ~L1910) renders this as a two-part patchwork composite rather than a plain
+# tile heatmap: a diverging tile heatmap of row-scaled activity (with a sample
+# header strip and per-row direction chips) beside a diverging effect-size
+# lollipop of differential activity with FDR annotations. We replicate that
+# construction here using the engine's ALREADY-COMPUTED variables -- `display`
+# (row z-scores, clamped +/-1.5 by row_zscore) and `differential` (limma logFC /
+# adj.P.Val). No statistic is recomputed and the audit table written above is
+# untouched. Direction is keyed off logFC sign so the numerator maps to the warm
+# ("CAPE") styling and the denominator to the cool ("control") styling.
+# Reference diverging palette (not present in utils.R, defined locally):
+CONTROL_FILL <- "#A6CEE3"; CAPE_FILL <- "#F4A6A6"
+CONTROL_INK <- "#39799C"; CAPE_INK <- "#B55252"
+fill_by_dir <- stats::setNames(c(CONTROL_FILL, CAPE_FILL), c(denominator, numerator))
+ink_by_dir <- stats::setNames(c(CONTROL_INK, CAPE_INK), c(denominator, numerator))
+
+# Per-regulator effect-size / significance table (mirrors regulator_key).
+reg_stats <- differential %>%
+  filter(regulator %in% selected) %>%
+  transmute(
+    regulator, logFC, adj.P.Val,
+    higher_in = if_else(logFC >= 0, numerator, denominator)
+  )
+
+# Order each direction block by hierarchical clustering of the row z-scores
+# (reference clustered_ids), numerator block on top then denominator block.
+cluster_block <- function(direction) {
+  ids <- selected[selected %in% reg_stats$regulator[reg_stats$higher_in == direction]]
+  if (length(ids) <= 2L) return(ids)
+  fit <- stats::hclust(stats::dist(display[ids, , drop = FALSE]), method = "complete")
+  ids[fit$order]
+}
+display_ids <- c(cluster_block(numerator), cluster_block(denominator))
+n_regulators <- length(display_ids)
+n_denominator <- sum(reg_stats$higher_in == denominator)
+boundary_y <- n_denominator + 0.5
+
+reg_key <- reg_stats %>%
+  mutate(
+    display_order = match(regulator, display_ids),
+    y = n_regulators + 1L - display_order,
+    regulator_display = stringr::str_replace_all(regulator, "_", "/"),
+    fdr_label = if_else(
+      adj.P.Val < 0.001, "q < 0.001",
+      paste0("q = ", formatC(adj.P.Val, format = "f", digits = 3))
+    ),
+    fdr_fontface = if_else(adj.P.Val < 0.05, "bold", "plain")
+  ) %>%
+  arrange(display_order)
+
+# Sample header key: denominator (control) columns first, then numerator (CAPE).
+sample_key <- tibble::tibble(sample_id = colnames(display)) %>%
+  mutate(condition = as.character(metadata[sample_id, factor_name])) %>%
+  arrange(factor(condition, levels = c(denominator, numerator)), sample_id) %>%
+  group_by(condition) %>%
+  mutate(sample_number = row_number()) %>%
+  ungroup() %>%
+  mutate(sample_label = paste0(condition, "\n", sample_number), sample_x = row_number())
+n_samples <- nrow(sample_key)
+
+heat_long <- as.data.frame(display, check.names = FALSE) %>%
+  tibble::rownames_to_column("regulator") %>%
+  tidyr::pivot_longer(-regulator, names_to = "sample_id", values_to = "activity_z") %>%
+  left_join(select(reg_key, regulator, y, higher_in), by = "regulator") %>%
+  left_join(select(sample_key, sample_id, sample_x, condition), by = "sample_id")
+
+y_limits <- c(0.45, n_regulators + 1.65)
+activity_label <- if (identical(method, "VIPER")) "Row-scaled VIPER activity" else "Row-scaled activity"
+
+heatmap_plot <- ggplot() +
+  geom_tile(
+    data = heat_long, aes(sample_x, y, fill = activity_z),
+    width = 0.98, height = 0.94, colour = "white", linewidth = 0.42
+  ) +
+  geom_tile(
+    data = filter(sample_key, condition == denominator),
+    aes(sample_x, y = n_regulators + 1.05),
+    width = 0.98, height = 0.78, fill = CONTROL_FILL, colour = "white", linewidth = 0.42
+  ) +
+  geom_tile(
+    data = filter(sample_key, condition == numerator),
+    aes(sample_x, y = n_regulators + 1.05),
+    width = 0.98, height = 0.78, fill = CAPE_FILL, colour = "white", linewidth = 0.42
+  ) +
+  geom_text(
+    data = sample_key, aes(sample_x, y = n_regulators + 1.05, label = sample_label),
+    colour = NAVY, size = 2.3, lineheight = 0.88, fontface = "bold"
+  ) +
+  geom_tile(
+    data = filter(reg_key, higher_in == numerator),
+    aes(x = 0.28, y = y), width = 0.18, height = 0.94, fill = CAPE_FILL
+  ) +
+  geom_tile(
+    data = filter(reg_key, higher_in == denominator),
+    aes(x = 0.28, y = y), width = 0.18, height = 0.94, fill = CONTROL_FILL
+  ) +
+  geom_hline(yintercept = boundary_y, colour = "white", linewidth = 2.0) +
+  scale_fill_gradient2(
+    low = CONTROL_INK, mid = "#F7F4EE", high = CAPE_INK, midpoint = 0,
+    limits = c(-1.5, 1.5), breaks = c(-1.5, 0, 1.5), oob = scales::squish,
+    name = activity_label
+  ) +
+  scale_x_continuous(limits = c(0.12, n_samples + 0.52), expand = c(0, 0)) +
+  scale_y_continuous(
+    limits = y_limits, breaks = reg_key$y, labels = reg_key$regulator_display,
+    expand = c(0, 0)
+  ) +
+  guides(fill = guide_colourbar(
+    title.position = "top", title.hjust = 0.5, direction = "horizontal",
+    barwidth = grid::unit(34, "mm"), barheight = grid::unit(3.3, "mm")
+  )) +
+  labs(x = NULL, y = NULL) +
+  theme_publication(8.0) +
+  theme(
+    axis.text.x = element_blank(), axis.ticks = element_blank(), axis.line = element_blank(),
+    axis.text.y = element_text(face = "bold", size = 7.4, margin = margin(r = 4)),
+    panel.grid = element_blank(),
+    legend.position = "bottom", legend.margin = margin(t = 1),
+    legend.title = element_text(size = 6.56), legend.text = element_text(size = 6.24),
+    plot.margin = margin(2, 4, 2, 5)
+  )
+
+# Reference hardcodes CAPE-tuned x-limits c(-5.8, 8.2); the engine derives the
+# equivalent proportions from the data so the lollipop generalizes across
+# studies without clipping (data domain + a right-hand FDR-label column).
+lfc_abs <- max(abs(reg_key$logFC), na.rm = TRUE)
+if (!is.finite(lfc_abs) || lfc_abs <= 0) lfc_abs <- 1
+data_extent <- lfc_abs * 1.08
+fdr_pad <- lfc_abs * 0.62
+fdr_x <- data_extent + fdr_pad * 0.95
+x_break <- signif(lfc_abs * 0.9, 1)
+x_breaks <- unique(c(-x_break, 0, x_break))
+
+effect_plot <- ggplot(reg_key, aes(y = y)) +
+  annotate(
+    "rect", xmin = -Inf, xmax = 0, ymin = 0.5, ymax = n_regulators + 0.5,
+    fill = CONTROL_FILL, alpha = 0.10
+  ) +
+  annotate(
+    "rect", xmin = 0, xmax = Inf, ymin = 0.5, ymax = n_regulators + 0.5,
+    fill = CAPE_FILL, alpha = 0.10
+  ) +
+  geom_vline(xintercept = 0, colour = "#87939D", linewidth = 0.55) +
+  geom_hline(yintercept = boundary_y, colour = "white", linewidth = 2.0) +
+  geom_segment(
+    aes(x = 0, xend = logFC, yend = y, colour = higher_in),
+    linewidth = 1.05, lineend = "round"
+  ) +
+  geom_point(
+    aes(x = logFC, fill = higher_in, colour = higher_in),
+    shape = 21, size = 3.8, stroke = 0.75
+  ) +
+  geom_text(
+    aes(x = fdr_x, label = fdr_label, fontface = fdr_fontface),
+    hjust = 1, colour = MID_GREY, size = 2.35
+  ) +
+  annotate(
+    "text", x = fdr_x, y = n_regulators + 1.05, label = "FDR", hjust = 1,
+    colour = NAVY, fontface = "bold", size = 2.65
+  ) +
+  scale_colour_manual(values = ink_by_dir, guide = "none") +
+  scale_fill_manual(values = fill_by_dir, guide = "none") +
+  scale_x_continuous(limits = c(-data_extent, data_extent + fdr_pad), breaks = x_breaks, expand = c(0, 0)) +
+  scale_y_continuous(limits = y_limits, breaks = NULL, expand = c(0, 0)) +
+  labs(
+    title = "Differential activity",
+    x = paste0("Activity logFC (", numerator, " − ", denominator, ")"), y = NULL
+  ) +
+  theme_publication(8.0) +
+  theme(
+    plot.title = element_text(size = 8.3, margin = margin(b = 4)),
+    axis.title.x = element_text(size = 7.36),
+    axis.text.x = element_text(size = 6.56),
+    axis.text.y = element_blank(), axis.ticks.y = element_blank(), axis.line.y = element_blank(),
+    panel.grid.major.y = element_blank(),
+    panel.grid.major.x = element_line(colour = LIGHT_GREY, linewidth = 0.30),
+    plot.margin = margin(2, 5, 17, 4)
+  )
+
+panel <- heatmap_plot + effect_plot +
+  patchwork::plot_layout(widths = c(1.34, 1.0)) +
+  patchwork::plot_annotation(
+    title = "Regulator activity",
+    subtitle = paste0("Top ", n_regulators, " regulators by differential activity; row-scaled ", method, " scores"),
+    theme = theme(
+      plot.title = element_text(face = "bold", colour = NAVY, size = 12.2, margin = margin(b = 2)),
+      plot.subtitle = element_text(colour = MID_GREY, size = 8.2, margin = margin(b = 5)),
+      plot.margin = margin(6, 6, 4, 8)
+    )
+  )
+save_plot_pair(panel, file.path(dirs$figures, "regulator_activity"), 8.6, max(4.4, 0.42 * n_regulators + 1.8))
 write_json_file(list(
   contrast_id = args[["contrast-id"]], method = method, regulators_tested = nrow(differential),
   regulon_edges = nrow(regulon), measured_edges = nrow(measured), warnings = warnings

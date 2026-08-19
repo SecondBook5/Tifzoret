@@ -81,26 +81,77 @@ groups <- levels(droplevels(pca_table[[group_col]]))
 palette <- condition_palette(cfg, groups)
 ellipse_table <- ellipse_coordinates(pca_table, group_col, cfg$figures$pca$ellipse_level)
 
-pca_plot <- ggplot(pca_table, aes(PC1, PC2, colour = .data[[group_col]])) +
+# --- Panel A presentation helpers (visual parity with the finalized panel) ---
+# The reference PCA styles shape-21 points with a light fill plus a darker
+# "ink" outline drawn from a second hand-picked palette (CONTROL_INK/CAPE_INK).
+# The engine config carries a single fill palette, so derive an outline colour
+# by approximating the reference fill->ink relationship (lower value, higher
+# saturation). Presentation only: does not touch any computed value or table.
+darken_ink <- function(hex, value_factor = 0.70, saturation_factor = 1.9) {
+  hsv_values <- grDevices::rgb2hsv(grDevices::col2rgb(hex))
+  grDevices::hsv(
+    hsv_values["h", ],
+    pmin(hsv_values["s", ] * saturation_factor, 1),
+    hsv_values["v", ] * value_factor
+  )
+}
+ink_palette <- stats::setNames(darken_ink(palette), names(palette))
+
+# Reproduce the reference theme_pub() element sizes/margins exactly by layering
+# them on top of the engine's theme_publication() base (reuse the engine helper,
+# replicate the reference values).
+theme_panel <- function(base_size) {
+  theme_publication(base_size) +
+    theme(
+      plot.title = element_text(face = "bold", size = rel(1.13), margin = margin(b = 2.5)),
+      plot.subtitle = element_text(colour = MID_GREY, size = rel(0.86), margin = margin(b = 5)),
+      plot.caption = element_text(colour = MID_GREY, size = rel(0.72), hjust = 0),
+      axis.title = element_text(face = "bold", size = rel(0.92)),
+      axis.text = element_text(colour = NAVY, size = rel(0.82)),
+      legend.title = element_text(face = "bold", size = rel(0.82)),
+      legend.text = element_text(size = rel(0.78)),
+      plot.margin = margin(5, 6, 5, 6)
+    )
+}
+
+pca_plot <- ggplot(pca_table, aes(PC1, PC2)) +
   {if (nrow(ellipse_table)) geom_path(
     data = ellipse_table,
     aes(PC1, PC2, colour = ellipse_group, group = ellipse_group),
     inherit.aes = FALSE,
-    linewidth = 0.85,
-    alpha = 0.95
+    linewidth = 0.7,
+    linetype = "22",
+    lineend = "round"
   )} +
-  geom_point(size = 3.2, alpha = 0.95) +
-  ggrepel::geom_text_repel(aes(label = sample_id), size = 2.6, show.legend = FALSE, max.overlaps = Inf) +
-  scale_colour_manual(values = palette, drop = FALSE) +
+  geom_point(aes(fill = .data[[group_col]], colour = .data[[group_col]]), shape = 21, size = 3.5, stroke = 0.9) +
+  ggrepel::geom_text_repel(
+    aes(label = sample_id),
+    size = 2.45,
+    colour = NAVY,
+    box.padding = 0.35,
+    point.padding = 0.2,
+    min.segment.length = 0,
+    segment.colour = "#AAB3BA",
+    max.overlaps = Inf,
+    show.legend = FALSE
+  ) +
+  scale_fill_manual(values = palette, drop = FALSE) +
+  scale_colour_manual(values = ink_palette, drop = FALSE) +
   labs(
     title = "Principal-component analysis",
     subtitle = "Ellipses summarize within-group covariance when at least three samples are available",
-    x = sprintf("PC1 (%.1f%%)", variance[[1]]),
-    y = sprintf("PC2 (%.1f%%)", variance[[2]]),
+    x = sprintf("PC1 (%.1f%% variance)", variance[[1]]),
+    y = sprintf("PC2 (%.1f%% variance)", variance[[2]]),
+    fill = NULL,
     colour = NULL
   ) +
-  theme_publication(9.2) +
-  theme(legend.position = "top", panel.grid.minor = element_blank())
+  coord_equal(clip = "off") +
+  theme_panel(8.5) +
+  theme(legend.position = "bottom", legend.direction = "horizontal") +
+  guides(
+    colour = "none",
+    fill = guide_legend(override.aes = list(shape = 21, size = 3, stroke = 0.7))
+  )
 save_plot_pair(pca_plot, file.path(dirs$figures, "pca"), 6.2, 5.2)
 
 correlation <- stats::cor(vst_matrix, method = "pearson")
@@ -128,14 +179,21 @@ annotation_plot <- metadata %>%
   theme_void() +
   theme(legend.position = "none", plot.margin = margin(0, 6, 0, 38))
 correlation_plot <- ggplot(correlation_long, aes(sample_id, sample_id_y, fill = pearson_r)) +
-  geom_tile(colour = "white", linewidth = 0.22) +
-  scale_fill_gradientn(colours = c("#355C7D", "#A6CEE3", "#F7F4EE", "#F4A6A6", "#B55252"), limits = c(min(correlation), 1), name = "Pearson r") +
-  labs(title = "Sample correlation", subtitle = "Average-linkage ordering of 1 − Pearson correlation", x = NULL, y = NULL) +
-  theme_publication(8.2) +
-  theme(panel.grid = element_blank(), axis.text.x = element_text(angle = 45, hjust = 1), axis.ticks = element_blank())
+  geom_tile(colour = "white", linewidth = 0.55) +
+  geom_text(aes(label = sprintf("%.2f", pearson_r)), size = 2.2, colour = NAVY) +
+  scale_fill_gradientn(
+    colours = c("#3E6488", "#E8EEF2", "#F3B2A9", "#B52A2E"),
+    limits = c(min(correlation), 1),
+    oob = scales::squish,
+    name = "Pearson\nr"
+  ) +
+  labs(title = "Sample correlation", x = NULL, y = NULL) +
+  coord_equal() +
+  theme_panel(8.5) +
+  theme(panel.grid = element_blank(), axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "right")
 combined_correlation <- annotation_plot / correlation_plot + patchwork::plot_layout(heights = c(0.055, 1))
 save_plot_pair(combined_correlation, file.path(dirs$figures, "sample_correlation"), 6.2, 5.7)
-combined_pca_correlation <- pca_plot | combined_correlation
+combined_pca_correlation <- pca_plot + correlation_plot + patchwork::plot_layout(widths = c(1.12, 1))
 save_plot_pair(combined_pca_correlation, file.path(dirs$figures, "pca_correlation"), 12.4, 5.8)
 write_json_file(list(
   panels = list(

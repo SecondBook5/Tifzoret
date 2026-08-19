@@ -70,20 +70,71 @@ differential <- limma::topTable(fit, coef = coefficient, number = Inf, sort.by =
 readr::write_tsv(differential, file.path(dirs$tables, "cell_state_differential.tsv"), na = "NA")
 readr::write_tsv(differential, file.path(dirs$tables, "cell_state_displayed.tsv"), na = "NA")
 
-palette <- condition_palette(cfg, c(denominator, numerator))
-differential <- differential %>% mutate(label = factor(label, levels = unique(label)))
-plot <- ggplot(differential, aes(logFC, label, colour = higher_in, size = matched_genes)) +
-  geom_vline(xintercept = 0, colour = "#87939C", linewidth = 0.4) +
-  geom_segment(aes(x = 0, xend = logFC, yend = label), linewidth = 0.75, show.legend = FALSE) +
-  geom_point(alpha = 0.96) +
-  geom_text(aes(label = fdr_label, hjust = text_hjust), colour = MID_GREY, size = 2.5, show.legend = FALSE) +
-  facet_grid(category ~ ., scales = "free_y", space = "free_y", switch = "y") +
-  scale_colour_manual(values = palette, breaks = c(denominator, numerator), drop = FALSE, name = "Higher in") +
-  scale_size_continuous(range = c(2.8, 7), name = "Matched genes") +
-  scale_x_continuous(expand = expansion(mult = c(0.22, 0.22))) +
-  labs(title = "Cell-state signature shifts", subtitle = "Relative signature scores; positive effects are higher in the contrast numerator", x = "Signature score log2 fold-change", y = NULL) +
-  theme_publication(8.3) +
-  theme(legend.position = "top", strip.placement = "outside", strip.background = element_rect(fill = "#F2F5F7", colour = NA), strip.text.y.left = element_text(face = "bold"), panel.grid.major.y = element_blank())
+# ---------------------------------------------------------------------------
+# Panel B presentation parity. Replicates the finalized manuscript cell-state
+# panel (reference make_cell_state_hybrid) onto the engine's already-computed
+# `differential` columns. No statistics are refit and the cell_state_displayed.tsv
+# table written above is untouched; only the ggplot construction is styled to
+# match the reference: the two-tone lollipop (light fill + dark ink ring/stem),
+# matched-gene point sizing, per-point FDR annotations, left-switched category
+# facets, palette, legend and typography. The panel letter ("B") is drawn at
+# assembly time by assemble.py's _label_overlay, so no plot.tag is baked in here
+# (mirrors ontology.R). The reference's hand-picked ink hexes (CONTROL_INK
+# #39799C / CAPE_INK #B55252) are study-editorial and are not carried by the
+# engine's single configured fill palette, so a hue-preserving darkened
+# companion is derived per condition to reproduce the two-tone appearance.
+condition_fill <- condition_palette(cfg, c(denominator, numerator))
+condition_ink <- vapply(condition_fill, function(hex) {
+  hsv_values <- grDevices::rgb2hsv(grDevices::col2rgb(hex))
+  grDevices::hsv(h = hsv_values[1L, ], s = pmin(1, hsv_values[2L, ] * 2), v = hsv_values[3L, ] * 0.68)
+}, character(1))
+differential <- differential %>%
+  mutate(label = factor(label, levels = unique(label)), category_display = clean_term(category))
+plot <- ggplot(differential, aes(logFC, label)) +
+  geom_vline(xintercept = 0, linewidth = 0.48, colour = "#87939D") +
+  geom_segment(aes(x = 0, xend = logFC, yend = label, colour = higher_in), linewidth = 0.8, lineend = "round") +
+  geom_point(aes(fill = higher_in, colour = higher_in, size = matched_genes), shape = 21, stroke = 0.6) +
+  geom_text(aes(label = paste0("FDR ", formatC(adj.P.Val, format = "e", digits = 1)), hjust = text_hjust),
+            size = 2.2, colour = MID_GREY, show.legend = FALSE) +
+  facet_grid(category_display ~ ., scales = "free_y", space = "free_y", switch = "y", drop = TRUE) +
+  scale_colour_manual(values = condition_ink, breaks = c(denominator, numerator), drop = FALSE) +
+  scale_fill_manual(values = condition_fill, breaks = c(denominator, numerator), drop = FALSE) +
+  scale_size_continuous(range = c(2.5, 5.2), breaks = c(9, 10, 11)) +
+  scale_x_continuous(expand = expansion(mult = c(0.12, 0.12))) +
+  labs(
+    title = "Differential cell-state signatures",
+    subtitle = sprintf("Positive scores are higher in %s; negative scores are higher in %s", numerator, denominator),
+    x = "Signature score log2 fold-change", y = NULL,
+    fill = "Higher in", colour = "Higher in", size = "Matched genes"
+  ) +
+  theme_publication(8.5) +
+  theme(
+    legend.position = "top",
+    legend.box = "horizontal",
+    legend.spacing.x = grid::unit(2.4, "mm"),
+    legend.margin = margin(1, 0, 6, 0),
+    legend.box.margin = margin(0, 0, 2, 0),
+    legend.title = element_text(size = rel(0.82)),
+    legend.text = element_text(size = rel(0.78)),
+    axis.title = element_text(size = rel(0.92)),
+    axis.title.x = element_text(margin = margin(t = 7)),
+    axis.text = element_text(size = rel(0.82)),
+    axis.text.y = element_text(margin = margin(r = 4)),
+    panel.grid.major.y = element_blank(),
+    panel.spacing.y = grid::unit(2.6, "mm"),
+    strip.placement = "outside",
+    strip.background = element_rect(fill = "#EEF2F5", colour = NA),
+    strip.text.y.left = element_text(angle = 0, face = "bold", colour = NAVY, size = 7.1, margin = margin(3, 5, 3, 5)),
+    plot.title = element_text(size = rel(1.13), margin = margin(b = 3)),
+    plot.subtitle = element_text(margin = margin(b = 8)),
+    plot.margin = margin(10, 14, 10, 12)
+  ) +
+  coord_cartesian(clip = "off") +
+  guides(
+    colour = "none",
+    fill = guide_legend(order = 1, override.aes = list(shape = 21, size = 3.4)),
+    size = guide_legend(order = 2, override.aes = list(shape = 21, fill = "#D3DBE1", colour = NAVY))
+  )
 save_plot_pair(plot, file.path(dirs$figures, "cell_state_signatures"), 8.6, max(5.4, 0.42 * nrow(differential) + 2.5))
 
 write_json_file(list(

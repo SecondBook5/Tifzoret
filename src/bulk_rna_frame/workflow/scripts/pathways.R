@@ -67,45 +67,104 @@ running_enrichment <- function(ranks, genes) {
   )
 }
 
-build_curve <- function(curve_table, pathway_row) {
-  colour <- if (pathway_row$NES[[1]] >= 0) "#B55252" else "#39799C"
-  title <- stringr::str_wrap(pathway_row$pathway_label[[1]], width = 46)
-  leading_count <- sum(curve_table$leading_edge)
-  subtitle <- sprintf("NES %.2f   FDR %s   leading edge %d genes", pathway_row$NES[[1]], formatC(pathway_row$padj[[1]], format = "g", digits = 2), leading_count)
-  peak_index <- if (pathway_row$NES[[1]] >= 0) which.max(curve_table$running_es) else which.min(curve_table$running_es)
+build_curve <- function(curve_table, pathway_row, numerator = "numerator", denominator = "denominator") {
+  # Presentation parity with the finalized publication panel (Figure 1G): a
+  # stacked GSEA multitrack -- running-enrichment ribbon, leading-edge hit rug,
+  # ranked-metric colour strip, and signed ranking-statistic profile -- composed
+  # with patchwork. Colours, sizes, annotations and layout replicate the
+  # reference styling library; every plotted value is read from the already
+  # computed curve table, and no statistic is recomputed here.
+  cape_ink <- "#B55252"      # numerator-enriched ink (reference CAPE_INK)
+  control_ink <- "#39799C"   # denominator-enriched ink (reference CONTROL_INK)
+
+  nes <- pathway_row$NES[[1]]
+  n_genes <- nrow(curve_table)
+  line_col <- if (nes >= 0) cape_ink else control_ink
+
+  peak_index <- if (nes >= 0) which.max(curve_table$running_es) else which.min(curve_table$running_es)
   peak_rank <- curve_table$rank[[peak_index]]
-  zero_candidates <- which(diff(sign(curve_table$metric)) != 0)
-  zero_rank <- if (length(zero_candidates)) curve_table$rank[[zero_candidates[[1]]]] else NA_integer_
+  es <- curve_table$running_es[[peak_index]]
+  zero_cross <- which.min(abs(curve_table$metric))
+
+  mapped_genes <- sum(curve_table$hit)
+  leading_count <- sum(curve_table$leading_edge)
+  collection_label <- if (identical(pathway_row$gene_set_source[[1]], "configured_gene_program")) {
+    "Custom manuscript program"
+  } else {
+    "MSigDB gene set"
+  }
+  direction_label <- paste0("Enriched toward ", if (nes >= 0) numerator else denominator)
+  title <- stringr::str_wrap(pathway_row$pathway_label[[1]], width = 46)
+  subtitle <- sprintf(
+    "%s · %s  |  NES %.2f  |  FDR %s  |  %d mapped genes  |  %d leading-edge",
+    collection_label, direction_label, nes,
+    formatC(pathway_row$padj[[1]], format = "e", digits = 1),
+    mapped_genes, leading_count
+  )
+
+  hits <- curve_table %>% filter(hit)
+  gene_labs <- hits %>% filter(leading_edge) %>% slice_max(abs(metric), n = 4)
+
   es_plot <- ggplot(curve_table, aes(rank, running_es)) +
-    geom_hline(yintercept = 0, colour = "#AEB8BF", linewidth = 0.3) +
-    geom_vline(xintercept = peak_rank, colour = colour, linetype = 3, linewidth = 0.3) +
-    geom_line(colour = colour, linewidth = 0.9) +
-    annotate("point", x = peak_rank, y = curve_table$running_es[[peak_index]], colour = colour, size = 1.8) +
-    labs(title = title, subtitle = subtitle, x = NULL, y = "ES") +
-    theme_publication(7.5) +
-    theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(), panel.grid.major.x = element_blank())
-  hits_plot <- ggplot(curve_table %>% filter(hit), aes(rank, 0, xend = rank, yend = 1, colour = leading_edge)) +
-    geom_segment(linewidth = 0.30) +
-    scale_colour_manual(values = c(`FALSE` = NAVY, `TRUE` = colour), guide = "none") +
-    scale_y_continuous(NULL, breaks = NULL) +
-    labs(x = NULL) +
-    theme_void() +
-    theme(plot.background = element_rect(fill = "white", colour = NA))
+    annotate("rect",
+             xmin = if (nes >= 0) 1 else peak_rank,
+             xmax = if (nes >= 0) peak_rank else n_genes,
+             ymin = -Inf, ymax = Inf, fill = alpha(line_col, 0.08)) +
+    geom_hline(yintercept = 0, colour = "#9DA7AF", linewidth = 0.35) +
+    geom_vline(xintercept = peak_rank, colour = alpha(line_col, 0.45), linewidth = 0.35, linetype = 3) +
+    geom_ribbon(aes(ymin = 0, ymax = running_es), fill = alpha(line_col, 0.17)) +
+    geom_line(colour = line_col, linewidth = 0.8) +
+    geom_point(data = curve_table[peak_index, , drop = FALSE], colour = line_col,
+               fill = "white", shape = 21, size = 2.2, stroke = 0.65) +
+    annotate("text", x = peak_rank, y = es, label = sprintf(" ES %.2f", es),
+             hjust = if (es > 0) 0 else 1, vjust = if (es > 0) -0.8 else 1.4,
+             size = 2.35, fontface = "bold", colour = line_col) +
+    labs(title = title, subtitle = subtitle, y = "Running enrichment score", x = NULL) +
+    scale_x_continuous(limits = c(1, n_genes), expand = c(0, 0)) +
+    theme_publication(8) +
+    theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(),
+          plot.margin = margin(5, 5, 0, 5), panel.grid.major.x = element_blank())
+  hits_plot <- ggplot(hits, aes(rank, 0, colour = leading_edge)) +
+    geom_segment(aes(xend = rank, y = -0.42, yend = 0.42), linewidth = 0.38) +
+    ggrepel::geom_text_repel(
+      data = gene_labs, aes(label = gene_symbol), y = 0.48, size = 1.9,
+      direction = "x", angle = 45, hjust = 0, vjust = 0, min.segment.length = 0,
+      segment.colour = "#AAB3BA", max.overlaps = Inf
+    ) +
+    scale_colour_manual(values = c(`FALSE` = "#111111", `TRUE` = line_col)) +
+    scale_x_continuous(limits = c(1, n_genes), expand = c(0, 0)) +
+    coord_cartesian(ylim = c(-0.48, 1.15), clip = "off") +
+    labs(y = "Gene hits", x = NULL) +
+    theme_publication(7.4) +
+    theme(legend.position = "none", axis.text = element_blank(), axis.ticks = element_blank(),
+          panel.grid = element_blank(), plot.margin = margin(0, 5, 0, 5))
   strip_plot <- ggplot(curve_table, aes(rank, 1, fill = metric)) +
-    geom_tile() +
-    scale_fill_gradient2(low = "#39799C", mid = "#F7F4EE", high = "#B55252", midpoint = 0, guide = "none") +
-    theme_void() + theme(plot.background = element_rect(fill = "white", colour = NA))
+    geom_raster() +
+    scale_fill_gradient2(low = control_ink, mid = "#F7F4EE", high = cape_ink,
+                         midpoint = 0, limits = range(curve_table$metric), guide = "none") +
+    geom_vline(xintercept = zero_cross, colour = "#5E6871", linewidth = 0.28, linetype = 3) +
+    annotate("text", x = n_genes * 0.02, y = 1, label = paste0(numerator, "-correlated"),
+             hjust = 0, size = 2.05, colour = "white", fontface = "bold") +
+    annotate("text", x = n_genes * 0.98, y = 1, label = paste0(denominator, "-correlated"),
+             hjust = 1, size = 2.05, colour = "white", fontface = "bold") +
+    scale_x_continuous(expand = c(0, 0)) +
+    coord_cartesian(xlim = c(1, n_genes), expand = FALSE) +
+    theme_void() +
+    theme(legend.position = "none", plot.margin = margin(0, 5, 0, 5))
   metric_plot <- ggplot(curve_table, aes(rank, metric)) +
-    geom_hline(yintercept = 0, colour = "#AEB8BF", linewidth = 0.25) +
-    geom_area(data = curve_table %>% filter(metric >= 0), fill = "#F4A6A6", alpha = 0.8) +
-    geom_area(data = curve_table %>% filter(metric < 0), fill = "#A6CEE3", alpha = 0.8) +
-    geom_line(colour = MID_GREY, linewidth = 0.25) +
-    {if (is.finite(zero_rank)) geom_vline(xintercept = zero_rank, linetype = 3, colour = "#697783", linewidth = 0.3)} +
-    {if (is.finite(zero_rank)) annotate("text", x = zero_rank, y = 0, label = paste0(" zero cross: ", zero_rank), hjust = 0, vjust = -0.5, size = 2.1, colour = MID_GREY)} +
-    labs(x = "Rank in ordered dataset", y = "Metric") +
-    theme_publication(7.2) +
-    theme(panel.grid.major.x = element_blank())
-  es_plot / hits_plot / strip_plot / metric_plot + patchwork::plot_layout(heights = c(2.0, 0.35, 0.20, 1.0))
+    geom_hline(yintercept = 0, colour = "#9DA7AF", linewidth = 0.3) +
+    geom_vline(xintercept = zero_cross, colour = "#6F7B85", linewidth = 0.35, linetype = 3) +
+    geom_ribbon(aes(ymin = 0, ymax = pmax(metric, 0)), fill = alpha(cape_ink, 0.5)) +
+    geom_ribbon(aes(ymin = pmin(metric, 0), ymax = 0), fill = alpha(control_ink, 0.5)) +
+    geom_line(colour = "#65737E", linewidth = 0.25) +
+    annotate("text", x = zero_cross, y = 0,
+             label = paste0("Zero cross: rank ", comma(zero_cross)),
+             vjust = -0.6, hjust = 0.5, size = 2, colour = MID_GREY) +
+    scale_x_continuous(limits = c(1, n_genes), expand = c(0, 0), labels = comma) +
+    labs(x = "Rank in ordered gene list", y = "Wald statistic") +
+    theme_publication(7.4) +
+    theme(panel.grid.major.x = element_blank(), plot.margin = margin(0, 5, 4, 5))
+  es_plot / hits_plot / strip_plot / metric_plot + patchwork::plot_layout(heights = c(3.2, 0.9, 0.27, 1.25))
 }
 
 args <- parse_cli(c("project-config", "samples", "annotation", "contrasts", "gmt", "resource-table", "contrast-id", "vst", "de", "outdir"))
@@ -271,14 +330,27 @@ if (nrow(ora_displayed)) {
 }
 save_plot_pair(ora_plot, file.path(dirs$figures, "ora_bidirectional"), 8.1, max(4.8, 0.34 * nrow(ora_displayed) + 2.2))
 
-ssgsea_parameter <- GSVA::ssgseaParam(
-  exprData = expression,
-  geneSets = gene_sets,
-  minSize = effective_min_size,
-  maxSize = cfg$gene_sets$max_size,
-  normalize = TRUE
-)
-gsva_matrix <- GSVA::gsva(ssgsea_parameter, verbose = FALSE, BPPARAM = BiocParallel::SerialParam())
+# GSVA panel data choice (Figure 1F). Method and the displayed set list are
+# curation-driven so a study can reproduce an exact published panel: CAPE uses
+# Hänzelmann GSVA over an explicit, effect-ordered Hallmark list; the generic
+# default stays ssGSEA over every measured set. Restricting the set list here
+# does not change other sets' scores (each set is scored independently), and the
+# audit table below records exactly what was scored.
+gsva_method <- if (is.null(cfg$figures$pathways$gsva_method)) "ssgsea" else cfg$figures$pathways$gsva_method
+gsva_set_ids <- cfg$figures$pathways$gsva_sets
+if (!is.null(gsva_set_ids)) {
+  gsva_input_sets <- gene_sets[intersect(as.character(gsva_set_ids), names(gene_sets))]
+} else {
+  gsva_input_sets <- gene_sets[setdiff(names(gene_sets), configured_curve_ids)]
+}
+if (!length(gsva_input_sets)) stop("No gene sets remain for the GSVA panel after curation filtering.", call. = FALSE)
+gsva_param <- if (identical(gsva_method, "gsva")) {
+  GSVA::gsvaParam(exprData = expression, geneSets = gsva_input_sets, minSize = effective_min_size, maxSize = cfg$gene_sets$max_size, kcdf = "Gaussian")
+} else {
+  GSVA::ssgseaParam(exprData = expression, geneSets = gsva_input_sets, minSize = effective_min_size, maxSize = cfg$gene_sets$max_size, normalize = TRUE)
+}
+gsva_matrix <- GSVA::gsva(gsva_param, verbose = FALSE, BPPARAM = BiocParallel::SerialParam())
+gsva_score_label <- if (identical(gsva_method, "gsva")) "GSVA" else "ssGSEA"
 gsva_wide <- as.data.frame(gsva_matrix, check.names = FALSE) %>% tibble::rownames_to_column("pathway")
 readr::write_tsv(gsva_wide, file.path(dirs$tables, "gsva_scores.tsv"))
 
@@ -319,10 +391,17 @@ gsva_diff <- limma::topTable(gsva_fit, coef = gsva_coefficient, number = Inf, so
   )
 readr::write_tsv(gsva_diff, file.path(dirs$tables, "gsva_differential.tsv"), na = "NA")
 
-selected_pathways <- gsva_diff %>%
-  arrange(adj.P.Val, desc(abs(logFC))) %>%
-  slice_head(n = cfg$figures$pathways$top_gsva_terms) %>%
-  pull(pathway)
+if (!is.null(gsva_set_ids)) {
+  # Curated panel: display exactly the configured sets, in the exact order they
+  # are listed (that list is the authoritative published row order -- see the
+  # row-ordering block below).
+  selected_pathways <- intersect(as.character(gsva_set_ids), rownames(gsva_matrix))
+} else {
+  selected_pathways <- gsva_diff %>%
+    arrange(adj.P.Val, desc(abs(logFC))) %>%
+    slice_head(n = cfg$figures$pathways$top_gsva_terms) %>%
+    pull(pathway)
+}
 if (identical(resolved$type, "pairwise")) {
   display_samples <- metadata[[factor_name]] %in% c(denominator, numerator)
   display_group_col <- factor_name
@@ -336,13 +415,44 @@ if (identical(resolved$type, "pairwise")) {
 }
 gsva_display <- gsva_matrix[selected_pathways, display_samples, drop = FALSE]
 gsva_z <- row_zscore(gsva_display, 1.5)
-row_order <- rownames(gsva_z)[stats::hclust(stats::dist(gsva_z), method = "complete")$order]
-column_order <- colnames(gsva_z)[stats::hclust(stats::as.dist(1 - stats::cor(gsva_z)), method = "average")$order]
-display_labels <- setNames(make.unique(label_gene_set(rownames(gsva_z))), rownames(gsva_z))
+gsva_cluster <- if (is.null(cfg$figures$pathways$gsva_cluster)) TRUE else isTRUE(cfg$figures$pathways$gsva_cluster)
+gsva_order <- if (is.null(cfg$figures$pathways$gsva_order)) "differential" else cfg$figures$pathways$gsva_order
+if (!is.null(gsva_set_ids)) {
+  # Curated panel: the configured gsva_sets list IS the authoritative row order.
+  # It is pre-ordered by the published numerator-minus-denominator effect (e.g.
+  # the CAPE Panel F order), so honour it verbatim rather than re-deriving from
+  # the engine's own GSVA scores -- those differ slightly from the bespoke
+  # pipeline and flip near-tied adjacent rows, which would not reproduce the
+  # paper exactly. Columns stay in canonical denominator-then-numerator order.
+  row_order <- selected_pathways
+  order_condition <- metadata[colnames(gsva_z), display_group_col]
+  column_order <- colnames(gsva_z)[order(factor(order_condition, levels = display_breaks), colnames(gsva_z))]
+} else if (gsva_cluster) {
+  row_order <- rownames(gsva_z)[stats::hclust(stats::dist(gsva_z), method = "complete")$order]
+  column_order <- colnames(gsva_z)[stats::hclust(stats::as.dist(1 - stats::cor(gsva_z)), method = "average")$order]
+} else {
+  # Unclustered auto-selected panel: rows by numerator-minus-denominator effect
+  # (ascending); columns in canonical denominator-then-numerator sample order.
+  if (identical(resolved$type, "pairwise") && identical(gsva_order, "effect")) {
+    display_condition <- metadata[colnames(gsva_display), factor_name]
+    num_cols <- colnames(gsva_display)[display_condition == numerator]
+    den_cols <- colnames(gsva_display)[display_condition == denominator]
+    effect <- rowMeans(gsva_display[, num_cols, drop = FALSE]) - rowMeans(gsva_display[, den_cols, drop = FALSE])
+    row_order <- names(sort(effect))
+  } else {
+    row_order <- rownames(gsva_z)
+  }
+  order_condition <- metadata[colnames(gsva_z), display_group_col]
+  column_order <- colnames(gsva_z)[order(factor(order_condition, levels = display_breaks), colnames(gsva_z))]
+}
+display_labels <- setNames(make.unique(prettify_gene_set_label(rownames(gsva_z))), rownames(gsva_z))
 rownames(gsva_z) <- unname(display_labels[rownames(gsva_z)])
 row_order_clean <- unname(display_labels[row_order])
-gsva_heatmap <- tile_heatmap(gsva_z, row_order_clean, column_order, legend_title = "Row-scaled\nssGSEA score", base_size = 7.7)
-gsva_heatmap$plot <- gsva_heatmap$plot + scale_y_discrete(labels = function(value) stringr::str_wrap(value, width = 43))
+gsva_heatmap <- tile_heatmap(gsva_z, row_order_clean, column_order, legend_title = "Row\nz-score", base_size = 7.7, zlimit = 1.5)
+gsva_column_labels <- setNames(sample_display_labels(column_order, metadata[column_order, display_group_col]), column_order)
+gsva_heatmap$plot <- gsva_heatmap$plot +
+  scale_y_discrete(labels = function(value) stringr::str_wrap(value, width = 43)) +
+  scale_x_discrete(labels = gsva_column_labels)
 gsva_displayed <- gsva_heatmap$table %>%
   mutate(
     pathway_id = names(display_labels)[match(as.character(feature), display_labels)],
@@ -355,12 +465,23 @@ annotation_plot <- data.frame(
   condition = metadata[column_order, display_group_col]
 ) %>%
   ggplot(aes(sample_id, 1, fill = condition)) +
-  geom_tile() +
+  geom_tile(colour = "white", linewidth = 0.3) +
+  annotate("text", x = 0.4, y = 1, label = "Condition", hjust = 1, fontface = "bold", size = 2.9, colour = NAVY) +
   scale_fill_manual(values = display_palette, breaks = display_breaks, drop = FALSE) +
+  coord_cartesian(clip = "off") +
   theme_void() +
-  theme(legend.position = "top", plot.margin = margin(0, 55, 0, 35))
-gsva_heatmap$plot <- gsva_heatmap$plot +
-  labs(title = "Pathway activity heatmap", subtitle = "Top differential ssGSEA programs; row-scaled within displayed samples")
+  theme(legend.position = "none", plot.margin = margin(0, 55, 0, 35))
+# A fully-Hallmark curated panel is the published Figure 1F: title it "Hallmark
+# GSVA activity" with no subtitle, matching the paper. Any other panel keeps the
+# generic descriptive title + subtitle.
+gsva_is_hallmark <- !is.null(gsva_set_ids) && length(selected_pathways) > 0 &&
+  all(startsWith(selected_pathways, "HALLMARK_"))
+if (gsva_is_hallmark) {
+  gsva_heatmap$plot <- gsva_heatmap$plot + labs(title = "Hallmark GSVA activity", subtitle = NULL)
+} else {
+  gsva_heatmap$plot <- gsva_heatmap$plot +
+    labs(title = "Pathway activity heatmap", subtitle = paste0(if (!is.null(gsva_set_ids)) "Curated Hallmark programs" else "Top differential programs", "; row-scaled ", gsva_score_label, " within displayed samples"))
+}
 combined_gsva <- annotation_plot / gsva_heatmap$plot + patchwork::plot_layout(heights = c(0.07, 1))
 save_plot_pair(combined_gsva, file.path(dirs$figures, "gsva_heatmap"), 7.7, max(5.2, 0.30 * nrow(gsva_z) + 2.2))
 
@@ -392,7 +513,7 @@ for (index in seq_len(nrow(selected_gsea))) {
       contrast_id = args[["contrast-id"]]
     )
   curve_tables[[index]] <- curve
-  curve_plots[[index]] <- build_curve(curve, pathway_row)
+  curve_plots[[index]] <- build_curve(curve, pathway_row, numerator, denominator)
 }
 gsea_displayed <- bind_rows(curve_tables)
 readr::write_tsv(gsea_displayed, file.path(dirs$tables, "gsea_curves_displayed.tsv"), na = "NA")
