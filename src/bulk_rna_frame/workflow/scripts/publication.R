@@ -78,7 +78,14 @@ heatmap_definitions <- heatmap_definitions %>%
 panel_definitions <- panel_definitions %>%
   mutate(configured_gene_symbol = gene_symbol, gene_symbol = unname(symbol_lookup[toupper(gene_symbol)])) %>%
   filter(!is.na(gene_symbol)) %>% distinct(gene_symbol, .keep_all = TRUE)
-top <- de %>% filter(!is.na(adjusted_p_value), gene_symbol %in% rownames(expression)) %>% arrange(adjusted_p_value, desc(abs(log2_fold_change))) %>% distinct(gene_symbol, .keep_all = TRUE) %>% slice_head(n = cfg$figures$de$top_heatmap_genes)
+# Optional single-direction selection for the top-DE heatmap (Panel D shows the
+# top CAPE-up genes). Defaults to both directions when the knob is absent.
+heatmap_direction <- cfg$figures$de$heatmap_direction
+if (is.null(heatmap_direction)) heatmap_direction <- "both"
+top <- de %>% filter(!is.na(adjusted_p_value), gene_symbol %in% rownames(expression))
+if (identical(heatmap_direction, "up")) top <- top %>% filter(log2_fold_change > 0)
+if (identical(heatmap_direction, "down")) top <- top %>% filter(log2_fold_change < 0)
+top <- top %>% arrange(adjusted_p_value, desc(abs(log2_fold_change))) %>% distinct(gene_symbol, .keep_all = TRUE) %>% slice_head(n = cfg$figures$de$top_heatmap_genes)
 assignments <- top %>% select(gene_symbol, gene_id, log2_fold_change, adjusted_p_value) %>%
   left_join(heatmap_definitions, by = "gene_symbol") %>%
   mutate(

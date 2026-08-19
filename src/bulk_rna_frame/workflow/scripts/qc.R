@@ -241,6 +241,59 @@ distance_plot <- ggplot(distance_long, aes(sample_id, sample_id_y, fill = euclid
   theme(panel.grid = element_blank(), axis.text.x = element_text(angle = 45, hjust = 1), axis.ticks = element_blank())
 save_plot_pair(distance_plot, file.path(dirs$figures, "sample_distance"), 6.2, 5.5)
 
+# --- PCA-distance sample outlier screen (display-only QC gate) -------------
+# Flag samples whose Euclidean distance in the leading principal components
+# exceeds a robust threshold (median + sigma x MAD). This reproduces the
+# outlier gate from the reference coursework pipeline, but as a *display* gate:
+# flagged samples are reported and highlighted, never dropped. Removing samples
+# would silently change every downstream contrast, so analysis-set curation
+# stays an explicit manual decision (samples.tsv / analysis_set), not an
+# automatic side effect of plotting. Defaults: 5 PCs, 3 x MAD.
+outlier_pcs <- if (is.null(cfg$figures$qc$outlier_pcs)) 5L else as.integer(cfg$figures$qc$outlier_pcs)
+outlier_sigma <- if (is.null(cfg$figures$qc$outlier_sigma)) 3 else as.numeric(cfg$figures$qc$outlier_sigma)
+outlier_k <- min(outlier_pcs, ncol(pca$x))
+pc_distances <- sqrt(rowSums(pca$x[, seq_len(outlier_k), drop = FALSE]^2))
+distance_median <- stats::median(pc_distances)
+distance_mad <- stats::mad(pc_distances)
+if (!is.finite(distance_mad) || distance_mad == 0) distance_mad <- max(pc_distances) * 1e-6
+outlier_threshold <- distance_median + outlier_sigma * distance_mad
+outlier_table <- data.frame(
+  sample_id = names(pc_distances),
+  pc_distance = as.numeric(pc_distances),
+  threshold = outlier_threshold,
+  is_outlier = pc_distances > outlier_threshold,
+  stringsAsFactors = FALSE
+) %>%
+  left_join(metadata %>% tibble::rownames_to_column("metadata_row") %>% select(-metadata_row), by = "sample_id") %>%
+  arrange(pc_distance)
+readr::write_tsv(outlier_table, file.path(dirs$tables, "outlier_distances.tsv"))
+
+outlier_plot_table <- outlier_table %>%
+  mutate(sample_id = factor(sample_id, levels = sample_id[order(pc_distance)]))
+flagged_samples <- dplyr::filter(outlier_plot_table, is_outlier)
+outlier_caption <- if (nrow(flagged_samples) > 0L) {
+  paste0("Flagged (not removed): ", paste(as.character(flagged_samples$sample_id), collapse = ", "))
+} else {
+  "No samples exceed the threshold"
+}
+outlier_plot <- ggplot(outlier_plot_table, aes(pc_distance, sample_id, fill = .data[[group_col]])) +
+  geom_col(width = 0.72, alpha = 0.9) +
+  geom_vline(xintercept = outlier_threshold, linetype = "22", colour = "#B52A2E", linewidth = 0.5) +
+  {if (nrow(flagged_samples) > 0L) geom_point(
+    data = flagged_samples, aes(pc_distance, sample_id),
+    shape = 8, size = 2.6, stroke = 0.7, colour = "#B52A2E", inherit.aes = FALSE
+  )} +
+  scale_fill_manual(values = palette, drop = FALSE) +
+  labs(
+    title = "Sample outlier screen",
+    subtitle = sprintf("Euclidean distance in the first %d PCs; dashed line = median + %g x MAD", outlier_k, outlier_sigma),
+    x = sprintf("Distance in first %d PCs", outlier_k),
+    y = NULL, fill = NULL, caption = outlier_caption
+  ) +
+  theme_publication(8.3) +
+  theme(legend.position = "top", plot.caption = element_text(hjust = 0, colour = MID_GREY))
+save_plot_pair(outlier_plot, file.path(dirs$figures, "sample_outliers"), 6.2, 5.0)
+
 top_variable_count <- if (is.null(cfg$figures$qc$top_variable_genes)) 50L else as.integer(cfg$figures$qc$top_variable_genes)
 variances <- apply(vst_matrix, 1, stats::var)
 variable_ids <- names(sort(variances, decreasing = TRUE))[seq_len(min(top_variable_count, length(variances)))]
@@ -271,7 +324,11 @@ write_json_file(
     pca_variance_pc1 = variance[[1]],
     pca_variance_pc2 = variance[[2]],
     ellipse_groups_drawn = unique(ellipse_table$ellipse_group),
-    ellipse_minimum_minor_major_ratio = 0.20
+    ellipse_minimum_minor_major_ratio = 0.20,
+    outlier_pcs_used = outlier_k,
+    outlier_sigma = outlier_sigma,
+    outlier_threshold = outlier_threshold,
+    outliers_flagged = as.character(outlier_table$sample_id[outlier_table$is_outlier])
   ),
   file.path(args$outdir, "qc_summary.json")
 )

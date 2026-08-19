@@ -104,10 +104,36 @@ result_table <- data.frame(
   arrange(adjusted_p_value, desc(abs(log2_fold_change)))
 readr::write_tsv(result_table, file.path(dirs$tables, "de_results.tsv"), na = "NA")
 
-label_table <- result_table %>%
-  filter(direction != "not_significant") %>%
-  arrange(adjusted_p_value, desc(abs(log2_fold_change))) %>%
-  slice_head(n = cfg$figures$de$top_labels)
+# Volcano gene labels. Default (`pooled`) = top-N significant genes by
+# (padj, |log2FC|). With `figures.de.label_balance: directional` the top_labels
+# budget is split into up- and down-regulated halves, each ranked by -log10(p)
+# (raw p, tie-broken by |log2FC|). This mirrors the primary analysis, which
+# labels the top 10 up + top 10 down significant genes by -log10(p): set
+# `top_labels: 20` to reproduce it. Backfill keeps the total at top_labels when
+# one direction has fewer significant genes than its half of the budget.
+label_balance <- cfg$figures$de$label_balance
+if (is.null(label_balance)) label_balance <- "pooled"
+label_pool <- result_table %>%
+  filter(direction != "not_significant")
+if (identical(label_balance, "directional")) {
+  n_total <- cfg$figures$de$top_labels
+  n_up <- ceiling(n_total / 2)
+  n_down <- n_total - n_up
+  up_lab <- label_pool %>% filter(log2_fold_change > 0) %>% arrange(desc(negative_log10_p), desc(abs(log2_fold_change))) %>% slice_head(n = n_up)
+  down_lab <- label_pool %>% filter(log2_fold_change < 0) %>% arrange(desc(negative_log10_p), desc(abs(log2_fold_change))) %>% slice_head(n = n_down)
+  label_table <- bind_rows(up_lab, down_lab)
+  if (nrow(label_table) < n_total) {
+    backfill <- label_pool %>%
+      filter(!gene_id %in% label_table$gene_id) %>%
+      arrange(desc(negative_log10_p), desc(abs(log2_fold_change))) %>%
+      slice_head(n = n_total - nrow(label_table))
+    label_table <- bind_rows(label_table, backfill)
+  }
+} else {
+  label_table <- label_pool %>%
+    arrange(adjusted_p_value, desc(abs(log2_fold_change))) %>%
+    slice_head(n = cfg$figures$de$top_labels)
+}
 volcano_table <- result_table %>%
   mutate(label = ifelse(gene_id %in% label_table$gene_id, gene_symbol, NA_character_))
 readr::write_tsv(volcano_table, file.path(dirs$tables, "volcano_displayed.tsv"), na = "NA")

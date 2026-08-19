@@ -64,6 +64,30 @@ PANEL_REGISTRY: dict[str, PanelConstructor] = {
         "pca_correlation", "PCA and sample correlation", "Shared-legend PCA and clustered correlation layout.", False, "default",
         {"default": _variant("qc/figures/pca_correlation", "qc", "PCA + correlation", "qc/tables/pca_coordinates.tsv", "qc/tables/pca_variance.tsv", "qc/tables/sample_correlation.tsv", "qc/tables/pca_correlation_layout.json")},
     ),
+    "library_metrics": PanelConstructor(
+        "library_metrics", "Library metrics", "Per-sample library size and detected-gene sequencing-depth metrics.", False, "default",
+        {"default": _variant("qc/figures/library_metrics", "qc", "Library metrics", "qc/tables/library_metrics.tsv")},
+    ),
+    "expression_density": PanelConstructor(
+        "expression_density", "Expression density", "Per-sample log-expression density distributions.", False, "default",
+        {"default": _variant("qc/figures/expression_density", "qc", "Expression density", "qc/tables/expression_density_displayed.tsv")},
+    ),
+    "sample_distance": PanelConstructor(
+        "sample_distance", "Sample distance", "Euclidean sample-to-sample distance heatmap on variance-stabilized expression.", False, "default",
+        {"default": _variant("qc/figures/sample_distance", "qc", "Sample distance", "qc/tables/sample_distance.tsv")},
+    ),
+    "variable_gene_heatmap": PanelConstructor(
+        "variable_gene_heatmap", "Most-variable-gene heatmap", "Row-scaled expression of the most variable genes across samples.", False, "default",
+        {"default": _variant("qc/figures/variable_gene_heatmap", "qc", "Variable-gene heatmap", "qc/tables/variable_gene_heatmap_displayed.tsv")},
+    ),
+    "sample_outliers": PanelConstructor(
+        "sample_outliers", "Sample outlier screen", "PCA-distance outlier screen: per-sample Euclidean distance in the leading PCs against a robust median + MAD threshold (flagged, never removed).", False, "default",
+        {"default": _variant("qc/figures/sample_outliers", "qc", "Outlier screen", "qc/tables/outlier_distances.tsv")},
+    ),
+    "qc_overview": PanelConstructor(
+        "qc_overview", "QC overview", "Composite quality-control overview across library, density, PCA, and correlation views.", False, "default",
+        {"default": _variant("qc/figures/qc_overview", "qc", "QC overview")},
+    ),
     "volcano": PanelConstructor(
         "volcano", "Volcano plot", "Shrunken effect sizes with configured thresholds and labels.", True, "default",
         {"default": _variant("contrasts/{contrast}/analyses/de/figures/volcano", "de", "Volcano", "contrasts/{contrast}/analyses/de/tables/volcano_displayed.tsv")},

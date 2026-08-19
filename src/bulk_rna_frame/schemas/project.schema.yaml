@@ -186,6 +186,11 @@ properties:
         additionalProperties: false
         properties:
           top_variable_genes: {type: integer, minimum: 2}
+          # Optional PCA-distance outlier screen (display-only): number of
+          # leading PCs the Euclidean distance is computed over, and the robust
+          # threshold multiplier (median + sigma x MAD). Omit for 5 PCs / 3 MAD.
+          outlier_pcs: {type: integer, minimum: 1}
+          outlier_sigma: {type: number, exclusiveMinimum: 0}
       de:
         type: object
         additionalProperties: false
@@ -196,6 +201,13 @@ properties:
           top_labels: {type: integer, minimum: 0}
           top_heatmap_genes: {type: integer, minimum: 2}
           z_limit: {type: number, exclusiveMinimum: 0}
+          # Optional: restrict the top-DE heatmap to one direction of the
+          # contrast (up = higher in the numerator). Omit for both directions.
+          heatmap_direction: {type: string, enum: [up, down, both]}
+          # Optional: balance volcano labels across up/down directions. Omit
+          # (or `pooled`) for a single top-N by (padj, |log2FC|); `directional`
+          # splits the top_labels budget into up/down halves.
+          label_balance: {type: string, enum: [pooled, directional]}
       pathways:
         type: object
         additionalProperties: false
