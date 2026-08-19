@@ -305,22 +305,23 @@ integrated <- (program_h_header / program_h_body) +
 save_plot_pair(integrated, file.path(dirs$figures, "program_integrated"), 10.4, 12.4)
 
 # ---------------------------------------------------------------------------
-# Panel I: consolidated per-gene violins, bounded to the curated gsea_programs.
+# Panel I: per-program violin blocks, bounded to the curated gsea_programs.
 # ---------------------------------------------------------------------------
 # A biological program is the atomic unit of the panel, never the individual
-# gene: the gene set and its order are identical to Panel H (program_h_def), so
-# the panel can never grow past (curated programs x their measured genes) no
-# matter how many genes pass FDR. Gene repeats across programs are kept (e.g.
-# Mylk in both contractile and calcium). Significance is the DESeq2 adjusted
-# p-value -- the same statistic as the volcano and heatmaps -- not a separately
-# re-run Wilcoxon test.
+# gene: each curated program is drawn as its own block with a program-coloured
+# title and tinted background, genes faceted within it (<= 8 columns wide). The
+# gene set and its order are identical to Panel H (program_h_def), so the panel
+# can never grow past (curated programs x their measured genes) no matter how
+# many genes pass FDR. Gene repeats across programs are kept (e.g. Mylk in both
+# contractile and calcium). Significance is the DESeq2 adjusted p-value -- the
+# same statistic as the volcano and heatmaps -- not a separately re-run test.
+# Every animal is drawn as a point atop a descriptive violin (n = 3/group).
 violin_def <- program_h_def %>%
   left_join(
     de %>% distinct(gene_symbol, .keep_all = TRUE) %>% select(gene_symbol, adjusted_p_value),
     by = "gene_symbol"
   ) %>%
   mutate(
-    program_color = unname(program_h_colors[as.character(program)]),
     significance = case_when(
       is.na(adjusted_p_value) ~ NA_character_,
       adjusted_p_value < 0.001 ~ "***",
@@ -336,37 +337,79 @@ violin <- as.data.frame(t(expression[unique(violin_def$gene_symbol), h_sample_or
   inner_join(violin_def, by = "gene_symbol", relationship = "many-to-many") %>%
   mutate(condition = factor(metadata[sample_id, factor_name], levels = c(denominator, numerator)))
 
-y_positions <- violin %>% group_by(row_id) %>%
-  summarize(y = max(expression, na.rm = TRUE) + 0.10 * diff(range(expression, na.rm = TRUE)), .groups = "drop")
-tests <- violin_def %>% left_join(y_positions, by = "row_id") %>% mutate(x1 = 1, x2 = 2)
-
-# Apply the shared program->gene display order (top-left -> bottom-right).
-violin$row_id <- factor(violin$row_id, levels = program_h_levels_row)
-tests$row_id <- factor(tests$row_id, levels = program_h_levels_row)
-facet_bg <- violin_def %>% distinct(row_id, program_color) %>%
-  mutate(row_id = factor(row_id, levels = program_h_levels_row))
-facet_labels <- setNames(as.character(violin_def$gene_symbol), as.character(violin_def$row_id))
-
 readr::write_tsv(violin, file.path(dirs$tables, "program_violins_displayed.tsv"), na = "NA")
-readr::write_tsv(tests, file.path(dirs$tables, "program_violins_tests.tsv"), na = "NA")
+readr::write_tsv(
+  violin_def %>% select(program, gene_index, gene_symbol, row_id, adjusted_p_value, significance),
+  file.path(dirs$tables, "program_violins_tests.tsv"), na = "NA"
+)
 
-# Brackets are drawn only where the DESeq2 FDR is significant; ns slots carry no
-# bracket rather than an empty line with no annotation above it.
-sig_tests <- dplyr::filter(tests, !is.na(significance))
-violin_plot <- ggplot(violin, aes(condition, expression, fill = condition)) +
-  geom_rect(data = facet_bg, aes(xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf), inherit.aes = FALSE, fill = scales::alpha(facet_bg$program_color, 0.09)) +
-  geom_violin(trim = FALSE, alpha = 0.72, colour = "white", linewidth = 0.3) + geom_boxplot(width = 0.18, outlier.shape = NA, alpha = 0.45, linewidth = 0.3) +
-  stat_summary(fun = mean, geom = "point", shape = 23, size = 1.6, fill = "white", colour = NAVY, stroke = 0.5) +
-  geom_segment(data = sig_tests, aes(x = x1, xend = x2, y = y, yend = y), inherit.aes = FALSE, colour = NAVY, linewidth = 0.35) +
-  geom_segment(data = sig_tests, aes(x = x1, xend = x1, y = y, yend = y - 0.03), inherit.aes = FALSE, colour = NAVY, linewidth = 0.35) +
-  geom_segment(data = sig_tests, aes(x = x2, xend = x2, y = y, yend = y - 0.03), inherit.aes = FALSE, colour = NAVY, linewidth = 0.35) +
-  geom_text(data = sig_tests, aes(x = 1.5, y = y, label = significance), inherit.aes = FALSE, vjust = -0.25, colour = NAVY, size = 2.8) +
-  facet_wrap(~ row_id, scales = "free_y", ncol = 5, labeller = as_labeller(facet_labels)) +
-  scale_fill_manual(values = condition_palette(cfg, c(denominator, numerator)), breaks = c(denominator, numerator), drop = FALSE) +
-  labs(title = "Curated program genes", subtitle = paste0(forest_title, "; DESeq2 FDR:  * < 0.05   ** < 0.01   *** < 0.001"), x = NULL, y = "Variance-stabilized expression", fill = NULL) +
-  theme_publication(7.4) + theme(legend.position = "top", strip.background = element_rect(fill = "#F3F6F8", colour = NA), axis.text.x = element_text(angle = 35, hjust = 1))
-n_violin_slots <- nrow(violin_def)
-save_plot_pair(violin_plot, file.path(dirs$figures, "program_violins"), 13.0, max(7.2, 2.25 * ceiling(n_violin_slots / 5)))
+# Condition fills + darker per-animal point inks (same hue, more saturated).
+violin_fill <- condition_palette(cfg, c(denominator, numerator))
+violin_ink <- setNames(darken_hex(unname(violin_fill)), names(violin_fill))
+MAX_BLOCK_COLS <- 8L
+
+# One block per curated program. block_ncol = min(genes, 8) reproduces the
+# hand-tuned CAPE layout (7,7,8,8 columns) while generalizing to any program
+# sizes; the block's height weight is the number of facet rows it needs.
+make_violin_block <- function(program_label) {
+  block_def <- violin_def %>% filter(as.character(program) == program_label) %>% arrange(gene_index)
+  block_def$gene_symbol <- factor(block_def$gene_symbol, levels = block_def$gene_symbol)
+  block <- violin %>% filter(as.character(program) == program_label) %>%
+    mutate(gene_symbol = factor(gene_symbol, levels = levels(block_def$gene_symbol)))
+  block_ncol <- min(nrow(block_def), MAX_BLOCK_COLS)
+  program_color <- unname(program_h_colors[[program_label]])
+
+  # Brackets are drawn only where the DESeq2 FDR is significant; ns genes carry
+  # no bracket rather than a bare line with no annotation above it.
+  y_pos <- block %>% group_by(gene_symbol) %>%
+    summarize(y_max = max(expression, na.rm = TRUE), y_min = min(expression, na.rm = TRUE), .groups = "drop") %>%
+    mutate(y_span = pmax(y_max - y_min, 0.12), bracket_y = y_max + 0.10 * y_span,
+           tick_y = bracket_y - 0.035 * y_span, label_y = bracket_y + 0.035 * y_span)
+  sig <- block_def %>% filter(!is.na(significance)) %>%
+    left_join(y_pos, by = "gene_symbol") %>% mutate(x1 = 1, x2 = 2)
+
+  ggplot(block, aes(condition, expression)) +
+    geom_violin(aes(fill = condition), width = 0.82, trim = TRUE, scale = "width", alpha = 0.42, linewidth = 0.42, colour = NA) +
+    geom_boxplot(width = 0.19, outlier.shape = NA, alpha = 0.68, linewidth = 0.36, colour = "#41525E", fill = "white") +
+    geom_point(aes(colour = condition), position = position_jitter(width = 0.065, height = 0, seed = 2026), size = 1.25) +
+    stat_summary(fun = mean, geom = "point", shape = 23, size = 1.65, fill = "white", colour = NAVY, stroke = 0.45) +
+    geom_segment(data = sig, aes(x = x1, xend = x2, y = bracket_y, yend = bracket_y), inherit.aes = FALSE, colour = NAVY, linewidth = 0.42) +
+    geom_segment(data = sig, aes(x = x1, xend = x1, y = bracket_y, yend = tick_y), inherit.aes = FALSE, colour = NAVY, linewidth = 0.42) +
+    geom_segment(data = sig, aes(x = x2, xend = x2, y = bracket_y, yend = tick_y), inherit.aes = FALSE, colour = NAVY, linewidth = 0.42) +
+    geom_text(data = sig, aes(x = 1.5, y = label_y, label = significance), inherit.aes = FALSE, colour = NAVY, size = 2.5, fontface = "bold") +
+    facet_wrap(vars(gene_symbol), scales = "free_y", ncol = block_ncol) +
+    scale_fill_manual(values = violin_fill, breaks = c(denominator, numerator), drop = FALSE, guide = "none") +
+    scale_colour_manual(values = violin_ink, breaks = c(denominator, numerator), drop = FALSE, guide = "none") +
+    scale_x_discrete(labels = cond_display) +
+    scale_y_continuous(expand = expansion(mult = c(0.05, 0.20))) +
+    labs(title = program_label, x = NULL, y = "VST expression") +
+    theme_publication(7.4) +
+    theme(
+      plot.background = element_rect(fill = scales::alpha(program_color, 0.055), colour = NA),
+      panel.background = element_rect(fill = scales::alpha(program_color, 0.025), colour = NA),
+      plot.title = element_text(colour = program_color, face = "bold", size = 9.5),
+      strip.background = element_rect(fill = scales::alpha(program_color, 0.11), colour = NA),
+      strip.text = element_text(face = "italic", size = 6.8),
+      axis.text = element_text(size = 5.8),
+      axis.text.x = element_text(angle = 30, hjust = 1, size = 6.0),
+      legend.position = "none"
+    )
+}
+
+violin_blocks <- lapply(program_h_levels, make_violin_block)
+block_weights <- vapply(program_h_levels, function(lbl) {
+  n_genes <- sum(as.character(violin_def$program) == lbl)
+  ceiling(n_genes / min(n_genes, MAX_BLOCK_COLS))
+}, numeric(1))
+
+violin_plot <- wrap_plots(violin_blocks, ncol = 1, heights = block_weights) +
+  plot_annotation(
+    title = paste0(forest_title, ": gene-level expression across the curated programs"),
+    subtitle = "One point per animal; diamonds show means; brackets denote DESeq2 FDR: * < 0.05  ** < 0.01  *** < 0.001. Violin envelopes are descriptive (n = 3/group).",
+    theme = theme(plot.title = element_text(face = "bold", size = 13, colour = NAVY), plot.subtitle = element_text(size = 8.5, colour = MID_GREY))
+  )
+total_weight <- sum(block_weights)
+save_plot_pair(violin_plot, file.path(dirs$figures, "program_violins"), 12.5, max(8.0, 2.4 * total_weight + 1.3))
 
 write_json_file(list(
   contrast_id = args[["contrast-id"]],

@@ -246,6 +246,19 @@ condition_palette <- function(cfg, observed) {
   values[observed]
 }
 
+# Derive a darker, slightly more saturated "ink" of a fill colour, preserving
+# hue. Used for per-animal point outlines that sit on top of pale condition
+# fills (a darker dot of the same hue reads as the same category). No external
+# colour package required -- pure grDevices HSV arithmetic.
+darken_hex <- function(hex, value_mult = 0.70, sat_add = 0.30) {
+  hsv_mat <- grDevices::rgb2hsv(grDevices::col2rgb(hex))
+  grDevices::hsv(
+    h = hsv_mat["h", ],
+    s = pmin(1, hsv_mat["s", ] + sat_add),
+    v = pmax(0, pmin(1, hsv_mat["v", ] * value_mult))
+  )
+}
+
 ellipse_coordinates <- function(data, group_col, level = 0.80, points = 120L) {
   groups <- split(data, data[[group_col]])
   rows <- lapply(names(groups), function(group_name) {
