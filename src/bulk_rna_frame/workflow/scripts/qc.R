@@ -125,7 +125,7 @@ pca_plot <- ggplot(pca_table, aes(PC1, PC2)) +
   )} +
   geom_point(aes(fill = .data[[group_col]], colour = .data[[group_col]]), shape = 21, size = 3.5, stroke = 0.9) +
   ggrepel::geom_text_repel(
-    aes(label = sample_id),
+    aes(label = sample_display_labels(sample_id, .data[[group_col]])),
     size = 2.45,
     colour = NAVY,
     box.padding = 0.35,
@@ -135,7 +135,7 @@ pca_plot <- ggplot(pca_table, aes(PC1, PC2)) +
     max.overlaps = Inf,
     show.legend = FALSE
   ) +
-  scale_fill_manual(values = palette, drop = FALSE) +
+  scale_fill_manual(values = palette, drop = FALSE, labels = cond_display) +
   scale_colour_manual(values = ink_palette, drop = FALSE) +
   labs(
     title = "Principal-component analysis",
@@ -193,7 +193,72 @@ correlation_plot <- ggplot(correlation_long, aes(sample_id, sample_id_y, fill = 
   theme(panel.grid = element_blank(), axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "right")
 combined_correlation <- annotation_plot / correlation_plot + patchwork::plot_layout(heights = c(0.055, 1))
 save_plot_pair(combined_correlation, file.path(dirs$figures, "sample_correlation"), 6.2, 5.7)
-combined_pca_correlation <- pca_plot + correlation_plot + patchwork::plot_layout(widths = c(1.12, 1))
+
+# --- Panel A-right: publication correlation heatmap (ComplexHeatmap) ----------
+# The finalized Panel A pairs the PCA with a ComplexHeatmap correlation heatmap
+# (average-linkage dendrograms on 1 - r, a condition strip, and NO per-cell
+# numbers), which supersedes the ggplot tiles-with-numbers version above -- that
+# one is retained as the standalone `sample_correlation` QC figure because its
+# printed coefficients are diagnostically useful. Structure mirrors the bespoke
+# make_correlation_heatmap(): a #123A63/#F8FAFC/#B91C1C ramp anchored at
+# min/median/1, hairline #F3F4F6 cell borders, 11 mm dendrograms, and a Pearson-r
+# colour scale on the right. The shared condition key rides on the PCA legend, so
+# the strip's own legend is suppressed (correlation_condition_legend = FALSE).
+correlation_cluster <- stats::hclust(stats::as.dist(1 - correlation), method = "average")
+correlation_dend <- stats::as.dendrogram(correlation_cluster)
+correlation_ramp <- circlize::colorRamp2(
+  c(min(correlation), stats::median(correlation), 1),
+  c("#123A63", "#F8FAFC", "#B91C1C")
+)
+correlation_conditions <- as.character(metadata[colnames(correlation), group_col])
+condition_strip <- cond_display(correlation_conditions)
+names(condition_strip) <- colnames(correlation)
+condition_strip_colors <- palette
+names(condition_strip_colors) <- cond_display(names(palette))
+correlation_labels <- sample_display_labels(colnames(correlation), correlation_conditions)
+correlation_top_annotation <- ComplexHeatmap::HeatmapAnnotation(
+  Condition = condition_strip,
+  col = list(Condition = condition_strip_colors),
+  show_legend = FALSE,
+  simple_anno_size = grid::unit(3.6, "mm"),
+  annotation_name_gp = grid::gpar(fontface = "bold", fontsize = 7.5, col = NAVY),
+  annotation_name_side = "left"
+)
+correlation_heatmap <- ComplexHeatmap::Heatmap(
+  correlation,
+  name = "Pearson\nr",
+  col = correlation_ramp,
+  top_annotation = correlation_top_annotation,
+  cluster_rows = correlation_dend,
+  cluster_columns = correlation_dend,
+  row_labels = correlation_labels,
+  column_labels = correlation_labels,
+  show_row_names = TRUE,
+  show_column_names = TRUE,
+  row_names_gp = grid::gpar(fontsize = 7.2, col = NAVY),
+  column_names_gp = grid::gpar(fontsize = 7.2, col = NAVY),
+  column_names_rot = 45,
+  row_title = NULL,
+  column_title = "Sample correlation",
+  column_title_gp = grid::gpar(fontface = "bold", fontsize = 11, col = NAVY),
+  border = FALSE,
+  rect_gp = grid::gpar(col = "#F3F4F6", lwd = 0.45),
+  row_dend_width = grid::unit(11, "mm"),
+  column_dend_height = grid::unit(11, "mm"),
+  heatmap_legend_param = list(
+    title_gp = grid::gpar(fontface = "bold", fontsize = 7.5, col = NAVY),
+    labels_gp = grid::gpar(fontsize = 7, col = NAVY),
+    legend_height = grid::unit(25, "mm")
+  )
+)
+# Capture the grid drawing once and let patchwork replay it at render size; this
+# is the confirmed way to seat a ComplexHeatmap inside a patchwork composite.
+correlation_grob <- grid::grid.grabExpr(
+  ComplexHeatmap::draw(correlation_heatmap, heatmap_legend_side = "right"),
+  wrap = TRUE
+)
+combined_pca_correlation <- pca_plot + patchwork::wrap_elements(full = correlation_grob) +
+  patchwork::plot_layout(widths = c(1.12, 1))
 save_plot_pair(combined_pca_correlation, file.path(dirs$figures, "pca_correlation"), 12.4, 5.8)
 write_json_file(list(
   panels = list(
@@ -203,7 +268,13 @@ write_json_file(list(
       ellipses = unique(ellipse_table$ellipse_group),
       ellipse_method = "covariance ellipse with a 0.20 minimum minor-to-major axis ratio"
     ),
-    list(id = "correlation", displayed_data = "tables/sample_correlation.tsv", clustering = "average linkage on 1 - Pearson correlation")
+    list(
+      id = "correlation",
+      displayed_data = "tables/sample_correlation.tsv",
+      clustering = "average linkage on 1 - Pearson correlation",
+      composite_style = "ComplexHeatmap with condition strip (min/median/1 ramp, no per-cell numbers)",
+      standalone_style = "ggplot tiles with per-cell coefficients (sample_correlation.png)"
+    )
   ),
   shared_group_legend = TRUE,
   correlation_condition_legend = FALSE
