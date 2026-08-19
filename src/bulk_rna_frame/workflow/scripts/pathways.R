@@ -450,45 +450,74 @@ if (!is.null(gsva_set_ids)) {
   order_condition <- metadata[colnames(gsva_z), display_group_col]
   column_order <- colnames(gsva_z)[order(factor(order_condition, levels = display_breaks), colnames(gsva_z))]
 }
+# --- Panel F: Hallmark GSVA activity heatmap (ComplexHeatmap) -----------------
+# Mirror the bespoke make_gsva_heatmap(): an unclustered heatmap with rows in the
+# configured (numerator-minus-denominator effect) order, a condition strip as the
+# top annotation (its own legend suppressed -- the shared condition key rides on
+# the neighbouring panels), left-side row names capped at 43 mm, display column
+# labels, the #356D9A/#F8F7F3/#C94F4F ramp anchored at +/-1.5 (row_zscore already
+# clamps there), white hairline cell borders, and a Row z-score scale on the
+# right. Pathway ids stay the matrix rownames; display labels ride on row_labels.
 display_labels <- setNames(make.unique(prettify_gene_set_label(rownames(gsva_z))), rownames(gsva_z))
-rownames(gsva_z) <- unname(display_labels[rownames(gsva_z)])
-row_order_clean <- unname(display_labels[row_order])
-gsva_heatmap <- tile_heatmap(gsva_z, row_order_clean, column_order, legend_title = "Row\nz-score", base_size = 7.7, zlimit = 1.5)
-gsva_column_labels <- setNames(sample_display_labels(column_order, metadata[column_order, display_group_col]), column_order)
-gsva_heatmap$plot <- gsva_heatmap$plot +
-  scale_y_discrete(labels = function(value) stringr::str_wrap(value, width = 43)) +
-  scale_x_discrete(labels = gsva_column_labels)
-gsva_displayed <- gsva_heatmap$table %>%
+gsva_ordered <- gsva_z[row_order, column_order, drop = FALSE]
+row_labels_display <- unname(display_labels[rownames(gsva_ordered)])
+column_labels_display <- sample_display_labels(colnames(gsva_ordered), metadata[colnames(gsva_ordered), display_group_col])
+
+gsva_displayed <- as.data.frame(gsva_ordered, check.names = FALSE) %>%
+  tibble::rownames_to_column("pathway_id") %>%
+  tidyr::pivot_longer(-pathway_id, names_to = "sample_id", values_to = "value") %>%
   mutate(
-    pathway_id = names(display_labels)[match(as.character(feature), display_labels)],
+    feature = unname(display_labels[pathway_id]),
     condition = metadata[as.character(sample_id), display_group_col],
     contrast_id = args[["contrast-id"]]
   )
 readr::write_tsv(gsva_displayed, file.path(dirs$tables, "gsva_heatmap_displayed.tsv"))
-annotation_plot <- data.frame(
-  sample_id = factor(column_order, levels = column_order),
-  condition = metadata[column_order, display_group_col]
-) %>%
-  ggplot(aes(sample_id, 1, fill = condition)) +
-  geom_tile(colour = "white", linewidth = 0.3) +
-  annotate("text", x = 0.4, y = 1, label = "Condition", hjust = 1, fontface = "bold", size = 2.9, colour = NAVY) +
-  scale_fill_manual(values = display_palette, breaks = display_breaks, drop = FALSE) +
-  coord_cartesian(clip = "off") +
-  theme_void() +
-  theme(legend.position = "none", plot.margin = margin(0, 55, 0, 35))
+
 # A fully-Hallmark curated panel is the published Figure 1F: title it "Hallmark
-# GSVA activity" with no subtitle, matching the paper. Any other panel keeps the
-# generic descriptive title + subtitle.
+# GSVA activity", matching the paper. Any other panel keeps the generic title.
 gsva_is_hallmark <- !is.null(gsva_set_ids) && length(selected_pathways) > 0 &&
   all(startsWith(selected_pathways, "HALLMARK_"))
-if (gsva_is_hallmark) {
-  gsva_heatmap$plot <- gsva_heatmap$plot + labs(title = "Hallmark GSVA activity", subtitle = NULL)
-} else {
-  gsva_heatmap$plot <- gsva_heatmap$plot +
-    labs(title = "Pathway activity heatmap", subtitle = paste0(if (!is.null(gsva_set_ids)) "Curated Hallmark programs" else "Top differential programs", "; row-scaled ", gsva_score_label, " within displayed samples"))
-}
-combined_gsva <- annotation_plot / gsva_heatmap$plot + patchwork::plot_layout(heights = c(0.07, 1))
-save_plot_pair(combined_gsva, file.path(dirs$figures, "gsva_heatmap"), 7.7, max(5.2, 0.30 * nrow(gsva_z) + 2.2))
+gsva_title <- if (gsva_is_hallmark) "Hallmark GSVA activity" else "Pathway activity heatmap"
+
+gsva_condition_strip <- cond_display(as.character(metadata[colnames(gsva_ordered), display_group_col]))
+names(gsva_condition_strip) <- colnames(gsva_ordered)
+gsva_condition_colors <- setNames(unname(display_palette), cond_display(names(display_palette)))
+gsva_top_annotation <- ComplexHeatmap::HeatmapAnnotation(
+  Condition = gsva_condition_strip,
+  col = list(Condition = gsva_condition_colors),
+  show_legend = FALSE,
+  simple_anno_size = grid::unit(3.8, "mm"),
+  annotation_name_side = "left",
+  annotation_name_gp = grid::gpar(fontface = "bold", fontsize = 7.5, col = NAVY)
+)
+gsva_ht <- ComplexHeatmap::Heatmap(
+  gsva_ordered,
+  name = "Row\nz-score",
+  col = circlize::colorRamp2(c(-1.5, 0, 1.5), c("#356D9A", "#F8F7F3", "#C94F4F")),
+  top_annotation = gsva_top_annotation,
+  cluster_rows = FALSE,
+  cluster_columns = FALSE,
+  row_labels = row_labels_display,
+  row_names_side = "left",
+  row_names_gp = grid::gpar(fontsize = 6.7, col = NAVY),
+  row_names_max_width = grid::unit(43, "mm"),
+  column_labels = column_labels_display,
+  column_names_rot = 45,
+  column_names_gp = grid::gpar(fontsize = 7.1, col = NAVY),
+  column_title = gsva_title,
+  column_title_gp = grid::gpar(fontface = "bold", fontsize = 10, col = NAVY),
+  border = FALSE,
+  rect_gp = grid::gpar(col = "white", lwd = 0.35),
+  use_raster = FALSE,
+  heatmap_legend_param = list(
+    at = c(-1.5, 0, 1.5),
+    labels = c("−1.5", "0", "1.5"),
+    title_gp = grid::gpar(fontface = "bold", fontsize = 7.5, col = NAVY),
+    labels_gp = grid::gpar(fontsize = 7, col = NAVY),
+    legend_height = grid::unit(24, "mm")
+  )
+)
+save_complexheatmap_pair(gsva_ht, file.path(dirs$figures, "gsva_heatmap"), 7.2, max(5.2, 0.30 * nrow(gsva_ordered) + 2.2))
 
 curve_n <- cfg$figures$pathways$gsea_curves_per_direction
 if (length(configured_curve_ids)) {
