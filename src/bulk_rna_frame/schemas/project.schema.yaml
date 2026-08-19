@@ -205,6 +205,15 @@ properties:
           top_gsva_terms: {type: integer, minimum: 2}
           gsea_curves_per_direction: {type: integer, minimum: 1}
           seed: {type: integer, minimum: 0}
+          # Optional GSVA-panel curation (Figure 1F). Omit for the generic
+          # default (ssGSEA over every measured set, top-N, clustered).
+          gsva_method: {type: string, enum: [ssgsea, gsva]}
+          gsva_order: {type: string, enum: [differential, effect]}
+          gsva_cluster: {type: boolean}
+          gsva_sets:
+            type: array
+            minItems: 1
+            items: {type: string, minLength: 1}
   output:
     type: object
     additionalProperties: false

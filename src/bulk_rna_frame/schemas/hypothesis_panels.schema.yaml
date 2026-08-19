@@ -89,6 +89,14 @@ properties:
     type: array
     uniqueItems: true
     items: {type: string, minLength: 1}
+  gsea_program_labels:
+    description: Display labels for gsea_programs, keyed by gene-panel identifier (Panels H/I).
+    type: object
+    additionalProperties: {type: string, minLength: 1}
+  gsea_program_colors:
+    description: Display colours for gsea_programs, keyed by gene-panel identifier (Panels H/I).
+    type: object
+    additionalProperties: {type: string, pattern: "^#[0-9A-Fa-f]{6}$"}
   constructor_defaults:
     description: Optional presentation defaults keyed by registered constructor id.
     type: object

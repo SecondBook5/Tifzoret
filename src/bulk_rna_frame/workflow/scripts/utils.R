@@ -289,8 +289,8 @@ row_zscore <- function(mat, limit = 1.5) {
 }
 
 tile_heatmap <- function(matrix, row_order = rownames(matrix), column_order = colnames(matrix),
-                         low = "#4C78A8", mid = "#F7F4EE", high = "#D95F5F",
-                         legend_title = "Row z-score", base_size = 8) {
+                         low = "#356D9A", mid = "#F8F7F3", high = "#C94F4F",
+                         legend_title = "Row\nz-score", base_size = 8, zlimit = NULL) {
   table <- as.data.frame(matrix, check.names = FALSE) %>%
     tibble::rownames_to_column("feature") %>%
     tidyr::pivot_longer(-feature, names_to = "sample_id", values_to = "value") %>%
@@ -299,8 +299,13 @@ tile_heatmap <- function(matrix, row_order = rownames(matrix), column_order = co
       sample_id = factor(sample_id, levels = column_order)
     )
   plot <- ggplot(table, aes(sample_id, feature, fill = value)) +
-    geom_tile(colour = "white", linewidth = 0.18) +
-    scale_fill_gradient2(low = low, mid = mid, high = high, midpoint = 0, name = legend_title) +
+    geom_tile(colour = "white", linewidth = 0.3) +
+    scale_fill_gradient2(
+      low = low, mid = mid, high = high, midpoint = 0,
+      limits = if (is.null(zlimit)) NULL else c(-zlimit, zlimit),
+      breaks = if (is.null(zlimit)) ggplot2::waiver() else c(-zlimit, 0, zlimit),
+      oob = scales::squish, name = legend_title
+    ) +
     labs(x = NULL, y = NULL) +
     theme_publication(base_size) +
     theme(
@@ -310,6 +315,42 @@ tile_heatmap <- function(matrix, row_order = rownames(matrix), column_order = co
       legend.position = "right"
     )
   list(plot = plot, table = table)
+}
+
+# MSigDB-style gene-set id -> display label, reproducing the published Hallmark
+# casing (HALLMARK_MYC_TARGETS_V1 -> "MYC Targets V1", HALLMARK_DNA_REPAIR ->
+# "Dna Repair", HALLMARK_WNT_BETA_CATENIN_SIGNALING -> "WNT/beta-catenin
+# Signaling"). Non-Hallmark ids are simply de-underscored + title-cased.
+prettify_gene_set_label <- function(ids) {
+  as.character(ids) %>%
+    stringr::str_remove("^HALLMARK_") %>%
+    stringr::str_replace_all("_", " ") %>%
+    stringr::str_to_title() %>%
+    stringr::str_replace_all(c(
+      "Myc" = "MYC",
+      "Mtorc1" = "mTORC1",
+      "E2f" = "E2F",
+      "G2m" = "G2M",
+      "Tgf Beta" = "TGF-beta",
+      "Wnt Beta Catenin" = "WNT/beta-catenin"
+    ))
+}
+
+# Sample id -> publication display label: the condition (kept upper-case when it
+# is already all-caps, e.g. CAPE; otherwise title-cased) plus the trailing
+# replicate number -- control1 -> "Control 1", Cape2 -> "CAPE 2". Falls back to
+# the raw id when no condition vector is supplied.
+sample_display_labels <- function(ids, conditions = NULL) {
+  ids <- as.character(ids)
+  if (is.null(conditions)) return(ids)
+  conditions <- as.character(conditions)
+  condition_display <- ifelse(
+    !is.na(conditions) & nchar(conditions) > 1 & conditions == toupper(conditions),
+    conditions,
+    stringr::str_to_title(conditions)
+  )
+  replicate <- stringr::str_extract(ids, "[0-9]+$")
+  ifelse(is.na(replicate), condition_display, paste0(condition_display, " ", replicate))
 }
 
 write_json_file <- function(value, path) {
