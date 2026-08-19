@@ -93,7 +93,7 @@ build_curve <- function(curve_table, pathway_row, numerator = "numerator", denom
   } else {
     "MSigDB gene set"
   }
-  direction_label <- paste0("Enriched toward ", if (nes >= 0) numerator else denominator)
+  direction_label <- paste0("Enriched toward ", cond_display(if (nes >= 0) numerator else denominator))
   title <- stringr::str_wrap(pathway_row$pathway_label[[1]], width = 46)
   subtitle <- sprintf(
     "%s · %s  |  NES %.2f  |  FDR %s  |  %d mapped genes  |  %d leading-edge",
@@ -143,9 +143,9 @@ build_curve <- function(curve_table, pathway_row, numerator = "numerator", denom
     scale_fill_gradient2(low = control_ink, mid = "#F7F4EE", high = cape_ink,
                          midpoint = 0, limits = range(curve_table$metric), guide = "none") +
     geom_vline(xintercept = zero_cross, colour = "#5E6871", linewidth = 0.28, linetype = 3) +
-    annotate("text", x = n_genes * 0.02, y = 1, label = paste0(numerator, "-correlated"),
+    annotate("text", x = n_genes * 0.02, y = 1, label = paste0(cond_display(numerator), "-correlated"),
              hjust = 0, size = 2.05, colour = "white", fontface = "bold") +
-    annotate("text", x = n_genes * 0.98, y = 1, label = paste0(denominator, "-correlated"),
+    annotate("text", x = n_genes * 0.98, y = 1, label = paste0(cond_display(denominator), "-correlated"),
              hjust = 1, size = 2.05, colour = "white", fontface = "bold") +
     scale_x_continuous(expand = c(0, 0)) +
     coord_cartesian(xlim = c(1, n_genes), expand = FALSE) +
@@ -216,6 +216,7 @@ configured_curve_ids <- character()
 if (!is.null(args$panels) && nzchar(args$panels)) {
   panel_cfg <- yaml::read_yaml(args$panels)
   requested_programs <- panel_cfg$gsea_programs
+  program_labels <- panel_cfg$gsea_program_labels
   symbol_lookup <- setNames(rownames(expression), toupper(rownames(expression)))
   configured_panels <- configured_gene_panels(panel_cfg)
   if (length(requested_programs)) {
@@ -228,8 +229,12 @@ if (!is.null(args$panels) && nzchar(args$panels)) {
         warning("Configured GSEA program '", panel_id, "' has fewer than three measured genes and will be omitted.")
         next
       }
+      # Prefer the study's editorial display label (gsea_program_labels, shared
+      # with Panels H/I) so the curve title reads "WNT/PCP valve" rather than the
+      # de-underscored fallback "Wnt pcp valve"; keep clean_term for the absent case.
+      program_label <- if (!is.null(program_labels[[panel_id]])) program_labels[[panel_id]] else clean_term(panel_id)
       gene_sets[[configured_id]] <- configured_genes
-      gene_set_labels[[configured_id]] <- clean_term(panel_id)
+      gene_set_labels[[configured_id]] <- program_label
       gene_set_sources[[configured_id]] <- "configured_gene_program"
       configured_curve_ids <- c(configured_curve_ids, configured_id)
     }
@@ -518,16 +523,14 @@ for (index in seq_len(nrow(selected_gsea))) {
 gsea_displayed <- bind_rows(curve_tables)
 readr::write_tsv(gsea_displayed, file.path(dirs$tables, "gsea_curves_displayed.tsv"), na = "NA")
 if (length(curve_plots)) {
-  gsea_plot <- patchwork::wrap_plots(curve_plots, ncol = min(2L, length(curve_plots))) +
-    patchwork::plot_annotation(
-      title = "Preranked gene-set enrichment",
-      subtitle = paste0("Positive NES is enriched toward ", numerator, "; negative NES toward ", denominator),
-      theme = theme(plot.title = element_text(face = "bold", colour = NAVY, size = 12), plot.subtitle = element_text(colour = MID_GREY, size = 8.5))
-    )
+  # No overall title/subtitle: each curve already carries its program title and
+  # a self-describing subtitle, and the assembled figure supplies the panel
+  # letter. Matches the finalized Panel G, which has no umbrella heading.
+  gsea_plot <- patchwork::wrap_plots(curve_plots, ncol = min(2L, length(curve_plots)))
 } else {
   gsea_plot <- empty_plot("Preranked gene-set enrichment")
 }
-save_plot_pair(gsea_plot, file.path(dirs$figures, "gsea_curves"), 10.2, max(5.4, 4.2 * ceiling(length(curve_plots) / 2)))
+save_plot_pair(gsea_plot, file.path(dirs$figures, "gsea_curves"), 13.5, max(5.4, 4.2 * ceiling(length(curve_plots) / 2)))
 
 write_json_file(
   list(
