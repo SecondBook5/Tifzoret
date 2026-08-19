@@ -206,8 +206,21 @@ properties:
           heatmap_direction: {type: string, enum: [up, down, both]}
           # Optional: balance volcano labels across up/down directions. Omit
           # (or `pooled`) for a single top-N by (padj, |log2FC|); `directional`
-          # splits the top_labels budget into up/down halves.
+          # splits the top_labels budget into up/down halves. Ignored when
+          # volcano_style is `clipped` (which uses its own tiered selector).
           label_balance: {type: string, enum: [pooled, directional]}
+          # Optional volcano rendering style. `standard` (default) is the
+          # house-style volcano. `clipped` reproduces the validated
+          # primary-analysis volcano: a display-clipped y-axis with off-scale
+          # up-triangles, a four-class legend, and a tiered salience label
+          # selector.
+          volcano_style: {type: string, enum: [standard, clipped]}
+          # Optional mechanism genes labelled first on the `clipped` volcano
+          # (only when FDR-significant). Case-insensitive symbol match.
+          priority_genes:
+            type: array
+            uniqueItems: true
+            items: {type: string, minLength: 1}
       pathways:
         type: object
         additionalProperties: false
