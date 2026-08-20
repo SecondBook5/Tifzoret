@@ -88,14 +88,31 @@ properties:
             properties:
               confidence: {type: array, uniqueItems: true, items: {enum: [A, B, C, D, E]}}
               min_targets: {type: integer, minimum: 2}
+              max_targets: {type: integer, minimum: 2}
               top_regulators: {type: integer, minimum: 2}
+              # Optional per-study curation for the DoRothEA radial regulon map
+              # (Fig2 Panel E). Absent -> grn.py falls back to gene-panel-majority
+              # program labels and the R radial writes a placeholder deferring to
+              # the matplotlib legacy view.
+              grn: {$ref: '#/$defs/grn_curation'}
           networks:
             type: object
             additionalProperties: false
             properties:
               required_score: {type: integer, minimum: 0, maximum: 1000}
               max_nodes: {type: integer, minimum: 10}
+              seed_max_nodes: {type: integer, minimum: 1}
+              seed_required_score: {type: integer, minimum: 0, maximum: 1000}
               seed: {type: integer, minimum: 0}
+              # Optional per-study curation for the STRING community-network
+              # panels (Fig2 B/C). Absent -> renderer falls back to generic
+              # topology labels, a default palette, and a data-ranged gradient.
+              community_curation:
+                type: object
+                additionalProperties: false
+                properties:
+                  up: {$ref: '#/$defs/community_curation_direction'}
+                  down: {$ref: '#/$defs/community_curation_direction'}
           sva:
             type: object
             additionalProperties: false
@@ -156,15 +173,22 @@ properties:
     type: object
     additionalProperties: false
     required: [claims, panels]
+    # Each block is either a path to a companion YAML or the companion document
+    # inlined as a mapping (so a UI can author a single self-contained config).
+    # The inline mapping is validated against its own companion schema in
+    # config.load_project, not here.
     properties:
-      claims: {type: string, minLength: 1}
-      panels: {type: string, minLength: 1}
+      claims:
+        oneOf: [{type: string, minLength: 1}, {type: object}]
+      panels:
+        oneOf: [{type: string, minLength: 1}, {type: object}]
   publication:
     type: object
     additionalProperties: false
     required: [recipe]
     properties:
-      recipe: {type: string, minLength: 1}
+      recipe:
+        oneOf: [{type: string, minLength: 1}, {type: object}]
   figures:
     type: object
     additionalProperties: false
@@ -254,6 +278,140 @@ allOf:
     then:
       required: [counting]
 $defs:
+  grn_curation:
+    # Curation for the anchored network-diffusion program assignment (grn.py) and
+    # the radial render (grn_radial.R). Exactly two anchored programs are required
+    # (the diffusion uses an epithelial/(epithelial+myogenic)-style probability).
+    type: object
+    additionalProperties: false
+    required: [programs]
+    properties:
+      # Personalized-PageRank damping and the probability threshold above which a
+      # node is assigned to a program (else "shared / bridging").
+      damping: {type: number, exclusiveMinimum: 0, exclusiveMaximum: 1}
+      assignment_threshold: {type: number, exclusiveMinimum: 0.5, maximum: 1}
+      # Radial geometry: sweep start (degrees) and inter-sector gap (degrees).
+      start_angle: {type: number}
+      sector_gap: {type: number, minimum: 0}
+      # ggrepel seed for reproducible regulator label placement.
+      seed: {type: integer, minimum: 0}
+      # Fixed regulator display order (breaks target-ordering ties within a
+      # sector, matching the bespoke regulator_order).
+      regulator_order: {type: array, items: {type: string, minLength: 1}}
+      # Diverging DE-effect fill (target log2FC / regulator activity).
+      fill_limits: {type: array, minItems: 2, maxItems: 2, items: {type: number}}
+      fill_breaks: {type: array, items: {type: number}}
+      fill_colours:
+        type: object
+        additionalProperties: false
+        properties:
+          low: {type: string, minLength: 1}
+          mid: {type: string, minLength: 1}
+          high: {type: string, minLength: 1}
+      # Signed-edge palette keyed by mode of regulation.
+      edge_colours:
+        type: object
+        additionalProperties: false
+        properties:
+          Activating: {type: string, minLength: 1}
+          Repressing: {type: string, minLength: 1}
+      # Prior-likelihood -> edge-width scale.
+      likelihood:
+        type: object
+        additionalProperties: false
+        properties:
+          range: {type: array, minItems: 2, maxItems: 2, items: {type: number}}
+          limits: {type: array, minItems: 2, maxItems: 2, items: {type: number}}
+          breaks: {type: array, items: {type: number}}
+      # The two anchored programs. anchors are curated regulator symbols the
+      # diffusion seeds from; a node clearing the threshold toward a program is
+      # assigned it. Missing anchors (absent from the top regulators) are dropped
+      # gracefully -- at least one present anchor per program is required.
+      programs:
+        type: array
+        minItems: 2
+        maxItems: 2
+        items:
+          type: object
+          additionalProperties: false
+          required: [key, label, anchors]
+          properties:
+            key: {type: string, minLength: 1}
+            label: {type: string, minLength: 1}
+            short: {type: string, minLength: 1}
+            colour: {type: string, minLength: 1}
+            anchors: {type: array, minItems: 1, items: {type: string, minLength: 1}}
+      # Node label/colour for bridging nodes (below the assignment threshold).
+      shared:
+        type: object
+        additionalProperties: false
+        properties:
+          label: {type: string, minLength: 1}
+          short: {type: string, minLength: 1}
+          colour: {type: string, minLength: 1}
+      # Node label/colour for regulators outside the diffusion main component.
+      peripheral:
+        type: object
+        additionalProperties: false
+        properties:
+          label: {type: string, minLength: 1}
+          short: {type: string, minLength: 1}
+          colour: {type: string, minLength: 1}
+  community_curation_direction:
+    type: object
+    additionalProperties: false
+    properties:
+      # Fruchterman-Reingold layout seed (also seeds ggrepel label placement).
+      # Community detection no longer depends on a single seed: it is a
+      # deterministic max-modularity multi-start Louvain (see restarts).
+      seed: {type: integer, minimum: 0}
+      # Displayed vertex set: largest connected component or every degree>0 node.
+      display: {enum: [main_component, connected]}
+      # Louvain resolution (>1 = more/finer communities). Default 1.0.
+      resolution: {type: number, exclusiveMinimum: 0}
+      # Number of Louvain restarts for the max-modularity multi-start. The
+      # highest-modularity partition wins (canonical-signature tie-break), which
+      # is independent of edge/vertex order and the igraph RNG version. Default 200.
+      restarts: {type: integer, minimum: 1}
+      # Optional exact partition to REPRODUCE a specific published figure
+      # deterministically (bypasses detection). Each entry is one community's full
+      # member gene set; the union must cover every displayed node exactly once.
+      # Community labels/colours are still resolved via `communities` rules.
+      pinned_partition:
+        type: array
+        minItems: 1
+        items: {type: array, minItems: 1, items: {type: string, minLength: 1}}
+      # Diverging/sequential log2FC fill for the point interiors.
+      fill_gradient:
+        type: object
+        additionalProperties: false
+        required: [colours]
+        properties:
+          colours: {type: array, minItems: 2, items: {type: string, minLength: 1}}
+          values: {type: array, items: {type: number}}
+          limits: {type: array, minItems: 2, maxItems: 2, items: {type: number}}
+          breaks: {type: array, items: {type: number}}
+      # Degree->point-size scale.
+      size:
+        type: object
+        additionalProperties: false
+        properties:
+          range: {type: array, minItems: 2, maxItems: 2, items: {type: number}}
+          limits: {type: array, minItems: 2, maxItems: 2, items: {type: number}}
+          breaks: {type: array, items: {type: number}}
+      # Ordered curation rules: first rule whose gene set intersects a community
+      # names + colours it (mirrors the bespoke case_when); unmatched communities
+      # get a generic "Topology community N" label.
+      communities:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [label, genes]
+          properties:
+            label: {type: string, minLength: 1}
+            colour: {type: string, minLength: 1}
+            genes: {type: array, minItems: 1, items: {type: string, minLength: 1}}
   sharedInputs:
     type: object
     properties:

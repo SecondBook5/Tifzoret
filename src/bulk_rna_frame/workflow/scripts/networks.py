@@ -32,6 +32,7 @@ STRING_NETWORK_BATCH_SIZE = 900
 
 
 def write_tsv(path: Path, rows: list[dict[str, Any]], fields: list[str]) -> None:
+    """Write ``rows`` as a tab-delimited file with a ``fields`` header, creating parent directories."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=fields, delimiter="\t", lineterminator="\n", extrasaction="ignore")
@@ -40,11 +41,13 @@ def write_tsv(path: Path, rows: list[dict[str, Any]], fields: list[str]) -> None
 
 
 def read_tsv(path: Path) -> list[dict[str, str]]:
+    """Read a tab-delimited file into a list of column-keyed dictionaries."""
     with path.open(newline="", encoding="utf-8") as handle:
         return list(csv.DictReader(handle, delimiter="\t"))
 
 
 def sha256_bytes(value: bytes) -> str:
+    """Return the hex SHA-256 digest of ``value``."""
     return hashlib.sha256(value).hexdigest()
 
 
@@ -55,6 +58,9 @@ def cached_post(
     offline: bool,
     refresh: bool,
 ) -> str:
+    """Return the STRING ``endpoint`` response for ``parameters``, caching the TSV
+    body and a JSON provenance receipt on disk keyed by a hash of the request;
+    serve the cache unless ``refresh`` and raise in ``offline`` mode if it is absent."""
     encoded = urllib.parse.urlencode(parameters).encode()
     key = hashlib.sha256(endpoint.encode() + b"\0" + encoded).hexdigest()
     response_path = cache_dir / f"string_{endpoint}_{key}.tsv"
@@ -87,6 +93,7 @@ def cached_post(
 
 
 def parse_response(text: str) -> list[dict[str, str]]:
+    """Parse tab-delimited STRING response text into column-keyed rows (empty text yields none)."""
     if not text.strip():
         return []
     return list(csv.DictReader(io.StringIO(text), delimiter="\t"))
@@ -142,6 +149,7 @@ def fetch_induced_network(
 
 
 def empty_plot(path: Path, title: str, message: str) -> None:
+    """Save a titled placeholder figure carrying ``message`` as PDF and PNG at ``path``."""
     figure, axis = plt.subplots(figsize=(7, 5))
     axis.axis("off")
     axis.set_title(title, loc="left", weight="bold", color="#183B56")
@@ -187,7 +195,15 @@ def repelled_label_positions(
     return {node: tuple(value) for node, value in result.items()}
 
 
+NODE_FIELDS = [
+    "gene_symbol", "preferredName", "stringId", "queryItem", "seed_group",
+    "log2_fold_change", "padj", "stat", "leading_edge_frequency",
+    "degree", "degree_centrality", "betweenness_centrality", "community",
+]
+
+
 def network_for_direction(
+    seed_group: str,
     direction: str,
     genes: list[dict[str, str]],
     taxonomy: int,
@@ -200,9 +216,27 @@ def network_for_direction(
     tables: Path,
     figures: Path,
 ) -> dict[str, Any]:
-    prefix = "up" if direction == "up_in_numerator" else "down"
+    """Build the STRING association (not regulatory) network induced on one
+    directional seed set: map symbols to STRING IDs, fetch induced edges, compute
+    Louvain communities and centralities, write the seed/node/edge tables, and
+    render the top-``max_display`` subgraph coloured by log2 fold-change."""
+    prefix = seed_group
+    de_by_symbol: dict[str, dict[str, str]] = {}
+    for row in genes:
+        symbol = row.get("gene_symbol", "")
+        if symbol:
+            de_by_symbol.setdefault(symbol, row)
     symbols = list(dict.fromkeys(row["gene_symbol"] for row in genes if row.get("gene_symbol")))
-    input_rows = [{"gene_symbol": symbol, "direction": direction, "log2_fold_change": next(row["log2_fold_change"] for row in genes if row["gene_symbol"] == symbol)} for symbol in symbols]
+    input_rows = [
+        {
+            "gene_symbol": symbol,
+            "direction": direction,
+            "log2_fold_change": de_by_symbol[symbol].get("log2_fold_change", ""),
+            "padj": de_by_symbol[symbol].get("adjusted_p_value", ""),
+            "stat": de_by_symbol[symbol].get("statistic", ""),
+        }
+        for symbol in symbols
+    ]
     mapping = parse_response(cached_post(
         "get_string_ids",
         {"identifiers": "\r".join(symbols), "species": taxonomy, "limit": 1, "echo_query": 1},
@@ -251,14 +285,31 @@ def network_for_direction(
         communities = {node: index + 1 for index, group in enumerate(groups) for node in group}
     degree = nx.degree_centrality(graph) if graph else {}
     betweenness = nx.betweenness_centrality(graph, weight=None) if graph else {}
-    node_rows = [{
-        "gene_symbol": node,
-        "log2_fold_change": effect.get(node, 0.0),
-        "degree": graph.degree(node),
-        "degree_centrality": degree.get(node, 0.0),
-        "betweenness_centrality": betweenness.get(node, 0.0),
-        "community": communities.get(node, 0),
-    } for node in sorted(graph)]
+    # One node row per MAPPED seed gene (connected or isolated), matching the
+    # legacy per-seed node table — isolated mapped seeds get degree 0. Keyed on
+    # STRING preferredName so it lines up with the edge endpoints and the graph.
+    node_rows = []
+    for row in input_rows:
+        if not row["mapped"]:
+            continue
+        name = row["preferred_name"]
+        in_graph = name in graph
+        node_rows.append({
+            "gene_symbol": row["gene_symbol"],
+            "preferredName": name,
+            "stringId": row["string_id"],
+            "queryItem": row["gene_symbol"],
+            "seed_group": seed_group,
+            "log2_fold_change": row["log2_fold_change"],
+            "padj": row["padj"],
+            "stat": row["stat"],
+            "leading_edge_frequency": "",
+            "degree": graph.degree(name) if in_graph else 0,
+            "degree_centrality": degree.get(name, 0.0),
+            "betweenness_centrality": betweenness.get(name, 0.0),
+            "community": communities.get(name, 0),
+        })
+    node_rows.sort(key=lambda r: (-int(r["degree"]), r["preferredName"]))
     connected = set(graph)
     for row in input_rows:
         row["connected"] = row["preferred_name"] in connected or row["gene_symbol"] in connected
@@ -267,14 +318,14 @@ def network_for_direction(
 
     selected = sorted(graph, key=lambda node: (-graph.degree(node), node))[:max_display]
     display_graph = graph.subgraph(selected).copy()
-    display_nodes = [row for row in node_rows if row["gene_symbol"] in display_graph]
+    display_nodes = [row for row in node_rows if row["preferredName"] in display_graph]
     display_edges = [row for row in edge_rows if row["source"] in display_graph and row["target"] in display_graph]
     write_tsv(tables / f"string_{prefix}_input_genes.tsv", input_rows, ["gene_symbol", "direction", "log2_fold_change", "mapped", "string_id", "preferred_name", "connected"])
     write_tsv(tables / f"string_{prefix}_unmapped_genes.tsv", unmapped, ["gene_symbol", "direction", "log2_fold_change", "mapped", "string_id", "preferred_name", "connected"])
     write_tsv(tables / f"string_{prefix}_unconnected_genes.tsv", unconnected, ["gene_symbol", "direction", "log2_fold_change", "mapped", "string_id", "preferred_name", "connected"])
-    write_tsv(tables / f"string_{prefix}_nodes.tsv", node_rows, ["gene_symbol", "log2_fold_change", "degree", "degree_centrality", "betweenness_centrality", "community"])
+    write_tsv(tables / f"string_{prefix}_nodes.tsv", node_rows, NODE_FIELDS)
     write_tsv(tables / f"string_{prefix}_edges.tsv", edge_rows, ["source", "target", "combined_score", "neighborhood_score", "fusion_score", "cooccurrence_score", "coexpression_score", "experimental_score", "database_score", "textmining_score"])
-    write_tsv(tables / f"string_{prefix}_nodes_displayed.tsv", display_nodes, ["gene_symbol", "log2_fold_change", "degree", "degree_centrality", "betweenness_centrality", "community"])
+    write_tsv(tables / f"string_{prefix}_nodes_displayed.tsv", display_nodes, NODE_FIELDS)
     write_tsv(tables / f"string_{prefix}_edges_displayed.tsv", display_edges, ["source", "target", "combined_score", "neighborhood_score", "fusion_score", "cooccurrence_score", "coexpression_score", "experimental_score", "database_score", "textmining_score"])
 
     stem = figures / f"string_{prefix}_network"
@@ -323,6 +374,11 @@ def network_for_direction(
 
 
 def enrichment_panel(genes: list[str], taxonomy: int, cache_dir: Path, offline: bool, refresh: bool, tables: Path, figures: Path) -> int:
+    """Run STRING functional enrichment on ``genes`` and render the term dot plot.
+
+    Normalise FDR to -log10, write the full and displayed enrichment tables, plot a
+    deterministic category-balanced, de-duplicated set of up to 24 terms, and return
+    the count of returned terms."""
     rows = parse_response(cached_post(
         "enrichment", {"identifiers": "\r".join(genes), "species": taxonomy}, cache_dir, offline, refresh
     )) if genes else []
@@ -393,10 +449,195 @@ def enrichment_panel(genes: list[str], taxonomy: int, cache_dir: Path, offline: 
     return len(normalized)
 
 
+def _num(value: object) -> float:
+    try:
+        return float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return float("nan")
+
+
+def de_significance_threshold(config: dict[str, Any]) -> float:
+    """Return the DE FDR used to define STRING seed sets.
+
+    Mirrors the legacy `select_string_seed_symbols` cutoff (hard-coded 0.05 in
+    ``workflow/stages/ontology/ontology_string.R``). Reads the study's DE FDR
+    when present so the seed set tracks the DE significance the figures report.
+    """
+    for path in (("analysis", "settings", "de", "fdr"), ("figures", "de", "fdr")):
+        node: Any = config
+        for key in path:
+            if isinstance(node, dict) and key in node:
+                node = node[key]
+            else:
+                node = None
+                break
+        value = _num(node)
+        if not math.isnan(value):
+            return value
+    return 0.05
+
+
+def select_string_seed_symbols(
+    de_rows: list[dict[str, str]],
+    fgsea_rows: list[dict[str, str]],
+    fdr: float,
+    max_nodes: int,
+) -> dict[str, Any]:
+    """Reproduce the legacy STRING seed policy (top-``max_nodes`` per group).
+
+    Faithful port of ``select_string_seed_symbols`` in
+    ``workflow/stages/ontology/ontology_string.R``:
+
+    * up / down  — significant DE genes (``adjusted_p_value < fdr``) of the given
+      sign, ordered by adjusted p-value ascending then ``|log2FC|`` descending;
+      the |log2FC| threshold is deliberately NOT applied to the seed set.
+    * leading edge — union of the leading-edge genes of the six most significant
+      database (GMT) fgsea pathways, frequency-ranked (frequency descending, then
+      DE adjusted p-value ascending, then ``|statistic|`` descending). Leading-edge
+      genes need not be DE-significant. Configured gene programs are excluded so
+      only Hallmark/Reactome-style pathways drive the selection, matching legacy.
+    """
+
+    def directional(positive: bool) -> list[str]:
+        """Return up to ``max_nodes`` significant DE symbols of the requested sign, ordered by adjusted p-value then |log2FC|."""
+        ranked: list[tuple[float, float, str]] = []
+        for row in de_rows:
+            symbol = row.get("gene_symbol", "")
+            padj = _num(row.get("adjusted_p_value"))
+            lfc = _num(row.get("log2_fold_change"))
+            if not symbol or math.isnan(padj) or math.isnan(lfc) or padj >= fdr:
+                continue
+            if (lfc > 0) != positive:
+                continue
+            ranked.append((padj, -abs(lfc), symbol))
+        ranked.sort(key=lambda item: (item[0], item[1]))
+        ordered: list[str] = []
+        seen: set[str] = set()
+        for _, _, symbol in ranked:
+            if symbol not in seen:
+                seen.add(symbol)
+                ordered.append(symbol)
+        return ordered[:max_nodes]
+
+    de_padj: dict[str, float] = {}
+    de_stat: dict[str, float] = {}
+    for row in de_rows:
+        symbol = row.get("gene_symbol", "")
+        if symbol:
+            de_padj.setdefault(symbol, _num(row.get("adjusted_p_value")))
+            de_stat.setdefault(symbol, _num(row.get("statistic")))
+
+    # Restrict the leading-edge pathway pool to the study's assembled MSigDB
+    # collections (provider "custom", e.g. Hallmark + Reactome), matching the
+    # legacy derivation. Auto-added ontology providers (go, kegg) and configured
+    # gene programs are excluded so they cannot displace the curated pathways.
+    scored_pathways: list[tuple[float, float, dict[str, str]]] = []
+    for row in fgsea_rows:
+        if row.get("gene_set_source") != "custom":
+            continue
+        padj = _num(row.get("padj"))
+        if math.isnan(padj) or padj >= fdr:
+            continue
+        scored_pathways.append((padj, -abs(_num(row.get("NES"))), row))
+    scored_pathways.sort(key=lambda item: (item[0], item[1]))
+
+    frequency: dict[str, int] = {}
+    for _, _, row in scored_pathways[:6]:
+        for symbol in (row.get("leadingEdge", "") or "").split(";"):
+            symbol = symbol.strip()
+            if symbol:
+                frequency[symbol] = frequency.get(symbol, 0) + 1
+
+    def leading_edge_key(symbol: str) -> tuple[int, float, float]:
+        """Sort key ranking a leading-edge symbol by frequency, then DE adjusted p-value, then |statistic|."""
+        padj = de_padj.get(symbol, float("nan"))
+        stat = de_stat.get(symbol, float("nan"))
+        return (
+            -frequency[symbol],
+            padj if not math.isnan(padj) else float("inf"),
+            -abs(stat) if not math.isnan(stat) else 0.0,
+        )
+
+    leading_edge = sorted(frequency, key=leading_edge_key)[:max_nodes]
+
+    return {
+        "up": directional(True),
+        "down": directional(False),
+        "leading_edge": leading_edge,
+        "leading_edge_frequency": {symbol: frequency[symbol] for symbol in leading_edge},
+    }
+
+
+ENRICHMENT_FIELDS = [
+    "category", "term", "number_of_genes", "number_of_genes_in_background",
+    "ncbiTaxonId", "inputGenes", "preferredNames", "p_value", "fdr",
+    "description", "seed_group",
+]
+
+SEED_FIELDS = ["gene_symbol", "seed_group", "leading_edge_frequency"]
+
+
+def map_symbols_to_ids(
+    symbols: list[str], taxonomy: int, cache_dir: Path, offline: bool, refresh: bool
+) -> list[dict[str, str]]:
+    """Map gene symbols to STRING identifiers via the cached ``get_string_ids`` endpoint."""
+    if not symbols:
+        return []
+    return parse_response(cached_post(
+        "get_string_ids",
+        {"identifiers": "\r".join(symbols), "species": taxonomy, "limit": 1, "echo_query": 1},
+        cache_dir, offline, refresh,
+    ))
+
+
+def directional_enrichment(
+    seed_symbols: list[str],
+    frequency: dict[str, int],
+    seed_group: str,
+    taxonomy: int,
+    cache_dir: Path,
+    offline: bool,
+    refresh: bool,
+    tables: Path,
+) -> dict[str, Any]:
+    """Run STRING functional enrichment on one directional seed set.
+
+    Emits the enrichment table in the legacy bespoke schema (raw STRING
+    ``/enrichment`` columns plus ``seed_group``) so the R renderer can consume
+    it unchanged, and an auditable seed-gene table.
+    """
+    mapping = map_symbols_to_ids(seed_symbols, taxonomy, cache_dir, offline, refresh)
+    string_ids = list(dict.fromkeys(row.get("stringId", "") for row in mapping if row.get("stringId")))
+    rows = parse_response(cached_post(
+        "enrichment", {"identifiers": "\r".join(string_ids), "species": taxonomy}, cache_dir, offline, refresh
+    )) if string_ids else []
+    for row in rows:
+        row["seed_group"] = seed_group
+    write_tsv(tables / f"string_{seed_group}_enrichment.tsv", rows, ENRICHMENT_FIELDS)
+    seed_rows = [
+        {
+            "gene_symbol": symbol,
+            "seed_group": seed_group,
+            "leading_edge_frequency": frequency.get(symbol, "") if frequency else "",
+        }
+        for symbol in seed_symbols
+    ]
+    write_tsv(tables / f"string_{seed_group}_seed_genes.tsv", seed_rows, SEED_FIELDS)
+    return {
+        "seed_group": seed_group,
+        "seed_genes": len(seed_symbols),
+        "mapped_genes": len(mapping),
+        "enrichment_terms": len(rows),
+    }
+
+
 def main() -> None:
+    """CLI entry point: build the directional STRING networks, the enrichment panel,
+    and per-group directional enrichment for one contrast, then write networks_summary.json."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--project-config", required=True)
     parser.add_argument("--de", required=True)
+    parser.add_argument("--fgsea", default=None, help="pathways fgsea.tsv for the leading-edge STRING seed set")
     parser.add_argument("--contrast-id", required=True)
     parser.add_argument("--outdir", required=True)
     parser.add_argument("--cache-dir", required=True)
@@ -410,22 +651,64 @@ def main() -> None:
     settings = project.config["analysis"].get("settings", {}).get("networks", {})
     required_score = int(settings.get("required_score", 700))
     max_nodes = int(settings.get("max_nodes", 120))
+    # STRING networks and the enrichment facets are built from the SAME capped
+    # directional seed sets (legacy parity), so the network figures use the
+    # seed-network confidence (STRING default 400) rather than required_score.
+    seed_required_score = int(settings.get("seed_required_score", 400))
     seed = int(settings.get("seed", project.config["analysis"].get("random_seed", 1)))
     offline = bool(project.config["resources"].get("offline", False))
     refresh = bool(project.config["resources"].get("refresh", False))
     cache_dir = Path(args.cache_dir).resolve()
+
+    # Compute the directional seed sets first: the up/down STRING networks
+    # (Panels B/C) and the three-facet enrichment (Panel A) are both built from
+    # these top-N seeds, matching the legacy pipeline that produced the bespoke
+    # figures. The seed policy is a faithful port of select_string_seed_symbols.
+    seed_fdr = de_significance_threshold(project.config)
+    seed_max = int(settings.get("seed_max_nodes", 50))
+    fgsea_rows = read_tsv(Path(args.fgsea)) if args.fgsea and Path(args.fgsea).is_file() else []
+    seeds = select_string_seed_symbols(de, fgsea_rows, seed_fdr, seed_max)
+    de_by_symbol = {}
+    for row in de:
+        symbol = row.get("gene_symbol", "")
+        if symbol:
+            de_by_symbol.setdefault(symbol, row)
+
     summaries = []
-    for direction in ("up_in_numerator", "down_in_numerator"):
-        genes = [row for row in de if row.get("direction") == direction]
-        summaries.append(network_for_direction(direction, genes, taxonomy, required_score, max_nodes, seed, cache_dir, offline, refresh, tables, figures))
+    for seed_group, direction in (("up", "up_in_numerator"), ("down", "down_in_numerator")):
+        genes = [de_by_symbol[symbol] for symbol in seeds[seed_group] if symbol in de_by_symbol]
+        summaries.append(network_for_direction(seed_group, direction, genes, taxonomy, seed_required_score, max_nodes, seed, cache_dir, offline, refresh, tables, figures))
     all_genes = list(dict.fromkeys(row["gene_symbol"] for row in de if row.get("direction") != "not_significant" and row.get("gene_symbol")))
     enrichment_terms = enrichment_panel(all_genes, taxonomy, cache_dir, offline, refresh, tables, figures)
+
+    # Directional STRING enrichment on the same seed sets, emitted per group in
+    # the bespoke schema for the R renderer.
+    seed_summaries = [
+        directional_enrichment(
+            seeds[group], seeds["leading_edge_frequency"] if group == "leading_edge" else {},
+            group, taxonomy, cache_dir, offline, refresh, tables,
+        )
+        for group in ("up", "down", "leading_edge")
+    ]
+
     summary = {
-        "schema_version": 1, "contrast_id": args.contrast_id, "taxonomy_id": taxonomy,
-        "required_score": required_score, "display_node_limit": max_nodes,
-        "selection_policy": "all significant genes are submitted and retained in audit tables; max_nodes limits visualization only",
+        "schema_version": 3, "contrast_id": args.contrast_id, "taxonomy_id": taxonomy,
+        "required_score": required_score, "network_required_score": seed_required_score,
+        "display_node_limit": max_nodes,
+        "selection_policy": (
+            f"up/down STRING networks are induced on the top-{seed_max} directional seed sets "
+            f"(same seeds as the enrichment facets) at STRING confidence {seed_required_score}; "
+            "max_nodes limits visualization only"
+        ),
         "enrichment_display_policy": "up to 24 unique descriptions, selected round-robin across STRING categories with at most three ranks per category; all terms remain in string_enrichment.tsv",
+        "seed_enrichment_policy": (
+            f"directional STRING enrichment on top-{seed_max} seed sets: up/down = "
+            f"significant DE genes (adjusted_p_value < {seed_fdr}) by padj then |log2FC|; "
+            "leading_edge = union of leading edges of the six most significant GMT fgsea pathways, frequency-ranked"
+        ),
+        "seed_fdr": seed_fdr, "seed_max_nodes": seed_max,
         "directions": summaries, "enrichment_terms": enrichment_terms,
+        "seed_enrichment": seed_summaries,
         "random_seed": seed,
         "warnings": ["STRING edges represent functional/physical association evidence and are not regulatory or causal edges."],
     }

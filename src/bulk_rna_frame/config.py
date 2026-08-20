@@ -98,6 +98,12 @@ def normalize_config(config: dict[str, Any]) -> dict[str, Any]:
 
 
 def resolve_modules(config: dict[str, Any]) -> dict[str, bool]:
+    """Return the enabled/disabled state of every module for this project.
+
+    Starts from the profile's default module set (``standard``/``publication``/
+    ``full``) and applies any explicit ``analysis.modules`` overrides on top, so
+    the result is the exact set of stages the workflow will run.
+    """
     analysis = config["analysis"]
     enabled = {name: name in PROFILE_MODULES[analysis["profile"]] for name in ALL_MODULES}
     enabled.update(analysis.get("modules", {}))
@@ -106,6 +112,14 @@ def resolve_modules(config: dict[str, Any]) -> dict[str, bool]:
 
 @dataclass(frozen=True)
 class ResolvedProject:
+    """A fully validated project with every path resolved and input checked.
+
+    Produced by :func:`load_project` once the configuration, the tabular inputs
+    (samples, contrasts, counts/BAMs, GMT), and any companion documents all
+    satisfy the workflow contract. Immutable, so it can be passed to the CLI,
+    the figure layer, and the workflow rules as a single source of truth.
+    """
+
     config_path: Path
     config: dict[str, Any]
     source_kind: str
@@ -134,10 +148,12 @@ class ResolvedProject:
 
     @property
     def project_id(self) -> str:
+        """The filesystem-safe project identifier (``project.id``)."""
         return str(self.config["project"]["id"])
 
     @property
     def source_files(self) -> tuple[Path, ...]:
+        """The primary input files for this boundary (counts+annotation, archive+GTF, or BAMs+GTF)."""
         if self.source_kind == "counts":
             return tuple(path for path in (self.counts, self.annotation) if path is not None)
         if self.source_kind == "archive":
@@ -146,16 +162,25 @@ class ResolvedProject:
 
     @property
     def result_root(self) -> Path:
+        """Where this run writes: ``<output.root>/<project.id>/<analysis_set>/``."""
         return self.output_root / self.project_id / self.analysis_set
 
 
 def _read_tsv(path: Path) -> tuple[list[str], list[dict[str, str]]]:
+    """Read a tab-separated file into its header list and list of row dicts."""
     with path.open(newline="", encoding="utf-8") as handle:
         reader = csv.DictReader(handle, delimiter="\t")
         return list(reader.fieldnames or []), list(reader)
 
 
 def _resolve(base: Path, value: str) -> Path:
+    """Resolve a configured path against ``base``, expanding ``~`` and ``$VAR``.
+
+    Relative paths resolve from the configuration directory. Any environment
+    variable that stays unexpanded (i.e. is unset) raises
+    :class:`ProjectValidationError` naming the missing variable, so a run never
+    silently proceeds with a wrong or empty path.
+    """
     expanded = os.path.expandvars(os.path.expanduser(value))
     unresolved = re.findall(r"\$\{([^}]+)\}|\$([A-Za-z_][A-Za-z0-9_]*)", expanded)
     if unresolved:
@@ -172,6 +197,17 @@ def _schema(name: str = "project") -> dict[str, Any]:
     return yaml.safe_load(path.read_text(encoding="utf-8"))
 
 
+def _validate_document(document: dict[str, Any], schema_name: str) -> list[str]:
+    validation_errors = sorted(
+        Draft202012Validator(_schema(schema_name)).iter_errors(document),
+        key=lambda error: tuple(error.absolute_path),
+    )
+    return [
+        f"{schema_name} schema {'.'.join(map(str, error.absolute_path)) or '<root>'}: {error.message}"
+        for error in validation_errors
+    ]
+
+
 def _load_schema_document(path: Path, schema_name: str) -> tuple[dict[str, Any] | None, list[str]]:
     try:
         document = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -179,14 +215,29 @@ def _load_schema_document(path: Path, schema_name: str) -> tuple[dict[str, Any] 
         return None, [f"{schema_name} could not be read: {error}"]
     if not isinstance(document, dict):
         return None, [f"{schema_name} must be a YAML mapping: {path}"]
-    validation_errors = sorted(
-        Draft202012Validator(_schema(schema_name)).iter_errors(document),
-        key=lambda error: tuple(error.absolute_path),
-    )
-    return document, [
-        f"{schema_name} schema {'.'.join(map(str, error.absolute_path)) or '<root>'}: {error.message}"
-        for error in validation_errors
-    ]
+    return document, _validate_document(document, schema_name)
+
+
+def _load_companion(
+    base: Path, value: Any, schema_name: str
+) -> tuple[dict[str, Any] | None, list[str]]:
+    """Load a companion document from a path string or an inline mapping.
+
+    A UI (or a hand-authored study) may embed the hypotheses/panels/recipe
+    documents directly in the main configuration instead of referencing sibling
+    files, so the whole analysis is one self-contained YAML. Either form is
+    validated against the companion's own schema; the materialize step later
+    writes the resolved document into the canonical inputs directory so the
+    workflow rules consume it exactly as they would a referenced file.
+    """
+    if isinstance(value, dict):
+        return copy.deepcopy(value), _validate_document(value, schema_name)
+    if isinstance(value, str):
+        resolved = _resolve(base, value)
+        if not resolved.is_file():
+            return None, [f"{schema_name} file does not exist: {resolved}"]
+        return _load_schema_document(resolved, schema_name)
+    return None, [f"{schema_name} must be a file path or an inline mapping"]
 
 
 def _selected_samples(
@@ -255,6 +306,18 @@ def _resolve_bams(
 
 
 def load_project(config_path: str | Path) -> ResolvedProject:
+    """Load, normalize, and fully validate a project configuration.
+
+    Accepts v1 or v2 YAML, validates it against the JSON schema, then performs
+    cross-file checks that a schema cannot express: samples/contrasts/counts
+    consistency, that contrast factors and levels exist and appear in the design
+    formula, palette coverage, gene-set bounds, inter-module dependencies, and
+    the hypotheses/panels/recipe companion documents (whether referenced as
+    files or inlined). Every failure is collected and raised together as one
+    :class:`ProjectValidationError`; on success returns an immutable
+    :class:`ResolvedProject`. No analysis direction is ever inferred here — the
+    numerator/denominator stated in ``contrasts.tsv`` is authoritative.
+    """
     path = Path(config_path).expanduser().resolve()
     if not path.is_file():
         raise ProjectValidationError(f"Project configuration does not exist: {path}")
@@ -277,6 +340,12 @@ def load_project(config_path: str | Path) -> ResolvedProject:
     base = path.parent
     inputs = config["inputs"]
     kind = str(inputs["kind"])
+    analysis_set = str(inputs.get("analysis_set", "all"))
+    # Canonical materialized-inputs directory (mirrors Snakefile's RESULTS/inputs).
+    # Inlined companion documents are written here by the materialize step, so
+    # the workflow always consumes them from one canonical location.
+    output_root = _resolve(base, config["output"]["root"])
+    canonical_inputs = output_root / str(config["project"]["id"]) / analysis_set / "inputs"
     samples_path = _resolve(base, inputs["samples"])
     contrasts_path = _resolve(base, config["analysis"]["contrasts"])
     gmt_path = _resolve(base, config["resources"]["gene_sets"]["gmt"])
@@ -580,35 +649,29 @@ def load_project(config_path: str | Path) -> ResolvedProject:
                 "module also requires hypotheses.claims"
             )
         else:
-            panel_path = _resolve(base, config["hypotheses"]["panels"])
-            if not panel_path.is_file():
-                errors.append(f"hypothesis panels file does not exist: {panel_path}")
-            else:
-                panel_config, document_errors = _load_schema_document(
-                    panel_path, "hypothesis_panels"
+            panel_config, document_errors = _load_companion(
+                base, config["hypotheses"]["panels"], "hypothesis_panels"
+            )
+            errors.extend(document_errors)
+            if panel_config is not None:
+                panel_path = canonical_inputs / "hypothesis_panels.yaml"
+            if modules["hypotheses"]:
+                hypothesis_config, document_errors = _load_companion(
+                    base, config["hypotheses"]["claims"], "hypotheses"
                 )
                 errors.extend(document_errors)
-            if modules["hypotheses"]:
-                hypothesis_path = _resolve(base, config["hypotheses"]["claims"])
-                if not hypothesis_path.is_file():
-                    errors.append(f"hypothesis claims file does not exist: {hypothesis_path}")
-                else:
-                    hypothesis_config, document_errors = _load_schema_document(
-                        hypothesis_path, "hypotheses"
-                    )
-                    errors.extend(document_errors)
+                if hypothesis_config is not None:
+                    hypothesis_path = canonical_inputs / "hypotheses.yaml"
     if modules["publication"]:
         if "publication" not in config:
             errors.append("modules.publication requires publication.recipe")
         else:
-            recipe_path = _resolve(base, config["publication"]["recipe"])
-            if not recipe_path.is_file():
-                errors.append(f"figure recipe file does not exist: {recipe_path}")
-            else:
-                recipe_config, document_errors = _load_schema_document(
-                    recipe_path, "figure_recipe"
-                )
-                errors.extend(document_errors)
+            recipe_config, document_errors = _load_companion(
+                base, config["publication"]["recipe"], "figure_recipe"
+            )
+            errors.extend(document_errors)
+            if recipe_config is not None:
+                recipe_path = canonical_inputs / "figure_recipe.yaml"
     if hypothesis_config is not None:
         known_contrasts = set(contrast_ids)
         known_gene_panels = set((panel_config or {}).get("gene_panels", {})) | set(
@@ -700,13 +763,19 @@ def load_project(config_path: str | Path) -> ResolvedProject:
         recipe_config=recipe_config,
         cell_state_signatures=signature_path,
         regulon_edges=regulon_path,
-        output_root=_resolve(base, config["output"]["root"]),
+        output_root=output_root,
         sample_rows=tuple(samples),
         contrast_rows=tuple(contrasts),
     )
 
 
 def validation_report(project: ResolvedProject) -> dict[str, Any]:
+    """Summarize a validated project as a JSON-serializable dictionary.
+
+    Reports the identity, sample/contrast counts, input kind, active profile and
+    modules, species, and resolved output root — the human-facing confirmation
+    that ``validate`` prints.
+    """
     report: dict[str, Any] = {
         "status": "ok",
         "project_id": project.project_id,
@@ -727,11 +796,19 @@ def validation_report(project: ResolvedProject) -> dict[str, Any]:
 
 
 def report_json(project: ResolvedProject) -> str:
+    """Render :func:`validation_report` as an indented JSON string with a trailing newline."""
     return json.dumps(validation_report(project), indent=2) + "\n"
 
 
 @dataclass(frozen=True)
 class ResolvedCollection:
+    """A validated multi-study collection for cross-study meta-analysis.
+
+    Holds each member study as an already-validated :class:`ResolvedProject`
+    plus the chosen contrast per study, so the meta-analysis stage combines only
+    comparisons that actually exist and share consistent direction semantics.
+    """
+
     config_path: Path
     config: dict[str, Any]
     projects: tuple[ResolvedProject, ...]
@@ -739,14 +816,23 @@ class ResolvedCollection:
 
     @property
     def collection_id(self) -> str:
+        """The filesystem-safe collection identifier (``collection.id``)."""
         return str(self.config["collection"]["id"])
 
     @property
     def result_root(self) -> Path:
+        """Where the collection writes: ``<output.root>/<collection.id>/``."""
         return self.output_root / self.collection_id
 
 
 def load_collection(config_path: str | Path) -> ResolvedCollection:
+    """Load and validate a collection: its schema, each member project, and its contrast.
+
+    Every referenced study is loaded through :func:`load_project`, and each
+    declared contrast must exist in its project. Study ids must be unique. All
+    problems are collected and raised together as one
+    :class:`ProjectValidationError`.
+    """
     path = Path(config_path).expanduser().resolve()
     if not path.is_file():
         raise ProjectValidationError(f"Collection configuration does not exist: {path}")
@@ -781,6 +867,7 @@ def load_collection(config_path: str | Path) -> ResolvedCollection:
 
 
 def collection_report(collection: ResolvedCollection) -> str:
+    """Render a validated collection (its studies, projects, and contrasts) as JSON."""
     data = {
         "status": "ok",
         "collection_id": collection.collection_id,

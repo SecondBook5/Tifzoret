@@ -119,6 +119,7 @@ rule contrast_regulators:
 rule contrast_networks:
     input:
         de=analysis("de", "tables/de_results.tsv"),
+        fgsea=analysis("pathways", "tables/fgsea.tsv"),
         config=str(CONFIG_PATH),
         script=str(WORKFLOW_ROOT / "scripts" / "networks.py")
     output:
@@ -129,9 +130,43 @@ rule contrast_networks:
         NETWORK_ENV
     shell:
         "python {input.script} --project-config {input.config:q} --de {input.de:q} "
-        "--contrast-id {wildcards.contrast_id:q} "
+        "--fgsea {input.fgsea:q} --contrast-id {wildcards.contrast_id:q} "
         "--outdir {RESULTS}/contrasts/{wildcards.contrast_id}/analyses/networks "
         "--cache-dir {RESULTS}/.cache/resources > {log:q} 2>&1"
+
+rule contrast_string_figures:
+    input:
+        up=analysis("networks", "tables/string_up_enrichment.tsv"),
+        down=analysis("networks", "tables/string_down_enrichment.tsv"),
+        leading_edge=analysis("networks", "tables/string_leading_edge_enrichment.tsv"),
+        up_nodes=analysis("networks", "tables/string_up_nodes.tsv"),
+        up_edges=analysis("networks", "tables/string_up_edges.tsv"),
+        down_nodes=analysis("networks", "tables/string_down_nodes.tsv"),
+        down_edges=analysis("networks", "tables/string_down_edges.tsv"),
+        contrasts=CONTRASTS,
+        config=str(CONFIG_PATH),
+        script=str(WORKFLOW_ROOT / "scripts" / "string_figures.R"),
+        network_script=str(WORKFLOW_ROOT / "scripts" / "string_network.R"),
+        utils=UTILS_R
+    output:
+        STRING_FIGURE_PATTERNS
+    log:
+        analysis("networks", "logs/string_figures.log")
+    conda:
+        R_ENV
+    shell:
+        "Rscript --vanilla {input.script} --up {input.up:q} --down {input.down:q} "
+        "--leading-edge {input.leading_edge:q} --contrasts {input.contrasts:q} "
+        "--contrast-id {wildcards.contrast_id:q} "
+        "--outdir {RESULTS}/contrasts/{wildcards.contrast_id}/analyses/networks > {log:q} 2>&1 && "
+        "Rscript --vanilla {input.network_script} --nodes {input.up_nodes:q} --edges {input.up_edges:q} "
+        "--project-config {input.config:q} --contrasts {input.contrasts:q} "
+        "--contrast-id {wildcards.contrast_id:q} --direction up "
+        "--outdir {RESULTS}/contrasts/{wildcards.contrast_id}/analyses/networks >> {log:q} 2>&1 && "
+        "Rscript --vanilla {input.network_script} --nodes {input.down_nodes:q} --edges {input.down_edges:q} "
+        "--project-config {input.config:q} --contrasts {input.contrasts:q} "
+        "--contrast-id {wildcards.contrast_id:q} --direction down "
+        "--outdir {RESULTS}/contrasts/{wildcards.contrast_id}/analyses/networks >> {log:q} 2>&1"
 
 rule contrast_grn:
     input:
@@ -148,8 +183,8 @@ rule contrast_grn:
         sectors=analysis("regulators", "tables/grn_sector_summary.tsv"),
         rectangular_pdf=analysis("regulators", "figures/grn_rectangular.pdf"),
         rectangular_png=analysis("regulators", "figures/grn_rectangular.png"),
-        radial_pdf=analysis("regulators", "figures/grn_radial.pdf"),
-        radial_png=analysis("regulators", "figures/grn_radial.png"),
+        radial_legacy_pdf=analysis("regulators", "figures/grn_radial_legacy.pdf"),
+        radial_legacy_png=analysis("regulators", "figures/grn_radial_legacy.png"),
         summary=analysis("regulators", "grn_summary.json")
     log:
         analysis("regulators", "logs/grn.log")
@@ -158,6 +193,32 @@ rule contrast_grn:
     shell:
         "python {input.script} --project-config {input.config:q} --edges {input.edges:q} "
         "--regulators {input.regulators:q} --de {input.de:q} --contrast-id {wildcards.contrast_id:q} "
+        "--outdir {RESULTS}/contrasts/{wildcards.contrast_id}/analyses/regulators > {log:q} 2>&1"
+
+# Renders the polished DoRothEA radial regulon map (Fig2 Panel E) from the
+# program-labelled node/edge tables that contrast_grn (Python) emits. Kept a
+# separate R_ENV rule for the same reason as contrast_string_figures: the data
+# layer runs in NETWORK_ENV (networkx/matplotlib) and the figure layer in R.
+rule contrast_grn_radial:
+    input:
+        nodes=analysis("regulators", "tables/grn_nodes_displayed.tsv"),
+        edges=analysis("regulators", "tables/grn_edges_displayed.tsv"),
+        separation=analysis("regulators", "tables/grn_program_separation_test.tsv"),
+        contrasts=CONTRASTS,
+        config=str(CONFIG_PATH),
+        script=str(WORKFLOW_ROOT / "scripts" / "grn_radial.R"),
+        utils=UTILS_R
+    output:
+        radial_pdf=analysis("regulators", "figures/grn_radial.pdf"),
+        radial_png=analysis("regulators", "figures/grn_radial.png")
+    log:
+        analysis("regulators", "logs/grn_radial.log")
+    conda:
+        R_ENV
+    shell:
+        "Rscript --vanilla {input.script} --nodes {input.nodes:q} --edges {input.edges:q} "
+        "--separation {input.separation:q} --project-config {input.config:q} "
+        "--contrasts {input.contrasts:q} --contrast-id {wildcards.contrast_id:q} "
         "--outdir {RESULTS}/contrasts/{wildcards.contrast_id}/analyses/regulators > {log:q} 2>&1"
 
 rule contrast_hypotheses:

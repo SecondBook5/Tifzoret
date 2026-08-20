@@ -17,9 +17,12 @@ rule materialize_inputs:
         samples=SAMPLES,
         annotation=ANNOTATION,
         contrasts=CONTRASTS,
-        manifest=INPUT_MANIFEST
+        manifest=INPUT_MANIFEST,
+        **COMPANION_OUTPUTS
     log:
         str(INPUTS / "materialize.log")
+    params:
+        companion=COMPANION_ARGS
     threads:
         CONFIG.get("counting", {}).get("threads", 1)
     conda:
@@ -27,7 +30,7 @@ rule materialize_inputs:
     shell:
         "python {input.script} --project-config {input.config:q} --counts {output.counts:q} "
         "--samples {output.samples:q} --annotation {output.annotation:q} "
-        "--contrasts {output.contrasts:q} "
+        "--contrasts {output.contrasts:q} {params.companion} "
         "--manifest {output.manifest:q} --threads {threads} > {log:q} 2>&1"
 
 rule study_qc:

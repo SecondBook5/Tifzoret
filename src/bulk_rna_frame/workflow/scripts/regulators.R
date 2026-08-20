@@ -53,23 +53,33 @@ if (!all(c("source", "target") %in% names(regulon))) {
 }
 if (!"mor" %in% names(regulon)) regulon$mor <- 1
 if (!"confidence" %in% names(regulon)) regulon$confidence <- "custom"
-if (!"likelihood" %in% names(regulon)) regulon$likelihood <- 1
+if (!"likelihood" %in% names(regulon)) regulon$likelihood <- NA_real_
 regulon$configured_target <- regulon$target
 regulon$target <- unname(symbol_lookup[toupper(regulon$target)])
 confidence <- cfg$analysis$settings$regulators$confidence
 if (is.null(confidence)) confidence <- c("A", "B", "C")
 if ("confidence" %in% names(regulon) && any(regulon$confidence %in% c("A", "B", "C", "D", "E"))) regulon <- regulon[regulon$confidence %in% confidence, , drop = FALSE]
-regulon$measured <- regulon$target %in% rownames(expression)
 regulon$mor <- as.numeric(regulon$mor)
 regulon$likelihood <- as.numeric(regulon$likelihood)
+# Confidence-tier edge likelihood (Garcia-Alonso et al. 2019 DoRothEA weights):
+# A/B/C/D/E -> 1.0/0.75/0.5/0.25/0.1. The dorothea package ships no likelihood
+# column, so a genuine signed VIPER regulon derives edge likelihood from the
+# confidence tier (higher-confidence edges weigh more in aREA). An explicit
+# likelihood on a custom regulon is preserved; anything still missing -> 1.
+DOROTHEA_CONFIDENCE_LIKELIHOOD <- c(A = 1.0, B = 0.75, C = 0.5, D = 0.25, E = 0.1)
+tier_weight <- unname(DOROTHEA_CONFIDENCE_LIKELIHOOD[as.character(regulon$confidence)])
+regulon$likelihood <- ifelse(is.na(regulon$likelihood), tier_weight, regulon$likelihood)
+regulon$likelihood[is.na(regulon$likelihood)] <- 1
+regulon$measured <- regulon$target %in% rownames(expression)
 readr::write_tsv(regulon, file.path(dirs$tables, "regulon_edges.tsv"), na = "NA")
 
 min_targets <- if (is.null(cfg$analysis$settings$regulators$min_targets)) 5L else as.integer(cfg$analysis$settings$regulators$min_targets)
+max_targets <- if (is.null(cfg$analysis$settings$regulators$max_targets)) Inf else as.numeric(cfg$analysis$settings$regulators$max_targets)
 measured <- regulon %>% filter(measured) %>% distinct(source, target, .keep_all = TRUE)
 target_counts <- table(measured$source)
-eligible <- names(target_counts[target_counts >= min_targets])
+eligible <- names(target_counts[target_counts >= min_targets & target_counts <= max_targets])
 measured <- measured %>% filter(source %in% eligible)
-if (!nrow(measured)) stop("No regulators retain the configured minimum measured targets", call. = FALSE)
+if (!nrow(measured)) stop("No regulators retain the configured measured-target window", call. = FALSE)
 
 signed_fallback <- function(edges, matrix, signed = TRUE) {
   rows <- lapply(split(edges, edges$source), function(group) {
@@ -81,9 +91,40 @@ signed_fallback <- function(edges, matrix, signed = TRUE) {
   bind_rows(rows)
 }
 
+# Regulator activity. Primary engine = viper::viper(method="scale"), the canonical
+# aREA implementation (Alvarez et al. 2016) and the exact activity model the
+# publication panels were built on. A signed regulon is passed as a named list of
+# {tfmode = mor, likelihood} per source. decoupleR::run_viper and the signed
+# weighted target score are ordered fallbacks so the stage still runs where the
+# viper package is unavailable.
+build_viper_regulons <- function(edges) {
+  lapply(split(edges, edges$source), function(group) {
+    group <- group[!duplicated(group$target), , drop = FALSE]
+    list(
+      tfmode = stats::setNames(as.numeric(group$mor), group$target),
+      likelihood = stats::setNames(as.numeric(group$likelihood), group$target)
+    )
+  })
+}
 method <- "signed weighted target score"
 signed_long <- NULL
-if (requireNamespace("decoupleR", quietly = TRUE)) {
+if (requireNamespace("viper", quietly = TRUE)) {
+  signed_long <- tryCatch({
+    regulons <- build_viper_regulons(measured)
+    scores <- as.matrix(viper::viper(
+      expression, regulons, method = "scale", minsize = min_targets,
+      eset.filter = FALSE, cores = 1, verbose = FALSE
+    ))
+    as.data.frame(scores, check.names = FALSE) %>%
+      tibble::rownames_to_column("source") %>%
+      tidyr::pivot_longer(-source, names_to = "condition", values_to = "score")
+  }, error = function(error) {
+    warnings <<- c(warnings, paste0("viper::viper failed; falling back: ", conditionMessage(error)))
+    NULL
+  })
+  if (!is.null(signed_long)) method <- "VIPER"
+}
+if (is.null(signed_long) && requireNamespace("decoupleR", quietly = TRUE)) {
   signed_long <- tryCatch(
     decoupleR::run_viper(
       mat = expression, network = measured, .source = "source", .target = "target",
@@ -91,7 +132,7 @@ if (requireNamespace("decoupleR", quietly = TRUE)) {
       eset.filter = FALSE, pleiotropy = TRUE, verbose = FALSE
     ) %>% select(source, condition, score),
     error = function(error) {
-      warnings <<- c(warnings, paste0("VIPER execution failed; used signed weighted target score: ", conditionMessage(error)))
+      warnings <<- c(warnings, paste0("decoupleR VIPER failed; used signed weighted target score: ", conditionMessage(error)))
       NULL
     }
   )
@@ -130,9 +171,9 @@ readr::write_tsv(displayed, file.path(dirs$tables, "regulator_activity_displayed
 # Publication panel (Figure 2, Panel D): signed regulator activity.
 # ---------------------------------------------------------------------------
 # Presentation parity with the finalized paper panel. The reference styling
-# library (analysis/cape_xizhao_edits/publication_figure_functions.R,
-# prepare_regulator_activity_panel ~L1839 / make_regulator_activity_panel
-# ~L1910) renders this as a two-part patchwork composite rather than a plain
+# library (the prepare_regulator_activity_panel / make_regulator_activity_panel
+# routines in the reference bespoke figure functions) renders this as a two-part
+# patchwork composite rather than a plain
 # tile heatmap: a diverging tile heatmap of row-scaled activity (with a sample
 # header strip and per-row direction chips) beside a diverging effect-size
 # lollipop of differential activity with FDR annotations. We replicate that
@@ -140,12 +181,12 @@ readr::write_tsv(displayed, file.path(dirs$tables, "regulator_activity_displayed
 # (row z-scores, clamped +/-1.5 by row_zscore) and `differential` (limma logFC /
 # adj.P.Val). No statistic is recomputed and the audit table written above is
 # untouched. Direction is keyed off logFC sign so the numerator maps to the warm
-# ("CAPE") styling and the denominator to the cool ("control") styling.
+# styling and the denominator to the cool styling.
 # Reference diverging palette (not present in utils.R, defined locally):
-CONTROL_FILL <- "#A6CEE3"; CAPE_FILL <- "#F4A6A6"
-CONTROL_INK <- "#39799C"; CAPE_INK <- "#B55252"
-fill_by_dir <- stats::setNames(c(CONTROL_FILL, CAPE_FILL), c(denominator, numerator))
-ink_by_dir <- stats::setNames(c(CONTROL_INK, CAPE_INK), c(denominator, numerator))
+DENOMINATOR_FILL <- "#A6CEE3"; NUMERATOR_FILL <- "#F4A6A6"
+DENOMINATOR_INK <- "#39799C"; NUMERATOR_INK <- "#B55252"
+fill_by_dir <- stats::setNames(c(DENOMINATOR_FILL, NUMERATOR_FILL), c(denominator, numerator))
+ink_by_dir <- stats::setNames(c(DENOMINATOR_INK, NUMERATOR_INK), c(denominator, numerator))
 
 # Per-regulator effect-size / significance table (mirrors regulator_key).
 reg_stats <- differential %>%
@@ -181,7 +222,7 @@ reg_key <- reg_stats %>%
   ) %>%
   arrange(display_order)
 
-# Sample header key: denominator (control) columns first, then numerator (CAPE).
+# Sample header key: denominator columns first, then numerator.
 sample_key <- tibble::tibble(sample_id = colnames(display)) %>%
   mutate(condition = as.character(metadata[sample_id, factor_name])) %>%
   arrange(factor(condition, levels = c(denominator, numerator)), sample_id) %>%
@@ -208,12 +249,12 @@ heatmap_plot <- ggplot() +
   geom_tile(
     data = filter(sample_key, condition == denominator),
     aes(sample_x, y = n_regulators + 1.05),
-    width = 0.98, height = 0.78, fill = CONTROL_FILL, colour = "white", linewidth = 0.42
+    width = 0.98, height = 0.78, fill = DENOMINATOR_FILL, colour = "white", linewidth = 0.42
   ) +
   geom_tile(
     data = filter(sample_key, condition == numerator),
     aes(sample_x, y = n_regulators + 1.05),
-    width = 0.98, height = 0.78, fill = CAPE_FILL, colour = "white", linewidth = 0.42
+    width = 0.98, height = 0.78, fill = NUMERATOR_FILL, colour = "white", linewidth = 0.42
   ) +
   geom_text(
     data = sample_key, aes(sample_x, y = n_regulators + 1.05, label = sample_label),
@@ -221,15 +262,15 @@ heatmap_plot <- ggplot() +
   ) +
   geom_tile(
     data = filter(reg_key, higher_in == numerator),
-    aes(x = 0.28, y = y), width = 0.18, height = 0.94, fill = CAPE_FILL
+    aes(x = 0.28, y = y), width = 0.18, height = 0.94, fill = NUMERATOR_FILL
   ) +
   geom_tile(
     data = filter(reg_key, higher_in == denominator),
-    aes(x = 0.28, y = y), width = 0.18, height = 0.94, fill = CONTROL_FILL
+    aes(x = 0.28, y = y), width = 0.18, height = 0.94, fill = DENOMINATOR_FILL
   ) +
   geom_hline(yintercept = boundary_y, colour = "white", linewidth = 2.0) +
   scale_fill_gradient2(
-    low = CONTROL_INK, mid = "#F7F4EE", high = CAPE_INK, midpoint = 0,
+    low = DENOMINATOR_INK, mid = "#F7F4EE", high = NUMERATOR_INK, midpoint = 0,
     limits = c(-1.5, 1.5), breaks = c(-1.5, 0, 1.5), oob = scales::squish,
     name = activity_label
   ) +
@@ -253,7 +294,7 @@ heatmap_plot <- ggplot() +
     plot.margin = margin(2, 4, 2, 5)
   )
 
-# Reference hardcodes CAPE-tuned x-limits c(-5.8, 8.2); the engine derives the
+# The reference hardcodes study-tuned x-limits c(-5.8, 8.2); the engine derives the
 # equivalent proportions from the data so the lollipop generalizes across
 # studies without clipping (data domain + a right-hand FDR-label column).
 lfc_abs <- max(abs(reg_key$logFC), na.rm = TRUE)
@@ -267,11 +308,11 @@ x_breaks <- unique(c(-x_break, 0, x_break))
 effect_plot <- ggplot(reg_key, aes(y = y)) +
   annotate(
     "rect", xmin = -Inf, xmax = 0, ymin = 0.5, ymax = n_regulators + 0.5,
-    fill = CONTROL_FILL, alpha = 0.10
+    fill = DENOMINATOR_FILL, alpha = 0.10
   ) +
   annotate(
     "rect", xmin = 0, xmax = Inf, ymin = 0.5, ymax = n_regulators + 0.5,
-    fill = CAPE_FILL, alpha = 0.10
+    fill = NUMERATOR_FILL, alpha = 0.10
   ) +
   geom_vline(xintercept = 0, colour = "#87939D", linewidth = 0.55) +
   geom_hline(yintercept = boundary_y, colour = "white", linewidth = 2.0) +

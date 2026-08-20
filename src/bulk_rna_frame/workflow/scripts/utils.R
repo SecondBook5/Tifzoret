@@ -382,7 +382,7 @@ prettify_gene_set_label <- function(ids) {
 }
 
 # Condition -> publication display label: keep it upper-case when it is already
-# all-caps (an acronym such as CAPE, WT, KO), otherwise title-case it
+# all-caps (an acronym such as WT, KO), otherwise title-case it
 # (control -> "Control", "old vs young" -> "Old Vs Young"). Vectorised; the
 # single source of truth for condition casing across every renderer.
 cond_display <- function(x) {
@@ -391,8 +391,8 @@ cond_display <- function(x) {
 }
 
 # Sample id -> publication display label: the condition (kept upper-case when it
-# is already all-caps, e.g. CAPE; otherwise title-cased) plus the trailing
-# replicate number -- control1 -> "Control 1", Cape2 -> "CAPE 2". Falls back to
+# is already all-caps, e.g. KO; otherwise title-cased) plus the trailing
+# replicate number -- control1 -> "Control 1", Ko2 -> "KO 2". Falls back to
 # the raw id when no condition vector is supplied.
 sample_display_labels <- function(ids, conditions = NULL) {
   ids <- as.character(ids)

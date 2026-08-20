@@ -74,12 +74,12 @@ build_curve <- function(curve_table, pathway_row, numerator = "numerator", denom
   # with patchwork. Colours, sizes, annotations and layout replicate the
   # reference styling library; every plotted value is read from the already
   # computed curve table, and no statistic is recomputed here.
-  cape_ink <- "#B55252"      # numerator-enriched ink (reference CAPE_INK)
-  control_ink <- "#39799C"   # denominator-enriched ink (reference CONTROL_INK)
+  numerator_ink <- "#B55252"    # numerator-enriched ink (warm)
+  denominator_ink <- "#39799C"  # denominator-enriched ink (cool)
 
   nes <- pathway_row$NES[[1]]
   n_genes <- nrow(curve_table)
-  line_col <- if (nes >= 0) cape_ink else control_ink
+  line_col <- if (nes >= 0) numerator_ink else denominator_ink
 
   peak_index <- if (nes >= 0) which.max(curve_table$running_es) else which.min(curve_table$running_es)
   peak_rank <- curve_table$rank[[peak_index]]
@@ -140,7 +140,7 @@ build_curve <- function(curve_table, pathway_row, numerator = "numerator", denom
           panel.grid = element_blank(), plot.margin = margin(0, 5, 0, 5))
   strip_plot <- ggplot(curve_table, aes(rank, 1, fill = metric)) +
     geom_raster() +
-    scale_fill_gradient2(low = control_ink, mid = "#F7F4EE", high = cape_ink,
+    scale_fill_gradient2(low = denominator_ink, mid = "#F7F4EE", high = numerator_ink,
                          midpoint = 0, limits = range(curve_table$metric), guide = "none") +
     geom_vline(xintercept = zero_cross, colour = "#5E6871", linewidth = 0.28, linetype = 3) +
     annotate("text", x = n_genes * 0.02, y = 1, label = paste0(cond_display(numerator), "-correlated"),
@@ -154,8 +154,8 @@ build_curve <- function(curve_table, pathway_row, numerator = "numerator", denom
   metric_plot <- ggplot(curve_table, aes(rank, metric)) +
     geom_hline(yintercept = 0, colour = "#9DA7AF", linewidth = 0.3) +
     geom_vline(xintercept = zero_cross, colour = "#6F7B85", linewidth = 0.35, linetype = 3) +
-    geom_ribbon(aes(ymin = 0, ymax = pmax(metric, 0)), fill = alpha(cape_ink, 0.5)) +
-    geom_ribbon(aes(ymin = pmin(metric, 0), ymax = 0), fill = alpha(control_ink, 0.5)) +
+    geom_ribbon(aes(ymin = 0, ymax = pmax(metric, 0)), fill = alpha(numerator_ink, 0.5)) +
+    geom_ribbon(aes(ymin = pmin(metric, 0), ymax = 0), fill = alpha(denominator_ink, 0.5)) +
     geom_line(colour = "#65737E", linewidth = 0.25) +
     annotate("text", x = zero_cross, y = 0,
              label = paste0("Zero cross: rank ", comma(zero_cross)),
@@ -336,7 +336,7 @@ if (nrow(ora_displayed)) {
 save_plot_pair(ora_plot, file.path(dirs$figures, "ora_bidirectional"), 8.1, max(4.8, 0.34 * nrow(ora_displayed) + 2.2))
 
 # GSVA panel data choice (Figure 1F). Method and the displayed set list are
-# curation-driven so a study can reproduce an exact published panel: CAPE uses
+# curation-driven so a study can reproduce an exact published panel: one study uses
 # Hänzelmann GSVA over an explicit, effect-ordered Hallmark list; the generic
 # default stays ssGSEA over every measured set. Restricting the set list here
 # does not change other sets' scores (each set is scored independently), and the
@@ -425,7 +425,7 @@ gsva_order <- if (is.null(cfg$figures$pathways$gsva_order)) "differential" else 
 if (!is.null(gsva_set_ids)) {
   # Curated panel: the configured gsva_sets list IS the authoritative row order.
   # It is pre-ordered by the published numerator-minus-denominator effect (e.g.
-  # the CAPE Panel F order), so honour it verbatim rather than re-deriving from
+  # the published panel order), so honour it verbatim rather than re-deriving from
   # the engine's own GSVA scores -- those differ slightly from the bespoke
   # pipeline and flip near-tied adjacent rows, which would not reproduce the
   # paper exactly. Columns stay in canonical denominator-then-numerator order.

@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -13,6 +14,7 @@ from bulk_rna_frame.config import ProjectValidationError, load_project, validati
 
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = ROOT / "src" / "bulk_rna_frame" / "templates" / "minimal"
+MATERIALIZE = ROOT / "src" / "bulk_rna_frame" / "workflow" / "scripts" / "materialize_inputs.py"
 
 
 def project_copy(tmp_path: Path) -> Path:
@@ -285,3 +287,127 @@ def test_gtrd_provider_requires_an_explicit_snapshot(tmp_path):
     config.write_text(yaml.safe_dump(data, sort_keys=False))
     project = load_project(config)
     assert project.regulon_edges == config.parent / "gtrd_edges.tsv"
+
+
+# Companion documents (hypotheses claims/panels + figure recipe) may be authored
+# either as sibling files or inlined in the main config, so a UI can emit one
+# self-contained YAML. Both forms must resolve to identical loaded configuration,
+# point at the canonical inputs directory, and materialize to faithful files.
+CLAIMS_DOC = {
+    "hypotheses": [
+        {
+            "id": "response",
+            "statement": "Treatment changes contractile state.",
+            "contrast": "treatment_a_vs_control",
+            "expected_direction": "increased",
+            "gene_panels": ["contractile"],
+            "pathway_panels": ["response"],
+        }
+    ]
+}
+PANELS_DOC = {
+    "gene_panels": {
+        "contractile": {
+            "description": "Contractile genes.",
+            "groups": {"contractile": ["ACTA2", "CNN1", "MYH11"]},
+        }
+    },
+    "program_annotations": {"ACTA2": "Contractile / cytoskeletal"},
+    "program_colors": {"Contractile / cytoskeletal": "#D55E00"},
+    "program_order": ["Contractile / cytoskeletal"],
+    "gsea_programs": ["contractile"],
+    "pathway_panels": {
+        "response": {
+            "description": "Response pathways.",
+            "pathways": [{"collection": "custom", "pathway": "CONTRACTILE_PROGRAM"}],
+        }
+    },
+}
+RECIPE_DOC = {
+    "figure_sets": {
+        "primary": {
+            "width": 12,
+            "height": 6,
+            "columns": 2,
+            "panels": [
+                {"id": "A", "source": "qc/figures/pca_correlation"},
+                {
+                    "id": "B",
+                    "source": "contrasts/treatment_a_vs_control/analyses/composition/figures/cell_state_signatures",
+                },
+            ],
+        }
+    }
+}
+
+
+def _publication_project(root: Path, *, inline: bool) -> Path:
+    shutil.copytree(TEMPLATE, root)
+    config = root / "project.yaml"
+    data = yaml.safe_load(config.read_text())
+    data["species"] = {"provider": "mouse", "scientific_name": "Mus musculus", "taxonomy_id": 10090}
+    data["reference"] = {"genome_build": "GRCm39", "annotation_release": 107}
+    data["analysis"]["profile"] = "publication"
+    data["analysis"]["random_seed"] = 1
+    data["analysis"]["settings"] = {
+        "composition": {"min_genes": 2},
+        "regulators": {"min_targets": 2, "top_regulators": 5},
+        "networks": {"required_score": 700, "max_nodes": 40, "seed": 1},
+    }
+    data["resources"]["cell_state_signatures"] = "signatures.yaml"
+    data["resources"]["providers"] = {"dorothea": True, "string": True}
+    (root / "signatures.yaml").write_text(
+        "signatures:\n  - id: contractile\n    label: Contractile\n    category: mural\n"
+        "    genes: [ACTA2, CNN1, MYH11]\n"
+    )
+    if inline:
+        data["hypotheses"] = {"claims": CLAIMS_DOC, "panels": PANELS_DOC}
+        data["publication"] = {"recipe": RECIPE_DOC}
+    else:
+        data["hypotheses"] = {"claims": "hypotheses.yaml", "panels": "panels.yaml"}
+        data["publication"] = {"recipe": "figure_recipe.yaml"}
+        (root / "hypotheses.yaml").write_text(yaml.safe_dump(CLAIMS_DOC, sort_keys=False))
+        (root / "panels.yaml").write_text(yaml.safe_dump(PANELS_DOC, sort_keys=False))
+        (root / "figure_recipe.yaml").write_text(yaml.safe_dump(RECIPE_DOC, sort_keys=False))
+    config.write_text(yaml.safe_dump(data, sort_keys=False))
+    return config
+
+
+def test_inline_companion_documents_match_referenced_files(tmp_path):
+    referenced = load_project(_publication_project(tmp_path / "referenced", inline=False))
+    inline = load_project(_publication_project(tmp_path / "inline", inline=True))
+
+    # The loaded companion documents are identical regardless of authoring form.
+    assert inline.panel_config == referenced.panel_config == PANELS_DOC
+    assert inline.hypothesis_config == referenced.hypothesis_config == CLAIMS_DOC
+    assert inline.recipe_config == referenced.recipe_config == RECIPE_DOC
+
+    # Both forms resolve companion paths to the canonical inputs directory.
+    for project in (referenced, inline):
+        inputs = project.result_root / "inputs"
+        assert project.hypothesis_panels == inputs / "hypothesis_panels.yaml"
+        assert project.hypotheses == inputs / "hypotheses.yaml"
+        assert project.figure_recipe == inputs / "figure_recipe.yaml"
+
+
+def test_materialize_stages_inline_companions(tmp_path):
+    project = load_project(_publication_project(tmp_path / "inline", inline=True))
+    inputs = project.result_root / "inputs"
+    subprocess.run(
+        [
+            sys.executable, str(MATERIALIZE),
+            "--project-config", str(project.config_path),
+            "--counts", str(inputs / "counts.tsv"),
+            "--samples", str(inputs / "samples.tsv"),
+            "--annotation", str(inputs / "annotation.tsv"),
+            "--contrasts", str(inputs / "contrasts.tsv"),
+            "--manifest", str(inputs / "input_manifest.json"),
+            "--panels", str(project.hypothesis_panels),
+            "--claims", str(project.hypotheses),
+            "--recipe", str(project.figure_recipe),
+        ],
+        check=True,
+    )
+    assert yaml.safe_load(project.hypothesis_panels.read_text()) == PANELS_DOC
+    assert yaml.safe_load(project.hypotheses.read_text()) == CLAIMS_DOC
+    assert yaml.safe_load(project.figure_recipe.read_text()) == RECIPE_DOC

@@ -10,6 +10,7 @@ from dataclasses import replace
 import hashlib
 import json
 import re
+import shutil
 import subprocess
 import sys
 import tarfile
@@ -17,13 +18,15 @@ import tempfile
 import zipfile
 from pathlib import Path
 from pathlib import PurePosixPath
-from typing import Iterator
+from typing import Any, Iterator
+
+import yaml
 
 SOURCE_ROOT = Path(__file__).resolve().parents[3]
 if str(SOURCE_ROOT) not in sys.path:
     sys.path.insert(0, str(SOURCE_ROOT))
 
-from bulk_rna_frame.config import ResolvedProject, load_project  # noqa: E402
+from bulk_rna_frame.config import ResolvedProject, _resolve, load_project  # noqa: E402
 
 
 STRAND_MODES = {"unstranded": 0, "forward": 1, "reverse": 2}
@@ -103,6 +106,7 @@ def extracted_archive_bams(project: ResolvedProject) -> Iterator[tuple[Path, ...
 
 
 def sha256(path: Path) -> str:
+    """Return the hex SHA-256 digest of ``path``, read in fixed-size blocks."""
     digest = hashlib.sha256()
     with path.open("rb") as handle:
         for block in iter(lambda: handle.read(1024 * 1024), b""):
@@ -111,6 +115,7 @@ def sha256(path: Path) -> str:
 
 
 def write_tsv(path: Path, fieldnames: list[str], rows: list[dict[str, object]]) -> None:
+    """Write ``rows`` as a tab-separated file with a header, creating parent directories."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(
@@ -125,6 +130,7 @@ def write_tsv(path: Path, fieldnames: list[str], rows: list[dict[str, object]]) 
 
 
 def read_tsv(path: Path, *, comments: bool = False) -> tuple[list[str], list[dict[str, str]]]:
+    """Read a tab-separated file into its header list and row dicts; optionally drop ``#`` lines."""
     with path.open(newline="", encoding="utf-8") as handle:
         lines = (line for line in handle if not comments or not line.startswith("#"))
         reader = csv.DictReader(lines, delimiter="\t")
@@ -132,18 +138,49 @@ def read_tsv(path: Path, *, comments: bool = False) -> tuple[list[str], list[dic
 
 
 def materialize_samples(project: ResolvedProject, output: Path) -> None:
+    """Write the project's resolved sample rows to ``output`` under the source samples header."""
     header, _ = read_tsv(project.samples)
     write_tsv(output, header, [dict(row) for row in project.sample_rows])
 
 
 def materialize_contrasts(project: ResolvedProject, output: Path) -> None:
+    """Write the project's resolved contrast rows to ``output`` under the source contrasts header."""
     header, _ = read_tsv(project.contrasts)
     write_tsv(output, header, [dict(row) for row in project.contrast_rows])
+
+
+def materialize_companion(
+    base: Path, raw_value: Any, validated: dict[str, Any] | None, output: str | None
+) -> None:
+    """Stage a companion document (hypotheses/panels/recipe) into the inputs dir.
+
+    ``raw_value`` is the entry as it appears in the project configuration: a path
+    string that references a sibling file, or an inline mapping. Path references
+    are copied verbatim (byte-for-byte parity with the referenced file); an inline
+    mapping is serialized from its validated form. Downstream rules consume the
+    resulting canonical file identically regardless of which form was authored.
+    """
+    if output is None or validated is None:
+        return
+    out = Path(output).resolve()
+    out.parent.mkdir(parents=True, exist_ok=True)
+    if isinstance(raw_value, str):
+        shutil.copyfile(_resolve(base, raw_value), out)
+    else:
+        out.write_text(
+            yaml.safe_dump(validated, sort_keys=False, allow_unicode=True),
+            encoding="utf-8",
+        )
 
 
 def materialize_count_matrix(
     project: ResolvedProject, counts_output: Path, annotation_output: Path
 ) -> dict[str, object]:
+    """Copy a precomputed count matrix and its annotation to the canonical outputs.
+
+    Restrict the count columns to the project's selected samples and return a provenance
+    mapping recording source file hashes, the source sample columns, and the selected samples.
+    """
     assert project.counts is not None and project.annotation is not None
     header, rows = read_tsv(project.counts)
     selected = [row["sample_id"] for row in project.sample_rows]
@@ -170,6 +207,7 @@ def materialize_count_matrix(
 def featurecounts_command(
     project: ResolvedProject, output: Path, mode: int
 ) -> list[str]:
+    """Build the featureCounts argument list for strand ``mode`` from the counting config and BAM paths."""
     assert project.gtf is not None
     counting = project.config["counting"]
     command = [
@@ -202,6 +240,10 @@ def featurecounts_command(
 
 
 def run_featurecounts(project: ResolvedProject, output: Path, mode: int) -> str:
+    """Run featureCounts for strand ``mode``, raising on a non-zero exit.
+
+    Return the invocation's combined stdout and stderr.
+    """
     result = subprocess.run(
         featurecounts_command(project, output, mode),
         text=True,
@@ -218,6 +260,12 @@ def run_featurecounts(project: ResolvedProject, output: Path, mode: int) -> str:
 def infer_strand_mode(
     project: ResolvedProject, temporary: Path
 ) -> tuple[int, dict[int, float], Path, str, float]:
+    """Infer the strand mode by running featureCounts across the configured test modes.
+
+    Choose forward or reverse when directional assignment dominance meets the configured
+    threshold, otherwise unstranded. Return the chosen mode, per-mode mean assignment rates,
+    the chosen mode's counts path and log, and the dominance ratio.
+    """
     modes = project.config["counting"]["strand_test_modes"]
     means: dict[int, float] = {}
     outputs: dict[int, Path] = {}
@@ -254,6 +302,11 @@ def infer_strand_mode(
 def parse_featurecounts(
     raw_path: Path, project: ResolvedProject, counts_output: Path
 ) -> list[str]:
+    """Convert a featureCounts table into the canonical count matrix at ``counts_output``.
+
+    Map each output sample column to a declared sample by BAM basename, reject negative
+    counts, and return the gene identifiers in row order.
+    """
     header, rows = read_tsv(raw_path, comments=True)
     annotation_fields = {"Geneid", "Chr", "Start", "End", "Strand", "Length"}
     raw_samples = [name for name in header if name not in annotation_fields]
@@ -289,6 +342,11 @@ def parse_featurecounts(
 
 
 def gtf_annotations(gtf: Path) -> dict[str, dict[str, object]]:
+    """Parse a GTF into per-gene annotation records keyed by ``gene_id``.
+
+    Record the gene symbol, sequence name, strand, biotype, and the minimum start and
+    maximum end spanning the gene's lines; skip comment and malformed rows.
+    """
     annotations: dict[str, dict[str, object]] = {}
     with gtf.open(encoding="utf-8") as handle:
         for line in handle:
@@ -322,6 +380,7 @@ def gtf_annotations(gtf: Path) -> dict[str, dict[str, object]]:
 
 
 def write_annotation(gtf: Path, gene_ids: list[str], output: Path) -> None:
+    """Write an annotation TSV for ``gene_ids`` from the GTF, falling back to a version-stripped id lookup."""
     annotations = gtf_annotations(gtf)
     rows = []
     for gene_id in gene_ids:
@@ -339,6 +398,10 @@ def write_annotation(gtf: Path, gene_ids: list[str], output: Path) -> None:
 
 
 def bam_record(sample_id: str, path: Path) -> dict[str, object]:
+    """Validate ``path`` with samtools quickcheck and require coordinate sort order.
+
+    Return a provenance record with file and header hashes and stat metadata.
+    """
     quickcheck = subprocess.run(
         ["samtools", "quickcheck", "-v", str(path)], text=True, capture_output=True, check=False
     )
@@ -365,6 +428,7 @@ def bam_record(sample_id: str, path: Path) -> dict[str, object]:
 
 
 def command_version(command: list[str]) -> str:
+    """Run ``command`` and return its first non-empty output line, or ``"unavailable"``."""
     result = subprocess.run(
         command,
         text=True,
@@ -380,6 +444,11 @@ def command_version(command: list[str]) -> str:
 def materialize_bams(
     project: ResolvedProject, counts_output: Path, annotation_output: Path
 ) -> dict[str, object]:
+    """Count aligned BAMs into the canonical count matrix and annotation.
+
+    Validate each BAM, resolve or infer the strand mode, run featureCounts, write the
+    annotation for the observed genes, and return a provenance mapping (tools, hashes, counting).
+    """
     assert project.gtf is not None
     sample_ids = [row["sample_id"] for row in project.sample_rows]
     records = [
@@ -424,6 +493,11 @@ def materialize_bams(
 def materialize_archive(
     project: ResolvedProject, counts_output: Path, annotation_output: Path
 ) -> dict[str, object]:
+    """Extract the declared BAM members from an archive and count them into the canonical outputs.
+
+    Delegate the counting to :func:`materialize_bams` on the extracted files, then rewrite the
+    provenance to record the archive and its ``archive://`` member paths.
+    """
     assert project.archive is not None
     member_root = project.config["inputs"].get("member_root", "").strip("/\\")
     member_names = [
@@ -447,6 +521,11 @@ def materialize_archive(
 
 
 def main() -> None:
+    """Parse CLI arguments, load the project, and materialize its canonical inputs.
+
+    Stage samples, contrasts, and companion documents, produce the count matrix and
+    annotation from the resolved source kind, and write the provenance manifest JSON.
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument("--project-config", required=True)
     parser.add_argument("--counts", required=True)
@@ -454,6 +533,9 @@ def main() -> None:
     parser.add_argument("--annotation", required=True)
     parser.add_argument("--contrasts", required=True)
     parser.add_argument("--manifest", required=True)
+    parser.add_argument("--panels")
+    parser.add_argument("--claims")
+    parser.add_argument("--recipe")
     parser.add_argument("--threads", type=int)
     args = parser.parse_args()
 
@@ -472,6 +554,20 @@ def main() -> None:
 
     materialize_samples(project, samples_output)
     materialize_contrasts(project, contrasts_output)
+    companion_base = project.config_path.parent
+    hypotheses_block = project.config.get("hypotheses", {})
+    materialize_companion(
+        companion_base, hypotheses_block.get("panels"), project.panel_config, args.panels
+    )
+    materialize_companion(
+        companion_base, hypotheses_block.get("claims"), project.hypothesis_config, args.claims
+    )
+    materialize_companion(
+        companion_base,
+        project.config.get("publication", {}).get("recipe"),
+        project.recipe_config,
+        args.recipe,
+    )
     if project.source_kind == "counts":
         provenance = materialize_count_matrix(project, counts_output, annotation_output)
     elif project.source_kind == "archive":

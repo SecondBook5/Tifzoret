@@ -29,6 +29,21 @@ ANNOTATION = str(INPUTS / "annotation.tsv")
 INPUT_MANIFEST = str(INPUTS / "input_manifest.json")
 SOURCE_CONTRASTS = str(PROJECT.contrasts)
 CONTRASTS = str(INPUTS / "contrasts.tsv")
+# Companion documents (hypotheses/panels/recipe) may be authored as sibling files
+# or inlined in the main config; either way load_project points these at their
+# canonical INPUTS location and materialize_inputs stages the resolved document
+# there, so every downstream rule consumes str(PROJECT.*) from one place.
+PANELS = str(PROJECT.hypothesis_panels) if PROJECT.hypothesis_panels else None
+CLAIMS = str(PROJECT.hypotheses) if PROJECT.hypotheses else None
+RECIPE = str(PROJECT.figure_recipe) if PROJECT.figure_recipe else None
+COMPANION_OUTPUTS = {
+    name: value
+    for name, value in (("panels", PANELS), ("claims", CLAIMS), ("recipe", RECIPE))
+    if value
+}
+COMPANION_ARGS = " ".join(
+    f"--{name} {shlex.quote(value)}" for name, value in COMPANION_OUTPUTS.items()
+)
 CUSTOM_GMT = str(PROJECT.gmt)
 RESOURCE_CACHE = RESULTS / ".cache" / "resources"
 GMT = str(RESOURCE_CACHE / "gene_sets.gmt")
@@ -177,6 +192,9 @@ REGULATOR_PATTERNS = [
     analysis("regulators", "tables/grn_sector_summary.tsv"),
     analysis("regulators", "figures/grn_rectangular.pdf"),
     analysis("regulators", "figures/grn_rectangular.png"),
+    analysis("regulators", "figures/grn_radial_legacy.pdf"),
+    analysis("regulators", "figures/grn_radial_legacy.png"),
+    # grn_radial.{pdf,png} is rendered by rule contrast_grn_radial (R_ENV).
     analysis("regulators", "figures/grn_radial.pdf"),
     analysis("regulators", "figures/grn_radial.png"),
     analysis("regulators", "grn_summary.json"),
@@ -190,6 +208,11 @@ NETWORK_PATTERNS = [
     ],
     analysis("networks", "tables/string_enrichment.tsv"),
     analysis("networks", "tables/string_enrichment_displayed.tsv"),
+    *[
+        analysis("networks", f"tables/string_{group}_{suffix}.tsv")
+        for group in ("up", "down", "leading_edge")
+        for suffix in ("enrichment", "seed_genes")
+    ],
     analysis("networks", "figures/string_up_network.pdf"),
     analysis("networks", "figures/string_up_network.png"),
     analysis("networks", "figures/string_down_network.pdf"),
@@ -197,6 +220,18 @@ NETWORK_PATTERNS = [
     analysis("networks", "figures/string_enrichment.pdf"),
     analysis("networks", "figures/string_enrichment.png"),
     analysis("networks", "networks_summary.json"),
+]
+
+# Rendered by rule contrast_string_figures (R_ENV) from the directional STRING
+# enrichment tables emitted by contrast_networks — kept separate from
+# NETWORK_PATTERNS because that list is the (Python) contrast_networks output.
+STRING_FIGURE_PATTERNS = [
+    analysis("networks", "figures/string_enrichment_faceted.pdf"),
+    analysis("networks", "figures/string_enrichment_faceted.png"),
+    analysis("networks", "figures/string_up_network_community.pdf"),
+    analysis("networks", "figures/string_up_network_community.png"),
+    analysis("networks", "figures/string_down_network_community.pdf"),
+    analysis("networks", "figures/string_down_network_community.png"),
 ]
 
 HYPOTHESIS_PATTERNS = [
@@ -246,6 +281,7 @@ if MODULES["regulators"]:
     FINAL_OUTPUTS.extend(expand(REGULATOR_PATTERNS, contrast_id=PAIRWISE_CONTRAST_IDS))
 if MODULES["networks"]:
     FINAL_OUTPUTS.extend(expand(NETWORK_PATTERNS, contrast_id=PAIRWISE_CONTRAST_IDS))
+    FINAL_OUTPUTS.extend(expand(STRING_FIGURE_PATTERNS, contrast_id=PAIRWISE_CONTRAST_IDS))
 if MODULES["hypotheses"]:
     FINAL_OUTPUTS.extend(expand(HYPOTHESIS_PATTERNS, contrast_id=PAIRWISE_CONTRAST_IDS))
 if MODULES["publication"]:

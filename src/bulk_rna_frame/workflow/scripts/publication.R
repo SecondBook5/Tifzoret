@@ -79,7 +79,7 @@ panel_definitions <- panel_definitions %>%
   mutate(configured_gene_symbol = gene_symbol, gene_symbol = unname(symbol_lookup[toupper(gene_symbol)])) %>%
   filter(!is.na(gene_symbol)) %>% distinct(gene_symbol, .keep_all = TRUE)
 # Optional single-direction selection for the top-DE heatmap (Panel D shows the
-# top CAPE-up genes). Defaults to both directions when the knob is absent.
+# top numerator-up genes). Defaults to both directions when the knob is absent.
 heatmap_direction <- cfg$figures$de$heatmap_direction
 if (is.null(heatmap_direction)) heatmap_direction <- "both"
 top <- de %>% filter(!is.na(adjusted_p_value), gene_symbol %in% rownames(expression))
@@ -127,7 +127,7 @@ program_short_vector <- factor(vapply(as.character(program_vector), short_label,
 names(program_short_vector) <- assignments$gene_symbol
 
 # Sample dendrogram: Euclidean/complete clustering rotated so the denominator
-# samples precede the numerator samples (e.g. control -> CAPE) for a stable
+# samples precede the numerator samples (e.g. denominator -> numerator) for a stable
 # left-to-right reading order, without discarding the clustering structure.
 ordered_samples <- c(
   colnames(z)[metadata[colnames(z), factor_name] == denominator],
@@ -438,7 +438,7 @@ violin_ink <- setNames(darken_hex(unname(violin_fill)), names(violin_fill))
 MAX_BLOCK_COLS <- 8L
 
 # One block per curated program. block_ncol = min(genes, 8) reproduces the
-# hand-tuned CAPE layout (7,7,8,8 columns) while generalizing to any program
+# hand-tuned reference layout (7,7,8,8 columns) while generalizing to any program
 # sizes; the block's height weight is the number of facet rows it needs.
 make_violin_block <- function(program_label) {
   block_def <- violin_def %>% filter(as.character(program) == program_label) %>% arrange(gene_index)

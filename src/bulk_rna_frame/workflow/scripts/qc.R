@@ -83,7 +83,7 @@ ellipse_table <- ellipse_coordinates(pca_table, group_col, cfg$figures$pca$ellip
 
 # --- Panel A presentation helpers (visual parity with the finalized panel) ---
 # The reference PCA styles shape-21 points with a light fill plus a darker
-# "ink" outline drawn from a second hand-picked palette (CONTROL_INK/CAPE_INK).
+# "ink" outline drawn from a second hand-picked palette (denominator/numerator inks).
 # The engine config carries a single fill palette, so derive an outline colour
 # by approximating the reference fill->ink relationship (lower value, higher
 # saturation). Presentation only: does not touch any computed value or table.

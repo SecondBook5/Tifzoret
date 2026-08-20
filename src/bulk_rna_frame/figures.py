@@ -20,6 +20,10 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class PanelVariant:
+    """One renderable form of a panel: its result-relative source figure stem,
+    the displayed-data tables it exposes, the analysis module that must be
+    enabled to produce it, and a human-readable label."""
+
     source: str
     displayed_data: tuple[str, ...]
     required_module: str
@@ -28,6 +32,10 @@ class PanelVariant:
 
 @dataclass(frozen=True)
 class PanelConstructor:
+    """A registered publication-panel type in the catalog: its identifier,
+    label, and description, whether it is contrast-specific, its default
+    variant, and the named variants that render it."""
+
     id: str
     label: str
     description: str
@@ -38,6 +46,10 @@ class PanelConstructor:
 
 @dataclass(frozen=True)
 class ResolvedPanel:
+    """A recipe panel resolved to concrete paths: the chosen constructor,
+    variant, and contrast, its label, the source figure path, the displayed-data
+    file paths, and the module the workflow must have run to build it."""
+
     constructor: str | None
     variant: str | None
     contrast: str | None
@@ -138,14 +150,19 @@ PANEL_REGISTRY: dict[str, PanelConstructor] = {
         {"default": _variant("contrasts/{contrast}/analyses/publication/figures/program_violins", "publication", "Program violins", "contrasts/{contrast}/analyses/publication/tables/program_violins_displayed.tsv", "contrasts/{contrast}/analyses/publication/tables/program_violins_tests.tsv", "contrasts/{contrast}/analyses/publication/tables/program_definitions.tsv")},
     ),
     "string_enrichment": PanelConstructor(
-        "string_enrichment", "STRING functional enrichment", "Configured enrichment summary retaining directional context.", True, "default",
-        {"default": _variant("contrasts/{contrast}/analyses/networks/figures/string_enrichment", "networks", "STRING enrichment", "contrasts/{contrast}/analyses/networks/tables/string_enrichment_displayed.tsv")},
+        "string_enrichment", "STRING functional enrichment", "Three-facet directional STRING enrichment bubble (down / GSEA leading edge / up).", True, "faceted",
+        {
+            "faceted": _variant("contrasts/{contrast}/analyses/networks/figures/string_enrichment_faceted", "networks", "STRING enrichment", "contrasts/{contrast}/analyses/networks/tables/string_down_enrichment.tsv", "contrasts/{contrast}/analyses/networks/tables/string_leading_edge_enrichment.tsv", "contrasts/{contrast}/analyses/networks/tables/string_up_enrichment.tsv"),
+            "combined": _variant("contrasts/{contrast}/analyses/networks/figures/string_enrichment", "networks", "STRING enrichment (combined)", "contrasts/{contrast}/analyses/networks/tables/string_enrichment_displayed.tsv"),
+        },
     ),
     "string_network": PanelConstructor(
-        "string_network", "STRING network", "Direction-specific STRING association network with auditable full and displayed edges.", True, "upregulated",
+        "string_network", "STRING network", "Direction-specific STRING association network with topology-derived community hulls; auditable full and displayed edges.", True, "upregulated",
         {
-            "upregulated": _variant("contrasts/{contrast}/analyses/networks/figures/string_up_network", "networks", "Upregulated STRING network", "contrasts/{contrast}/analyses/networks/tables/string_up_nodes_displayed.tsv", "contrasts/{contrast}/analyses/networks/tables/string_up_edges_displayed.tsv", "contrasts/{contrast}/analyses/networks/tables/string_up_input_genes.tsv", "contrasts/{contrast}/analyses/networks/tables/string_up_unmapped_genes.tsv"),
-            "downregulated": _variant("contrasts/{contrast}/analyses/networks/figures/string_down_network", "networks", "Downregulated STRING network", "contrasts/{contrast}/analyses/networks/tables/string_down_nodes_displayed.tsv", "contrasts/{contrast}/analyses/networks/tables/string_down_edges_displayed.tsv", "contrasts/{contrast}/analyses/networks/tables/string_down_input_genes.tsv", "contrasts/{contrast}/analyses/networks/tables/string_down_unmapped_genes.tsv"),
+            "upregulated": _variant("contrasts/{contrast}/analyses/networks/figures/string_up_network_community", "networks", "Upregulated STRING community network", "contrasts/{contrast}/analyses/networks/tables/string_up_nodes.tsv", "contrasts/{contrast}/analyses/networks/tables/string_up_edges.tsv", "contrasts/{contrast}/analyses/networks/tables/string_up_input_genes.tsv", "contrasts/{contrast}/analyses/networks/tables/string_up_unmapped_genes.tsv"),
+            "downregulated": _variant("contrasts/{contrast}/analyses/networks/figures/string_down_network_community", "networks", "Downregulated STRING community network", "contrasts/{contrast}/analyses/networks/tables/string_down_nodes.tsv", "contrasts/{contrast}/analyses/networks/tables/string_down_edges.tsv", "contrasts/{contrast}/analyses/networks/tables/string_down_input_genes.tsv", "contrasts/{contrast}/analyses/networks/tables/string_down_unmapped_genes.tsv"),
+            "upregulated_legacy": _variant("contrasts/{contrast}/analyses/networks/figures/string_up_network", "networks", "Upregulated STRING network (matplotlib)", "contrasts/{contrast}/analyses/networks/tables/string_up_nodes_displayed.tsv", "contrasts/{contrast}/analyses/networks/tables/string_up_edges_displayed.tsv", "contrasts/{contrast}/analyses/networks/tables/string_up_input_genes.tsv", "contrasts/{contrast}/analyses/networks/tables/string_up_unmapped_genes.tsv"),
+            "downregulated_legacy": _variant("contrasts/{contrast}/analyses/networks/figures/string_down_network", "networks", "Downregulated STRING network (matplotlib)", "contrasts/{contrast}/analyses/networks/tables/string_down_nodes_displayed.tsv", "contrasts/{contrast}/analyses/networks/tables/string_down_edges_displayed.tsv", "contrasts/{contrast}/analyses/networks/tables/string_down_input_genes.tsv", "contrasts/{contrast}/analyses/networks/tables/string_down_unmapped_genes.tsv"),
         },
     ),
     "regulator_activity": PanelConstructor(
@@ -156,7 +173,8 @@ PANEL_REGISTRY: dict[str, PanelConstructor] = {
         "dorothea_grn", "DoRothEA gene-regulatory network", "Program-aware GRN view backed by complete regulon-edge audit data.", True, "radial",
         {
             "rectangular": _variant("contrasts/{contrast}/analyses/regulators/figures/grn_rectangular", "regulators", "Rectangular GRN", "contrasts/{contrast}/analyses/regulators/tables/grn_nodes_displayed.tsv", "contrasts/{contrast}/analyses/regulators/tables/grn_edges_displayed.tsv", "contrasts/{contrast}/analyses/regulators/tables/regulon_edges.tsv"),
-            "radial": _variant("contrasts/{contrast}/analyses/regulators/figures/grn_radial", "regulators", "Radial GRN", "contrasts/{contrast}/analyses/regulators/tables/grn_nodes_displayed.tsv", "contrasts/{contrast}/analyses/regulators/tables/grn_edges_displayed.tsv", "contrasts/{contrast}/analyses/regulators/tables/regulon_edges.tsv", "contrasts/{contrast}/analyses/regulators/tables/grn_sector_summary.tsv"),
+            "radial": _variant("contrasts/{contrast}/analyses/regulators/figures/grn_radial", "regulators", "Radial GRN", "contrasts/{contrast}/analyses/regulators/tables/grn_nodes_displayed.tsv", "contrasts/{contrast}/analyses/regulators/tables/grn_edges_displayed.tsv", "contrasts/{contrast}/analyses/regulators/tables/grn_program_separation_test.tsv", "contrasts/{contrast}/analyses/regulators/tables/grn_sector_summary.tsv"),
+            "radial_legacy": _variant("contrasts/{contrast}/analyses/regulators/figures/grn_radial_legacy", "regulators", "Radial GRN (matplotlib)", "contrasts/{contrast}/analyses/regulators/tables/grn_nodes_displayed.tsv", "contrasts/{contrast}/analyses/regulators/tables/grn_edges_displayed.tsv", "contrasts/{contrast}/analyses/regulators/tables/grn_sector_summary.tsv"),
         },
     ),
     "wgcna_module_trait": PanelConstructor(

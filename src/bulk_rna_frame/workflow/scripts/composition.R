@@ -79,8 +79,9 @@ readr::write_tsv(differential, file.path(dirs$tables, "cell_state_displayed.tsv"
 # matched-gene point sizing, per-point FDR annotations, left-switched category
 # facets, palette, legend and typography. The panel letter ("B") is drawn at
 # assembly time by assemble.py's _label_overlay, so no plot.tag is baked in here
-# (mirrors ontology.R). The reference's hand-picked ink hexes (CONTROL_INK
-# #39799C / CAPE_INK #B55252) are study-editorial and are not carried by the
+# (mirrors ontology.R). The reference's hand-picked ink hexes (a cool
+# denominator ink #39799C / a warm numerator ink #B55252) are study-editorial and
+# are not carried by the
 # engine's single configured fill palette, so a hue-preserving darkened
 # companion is derived per condition to reproduce the two-tone appearance.
 condition_fill <- condition_palette(cfg, c(denominator, numerator))

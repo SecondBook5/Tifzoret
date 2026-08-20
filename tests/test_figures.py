@@ -50,7 +50,7 @@ def test_figures_init_scaffolds_programs_and_constructor_recipe(tmp_path):
     assert (project_path.parent / "hypothesis_panels.yaml").read_text() == before
 
 
-def test_constructor_catalog_is_public_and_contains_cape_derived_variants(capsys):
+def test_constructor_catalog_is_public_and_contains_derived_variants(capsys):
     assert main(["figures", "catalog", "--json"]) == 0
     catalog = json.loads(capsys.readouterr().out)["constructors"]
     indexed = {item["id"]: item for item in catalog}
@@ -60,7 +60,7 @@ def test_constructor_catalog_is_public_and_contains_cape_derived_variants(capsys
         "program_grouped",
         "direct_program_labels",
     }
-    assert set(indexed["dorothea_grn"]["variants"]) == {"rectangular", "radial"}
+    assert set(indexed["dorothea_grn"]["variants"]) == {"rectangular", "radial", "radial_legacy"}
     assert "program_violins" in PANEL_REGISTRY
 
 
