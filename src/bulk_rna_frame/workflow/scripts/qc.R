@@ -399,7 +399,8 @@ write_json_file(
     outlier_pcs_used = outlier_k,
     outlier_sigma = outlier_sigma,
     outlier_threshold = outlier_threshold,
-    outliers_flagged = as.character(outlier_table$sample_id[outlier_table$is_outlier])
+    outliers_flagged = as.character(outlier_table$sample_id[outlier_table$is_outlier]),
+    r_version = R.version.string
   ),
   file.path(args$outdir, "qc_summary.json")
 )

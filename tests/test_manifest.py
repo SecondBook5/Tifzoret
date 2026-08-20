@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import subprocess
@@ -11,6 +12,39 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "src" / "bulk_rna_frame" / "workflow" / "scripts" / "manifest.py"
+
+
+def _load_manifest_module():
+    spec = importlib.util.spec_from_file_location("_manifest_under_test", SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_analysis_r_version_prefers_recorded_over_path(tmp_path, monkeypatch):
+    """The R that ran the analysis is recorded in the QC summary; the manifest
+    must report it rather than whatever ``R`` happens to be on the system PATH
+    (the manifest step runs in the core env, which has no R)."""
+    module = _load_manifest_module()
+    monkeypatch.setattr(module, "command_output", lambda command: "R version 0.0.0 (path fallback)")
+    qc = tmp_path / "qc"
+    qc.mkdir()
+    (qc / "qc_summary.json").write_text(
+        json.dumps({"r_version": "R version 4.5.3 (2026-03-11)"}), encoding="utf-8"
+    )
+    assert module.analysis_r_version(tmp_path) == "R version 4.5.3 (2026-03-11)"
+
+
+def test_analysis_r_version_falls_back_when_unrecorded(tmp_path, monkeypatch):
+    module = _load_manifest_module()
+    monkeypatch.setattr(module, "command_output", lambda command: "R version 0.0.0 (path fallback)")
+    # No qc_summary.json at all.
+    assert module.analysis_r_version(tmp_path) == "R version 0.0.0 (path fallback)"
+    # Present but missing/blank the field → also falls back.
+    qc = tmp_path / "qc"
+    qc.mkdir()
+    (qc / "qc_summary.json").write_text(json.dumps({"r_version": "  "}), encoding="utf-8")
+    assert module.analysis_r_version(tmp_path) == "R version 0.0.0 (path fallback)"
 
 
 def test_manifest_expands_environment_variables_in_input_paths(tmp_path):

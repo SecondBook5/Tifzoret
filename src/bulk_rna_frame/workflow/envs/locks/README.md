@@ -9,7 +9,7 @@ and checksums.
 | Lock | Solved from | Packages | Role |
 |------|-------------|----------|------|
 | `core.lock.txt`    | `../core.yaml`    | 90  | BAM validation, featureCounts, assembly, front-door, report |
-| `network.lock.txt` | `../network.yaml` | 153 | Python network/GRN figure rendering |
+| `network.lock.txt` | `../network.yaml` | 152 | Python network/GRN figure rendering (networkx + scipy) |
 | `r.lock.txt`       | `../r.yaml`       | 414 | DESeq2, fgsea, GSVA, ComplexHeatmap, decoupleR/dorothea/viper, WGCNA |
 
 ## Platform

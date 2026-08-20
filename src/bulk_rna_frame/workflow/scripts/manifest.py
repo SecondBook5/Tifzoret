@@ -97,6 +97,22 @@ def command_output(command: list[str]) -> str:
     return lines[0] if lines else "unavailable"
 
 
+def analysis_r_version(results: Path) -> str:
+    """Return the R interpreter version recorded by the QC stage — the R that
+    actually ran the analysis. The manifest step runs in the core environment,
+    which has no R, so shelling out to ``R`` here would report whatever R is on
+    the system PATH rather than the pinned analysis interpreter. Fall back to
+    that PATH lookup only when the recorded version is unavailable."""
+    summary = results / "qc" / "qc_summary.json"
+    try:
+        recorded = json.loads(summary.read_text(encoding="utf-8")).get("r_version")
+    except (OSError, json.JSONDecodeError, AttributeError):
+        recorded = None
+    if isinstance(recorded, str) and recorded.strip():
+        return recorded
+    return command_output(["R", "--version"])
+
+
 def repository_revision(start: Path) -> dict[str, object]:
     """Return the git HEAD revision at ``start`` and whether its working tree is dirty."""
     revision = command_output(["git", "-C", str(start), "rev-parse", "HEAD"])
@@ -216,7 +232,7 @@ def main() -> None:
         "tools": {
             "python": platform.python_version(),
             "snakemake": command_output(["snakemake", "--version"]),
-            "R": command_output(["R", "--version"]),
+            "R": analysis_r_version(results),
             "samtools": command_output(["samtools", "--version"]),
             "featureCounts": command_output(["featureCounts", "-v"]),
         },
