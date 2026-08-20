@@ -22,6 +22,7 @@ from bulk_rna_frame.config import load_project  # noqa: E402
 
 
 def sha256(path: Path) -> str:
+    """Return the hex SHA-256 digest of a file, read in 1 MiB blocks."""
     digest = hashlib.sha256()
     with path.open("rb") as handle:
         for block in iter(lambda: handle.read(1024 * 1024), b""):
@@ -34,6 +35,9 @@ def record(
     relative_to: Path | None = None,
     known: dict[str, object] | None = None,
 ) -> dict[str, object]:
+    """Describe a file as a path/size/sha256 record. Reuse a previously
+    established checksum when the recorded size (and mtime, when present) still
+    match, otherwise recompute the digest."""
     stat = path.stat()
     reusable = (
         known is not None
@@ -59,6 +63,7 @@ def prepared_checksums(results: Path) -> dict[str, dict[str, object]]:
     indexed: dict[str, dict[str, object]] = {}
 
     def visit(value: object) -> None:
+        """Recursively index dict entries carrying an absolute ``path`` with a ``sha256`` and ``bytes`` into ``indexed``."""
         if isinstance(value, dict):
             candidate = value.get("path")
             if candidate and value.get("sha256") and value.get("bytes") is not None:
@@ -76,6 +81,7 @@ def prepared_checksums(results: Path) -> dict[str, dict[str, object]]:
 
 
 def command_output(command: list[str]) -> str:
+    """Run a command and return its first non-empty output line, or ``"unavailable"`` if it cannot run or prints nothing."""
     try:
         result = subprocess.run(
             command,
@@ -92,6 +98,7 @@ def command_output(command: list[str]) -> str:
 
 
 def repository_revision(start: Path) -> dict[str, object]:
+    """Return the git HEAD revision at ``start`` and whether its working tree is dirty."""
     revision = command_output(["git", "-C", str(start), "rev-parse", "HEAD"])
     status = command_output(["git", "-C", str(start), "status", "--porcelain"])
     return {
@@ -101,6 +108,7 @@ def repository_revision(start: Path) -> dict[str, object]:
 
 
 def collect_warnings(results: Path) -> list[dict[str, str]]:
+    """Gather ``warnings`` entries from every JSON artifact under ``results`` (except the manifest), each tagged with its source path relative to ``results``."""
     warnings: list[dict[str, str]] = []
     for path in sorted(results.rglob("*.json")):
         if path.name == "manifest.json":
@@ -118,6 +126,9 @@ def collect_warnings(results: Path) -> list[dict[str, str]]:
 
 
 def collect_resource_receipts(results: Path) -> list[dict[str, Any]]:
+    """Collect resource-cache receipt JSON files under ``results/.cache/resources``,
+    each augmented with its ``receipt`` path relative to ``results``. Return an
+    empty list when the cache directory is absent."""
     receipts: list[dict[str, Any]] = []
     cache = results / ".cache" / "resources"
     if not cache.is_dir():
@@ -134,6 +145,10 @@ def collect_resource_receipts(results: Path) -> list[dict[str, Any]]:
 
 
 def main() -> None:
+    """Write the run's provenance manifest: normalized configuration, contrast
+    direction semantics, random seeds, platform and tool versions, repository
+    revision, collected warnings and resource receipts, and checksums of every
+    declared input and produced result file."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--project-config", required=True)
     parser.add_argument("--results", required=True)

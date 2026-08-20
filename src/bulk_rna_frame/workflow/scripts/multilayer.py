@@ -14,6 +14,7 @@ import networkx as nx
 
 
 def read(path: str) -> list[dict[str, str]]:
+    """Read a TSV into a list of row dicts."""
     with Path(path).open(newline="", encoding="utf-8") as handle:
         return list(csv.DictReader(handle, delimiter="\t"))
 
@@ -33,6 +34,7 @@ def symbols(rows: list[dict[str, str]], columns: tuple[str, ...]) -> set[str]:
 
 
 def write(path: Path, rows: list[dict[str, Any]], fields: list[str]) -> None:
+    """Write ``rows`` to a TSV at ``path`` with the given field order, creating parent directories."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(
@@ -47,6 +49,7 @@ def write(path: Path, rows: list[dict[str, Any]], fields: list[str]) -> None:
 
 
 def arguments() -> argparse.Namespace:
+    """Parse the command-line arguments for the multilayer triangulation stage."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--grn-edges", required=True)
     parser.add_argument("--wgcna-hubs", required=True)
@@ -57,6 +60,10 @@ def arguments() -> argparse.Namespace:
     return parser.parse_args()
 
 def main() -> None:
+    """Combine regulatory (GRN), co-expression (WGCNA hub), and STRING-association
+    evidence, flagging genes present in at least two layers as triangulated. Write
+    node, triangulated, and edge tables, a triangulation network figure (PDF and
+    PNG), and a summary JSON."""
     args = arguments()
     grn = read(args.grn_edges)
     hubs = read(args.wgcna_hubs)

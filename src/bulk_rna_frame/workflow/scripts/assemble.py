@@ -65,6 +65,11 @@ def assemble(
     metadata: Path,
     panel_index: Path,
 ) -> None:
+    """Lay out a figure set's recipe-selected panels onto one vector PDF page and a
+    raster review PNG. Stage each source panel's PDF/PNG and its displayed-data
+    artifacts with checksums, then write the assembly metadata and the panel
+    index. Raise if the results root disagrees with the project or a panel source
+    is missing."""
     project = load_project(project_config)
     if results.resolve() != project.result_root.resolve():
         raise ValueError(
@@ -222,6 +227,7 @@ def assemble(
 
 
 def main() -> None:
+    """Parse arguments and assemble the requested figure set into its PDF, review PNG, metadata, and panel index."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--project-config", type=Path, required=True)
     parser.add_argument("--results", type=Path, required=True)

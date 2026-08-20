@@ -19,11 +19,15 @@ h = getattr(markup, "es" + "ca" + "pe")
 
 
 def link(path: Path, root: Path) -> str:
+    """Return an HTML list item linking to ``path`` by its POSIX path relative to ``root``."""
     relative = path.relative_to(root)
     return f'<li><a href="{h(relative.as_posix())}">{h(relative.as_posix())}</a></li>'
 
 
 def main() -> None:
+    """Build the run's front-door HTML index: the contrast table (with direction
+    semantics), warnings aggregated from module summaries, and links to every PDF
+    figure, TSV table, and summary JSON under the results root."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--project-config", required=True)
     parser.add_argument("--results", required=True)

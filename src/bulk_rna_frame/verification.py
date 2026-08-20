@@ -28,6 +28,9 @@ DE_FIELDS = {
 
 @dataclass(frozen=True)
 class VerificationResult:
+    """Outcome of comparing a candidate run against a reference: an overall
+    pass/fail flag and the structured report of every check performed."""
+
     passed: bool
     report: dict[str, Any]
 
@@ -115,6 +118,13 @@ def _compare_tsv(reference: Path, candidate: Path, *, atol: float, rtol: float) 
 
 
 def verify_runs(reference: str | Path, candidate: str | Path, *, atol: float = 1e-8, rtol: float = 1e-6) -> VerificationResult:
+    """Compare every TSV under two run directories cell-by-cell within tolerances.
+
+    Matches tables by their path relative to each run root, reports any table
+    present in one run but not the other, and compares shared tables numerically
+    (absolute ``atol`` / relative ``rtol``). Passes only when no table is missing
+    or extra and every compared cell agrees.
+    """
     reference_root = Path(reference).expanduser().resolve()
     candidate_root = Path(candidate).expanduser().resolve()
     if not reference_root.is_dir() or not candidate_root.is_dir():
@@ -360,5 +370,6 @@ def verify_project(
 
 
 def write_verification(result: VerificationResult, output: Path) -> None:
+    """Write a verification report as indented JSON, creating parent directories."""
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(result.report, indent=2) + "\n", encoding="utf-8")

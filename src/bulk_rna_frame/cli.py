@@ -26,6 +26,7 @@ from .verification import verify_project, write_verification
 
 
 def _copy_tree(source, destination: Path) -> None:
+    """Recursively copy a packaged template tree into ``destination``."""
     destination.mkdir(parents=True, exist_ok=True)
     for item in source.iterdir():
         target = destination / item.name
@@ -36,6 +37,11 @@ def _copy_tree(source, destination: Path) -> None:
 
 
 def command_init(args: argparse.Namespace) -> int:
+    """Scaffold a new project directory from an input-boundary template.
+
+    ``--input`` chooses the template (``counts``, ``bam``, ``nfcore-rnaseq``, or
+    ``archive``). The destination must not already contain files. Returns 0.
+    """
     destination = Path(args.directory).expanduser().resolve()
     if destination.exists() and any(destination.iterdir()):
         raise ProjectValidationError(f"Destination is not empty: {destination}")
@@ -52,6 +58,11 @@ def command_init(args: argparse.Namespace) -> int:
 
 
 def command_validate(args: argparse.Namespace) -> int:
+    """Validate the project and every tabular input, printing a JSON summary.
+
+    Loading raises :class:`ProjectValidationError` (exit 2 via :func:`main`) on
+    any contract violation; on success prints the resolved summary and returns 0.
+    """
     project = load_project(args.project)
     print(report_json(project), end="")
     return 0
@@ -60,6 +71,14 @@ def command_validate(args: argparse.Namespace) -> int:
 def _snakemake(
     args: argparse.Namespace, dry_run: bool, targets: tuple[str, ...] = ()
 ) -> int:
+    """Invoke Snakemake against the packaged workflow for a validated project.
+
+    The project is validated first, then Snakemake runs with the study's config
+    file, from the config directory (so relative paths resolve identically to
+    ``validate``). ``targets`` defaults to the release ``manifest.json``; conda
+    provisioning is on unless ``--no-conda`` is given, and ``dry_run`` adds
+    ``--dry-run``. Returns Snakemake's exit code unchanged.
+    """
     project = load_project(args.project)
     if not targets:
         targets = (str(project.result_root / "manifest.json"),)
@@ -84,18 +103,29 @@ def _snakemake(
 
 
 def command_prepare(args: argparse.Namespace) -> int:
+    """Run only up to the canonical inputs (counting/annotation), then stop.
+
+    Targets the input manifest so a study's data boundary can be materialized
+    and inspected before committing to the full analysis. Returns Snakemake's code.
+    """
     project = load_project(args.project)
     target = project.result_root / "inputs" / "input_manifest.json"
     return _snakemake(args, dry_run=False, targets=(str(target),))
 
 
 def command_report(args: argparse.Namespace) -> int:
+    """Build the navigable ``REPORT.html`` (running any missing upstream steps)."""
     project = load_project(args.project)
     target = project.result_root / "REPORT.html"
     return _snakemake(args, dry_run=False, targets=(str(target),))
 
 
 def command_assemble(args: argparse.Namespace) -> int:
+    """Assemble the configured multi-panel publication figure(s).
+
+    Requires ``publication.recipe`` (a file or inline mapping); raises
+    :class:`ProjectValidationError` otherwise. Returns Snakemake's exit code.
+    """
     project = load_project(args.project)
     if project.figure_recipe is None:
         raise ProjectValidationError("assemble requires publication.recipe in project.yaml")
@@ -103,6 +133,12 @@ def command_assemble(args: argparse.Namespace) -> int:
 
 
 def command_figures_init(args: argparse.Namespace) -> int:
+    """Scaffold the three publication companion files and validate the recipe.
+
+    Writes ``hypotheses.yaml``, ``hypothesis_panels.yaml``, and
+    ``figure_recipe.yaml`` beside the project (skipped unless ``--force`` when
+    they already exist, which surfaces as exit 2). Returns 0 on success.
+    """
     try:
         outputs = initialize_figure_workflow(args.project, force=args.force)
         project = load_project(args.project)
@@ -116,6 +152,11 @@ def command_figures_init(args: argparse.Namespace) -> int:
 
 
 def command_figures_catalog(args: argparse.Namespace) -> int:
+    """List the registered figure constructors, their variants, and scope.
+
+    ``--json`` emits the machine-readable catalog; otherwise prints an aligned
+    table of ``id``, contrast-vs-study scope, and available variants. Returns 0.
+    """
     catalog = constructor_catalog()
     if args.json:
         print(json.dumps({"constructors": catalog}, indent=2))
@@ -128,6 +169,12 @@ def command_figures_catalog(args: argparse.Namespace) -> int:
 
 
 def command_figures_build(args: argparse.Namespace) -> int:
+    """Render the recipe's panels and assemble its figure set(s).
+
+    With ``--figure-set`` only that set's panels are built (targeting its panel
+    index); without it, every configured set is assembled. Requires
+    ``publication.recipe``. Returns Snakemake's exit code.
+    """
     project = load_project(args.project)
     if project.figure_recipe is None:
         raise ProjectValidationError("figures build requires publication.recipe in project.yaml")
@@ -140,6 +187,12 @@ def command_figures_build(args: argparse.Namespace) -> int:
 
 
 def command_figures_gallery(args: argparse.Namespace) -> int:
+    """Build an HTML + contact-sheet review of every built panel variant.
+
+    Lets a reviewer compare variants side by side before choosing the final
+    panel. Requires ``publication.recipe``; ``--output`` overrides the path.
+    Returns 0.
+    """
     project = load_project(args.project)
     if project.figure_recipe is None:
         raise ProjectValidationError("figures gallery requires publication.recipe in project.yaml")
@@ -149,6 +202,12 @@ def command_figures_gallery(args: argparse.Namespace) -> int:
 
 
 def command_verify(args: argparse.Namespace) -> int:
+    """Compare a project's result against a reference run within tolerances.
+
+    ``--scope`` restricts the comparison (``counts``, ``core``, or ``all``);
+    ``--candidate`` overrides the directory checked (defaults to the resolved
+    result). Writes a verification report and returns 0 when it passes, 1 otherwise.
+    """
     project = load_project(args.project)
     candidate = Path(args.candidate).expanduser().resolve() if args.candidate else project.result_root
     result = verify_project(
@@ -161,17 +220,25 @@ def command_verify(args: argparse.Namespace) -> int:
 
 
 def command_collection_validate(args: argparse.Namespace) -> int:
+    """Validate a multi-study collection and print its resolved study summary."""
     print(collection_report(load_collection(args.collection)), end="")
     return 0
 
 
 def command_collection_run(args: argparse.Namespace) -> int:
+    """Run the cross-study (meta-analysis) collection and report the output path."""
     output = run_collection(load_collection(args.collection))
     print(f"Collection analysis written: {output}")
     return 0
 
 
 def command_migrate_config(args: argparse.Namespace) -> int:
+    """Convert a development v1 configuration into the public v2 contract.
+
+    Applies the requested species/reference metadata (v1 predates these),
+    refuses to overwrite an existing ``--output`` unless ``--force``, and
+    re-validates the written file in place so relative paths resolve. Returns 0.
+    """
     source = Path(args.project).expanduser().resolve()
     raw = yaml.safe_load(source.read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
@@ -203,6 +270,7 @@ def command_migrate_config(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """Construct the ``bulk-rna`` argument parser with every subcommand wired to a handler."""
     parser = argparse.ArgumentParser(prog="bulk-rna")
     commands = parser.add_subparsers(dest="command", required=True)
 
@@ -317,6 +385,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Parse arguments, dispatch to the selected handler, and map errors to exit codes.
+
+    Returns the handler's exit code, 2 for a :class:`ProjectValidationError`
+    (with the message on stderr), or 127 when a required executable is missing.
+    """
     parser = build_parser()
     args = parser.parse_args(argv)
     try:

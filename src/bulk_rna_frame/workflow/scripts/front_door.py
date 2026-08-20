@@ -21,6 +21,7 @@ from bulk_rna_frame.config import load_project  # noqa: E402
 
 
 def checksum(path: Path) -> str:
+    """Return the hex SHA-256 digest of a file, read in 1 MiB blocks."""
     digest = hashlib.sha256()
     with path.open("rb") as handle:
         for block in iter(lambda: handle.read(1024 * 1024), b""):
@@ -29,11 +30,13 @@ def checksum(path: Path) -> str:
 
 
 def safe_name(path: Path, root: Path) -> str:
+    """Return a flat, extension-free label built from ``path``'s parts relative to ``root``, joined by ``__``."""
     relative = path.relative_to(root).with_suffix("")
     return "__".join(relative.parts)
 
 
 def dimensions(path: Path) -> dict[str, object]:
+    """Return pixel dimensions for a PNG, or the page count and first-page point dimensions for a PDF."""
     if path.suffix.lower() == ".png":
         with Image.open(path) as image:
             return {"width_px": image.width, "height_px": image.height}
@@ -47,6 +50,11 @@ def dimensions(path: Path) -> dict[str, object]:
 
 
 def resolve_panel_sources(project, root: Path) -> list[tuple[str, Path, dict]]:
+    """Return ``(label, path-stem, selection)`` triples for each figure to promote.
+    Prefer recipe figure sets, resolving each panel's staged artifact from the
+    assembled panel index (falling back to a legacy ``source`` key) plus the
+    assembled figure; when no recipe applies, fall back to QC and per-contrast
+    default module figures."""
     selected: list[tuple[str, Path, dict]] = []
     recipe = project.recipe_config or {}
     for figure_set, spec in recipe.get("figure_sets", {}).items():
@@ -93,6 +101,9 @@ def resolve_panel_sources(project, root: Path) -> list[tuple[str, Path, dict]]:
 
 
 def main() -> None:
+    """Copy each resolved figure panel (PDF and PNG) and every selected table into
+    the review directories, recording checksums, dimensions, and per-figure
+    metadata, then write the figures and tables index JSON files."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--project-config", required=True)
     parser.add_argument("--results", required=True)

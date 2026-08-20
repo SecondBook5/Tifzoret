@@ -62,6 +62,17 @@ def _bh(rows: list[dict[str, object]]) -> None:
 
 
 def run_collection(collection: ResolvedCollection) -> Path:
+    """Combine each study's per-gene DE evidence into one signed meta-analysis.
+
+    Reads the chosen contrast's DE table from every member study, converts each
+    gene's effect and p-value into a direction-signed z (positive = numerator
+    minus denominator, preserved across studies), and combines the weighted
+    z-scores with Stouffer's method into a two-sided meta p-value with BH
+    correction. Genes seen in fewer than two studies are skipped; with three or
+    more, an optional leave-one-out pass records the z-range and whether the
+    direction stays stable. Writes ``meta_analysis.tsv`` plus a provenance
+    ``manifest.json`` and returns the table path.
+    """
     output = collection.result_root
     output.mkdir(parents=True, exist_ok=True)
     studies = []

@@ -6,6 +6,10 @@ from pathlib import Path
 from statistics import NormalDist
 
 def main():
+    """Estimate the per-group sample size for 80% power for the mediator and
+    outcome components: compute each component's standardized effect between the
+    two treatment groups by a normal approximation, then write the power table
+    and its summary JSON."""
     p=argparse.ArgumentParser(); p.add_argument("--inputs",required=True); p.add_argument("--outdir",required=True); a=p.parse_args(); rows=list(csv.DictReader(Path(a.inputs).open(),delimiter="\t")); out=Path(a.outdir); (out/"tables").mkdir(parents=True,exist_ok=True)
     result=[]
     for outcome in ("mediator","outcome"):

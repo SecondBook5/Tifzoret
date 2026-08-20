@@ -23,6 +23,7 @@ h = getattr(markup, "es" + "ca" + "pe")
 
 
 def read_tsv(path: str | None) -> list[dict[str, str]]:
+    """Read a TSV into a list of row dicts, or ``[]`` if the path is unset or missing."""
     if not path or not Path(path).is_file():
         return []
     with Path(path).open(newline="", encoding="utf-8") as handle:
@@ -30,6 +31,7 @@ def read_tsv(path: str | None) -> list[dict[str, str]]:
 
 
 def write_tsv(path: Path, rows: list[dict[str, Any]], fields: list[str]) -> None:
+    """Write ``rows`` to a TSV at ``path`` with the given field order, creating parent directories."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=fields, delimiter="\t", lineterminator="\n", extrasaction="ignore")
@@ -37,6 +39,7 @@ def write_tsv(path: Path, rows: list[dict[str, Any]], fields: list[str]) -> None
 
 
 def number(value: object) -> float | None:
+    """Coerce a value to a finite float, or ``None`` if it is not a finite number."""
     try:
         result = float(value)
     except (TypeError, ValueError):
@@ -45,6 +48,10 @@ def number(value: object) -> float | None:
 
 
 def support(expected: str, effect: float | None) -> str:
+    """Classify whether a signed effect supports an expected-direction phrase.
+    Return ``unmeasured`` when there is no effect, ``not_directional`` for
+    non-directional wording, otherwise ``supporting``/``conflicting``/``neutral``
+    by the sign of the effect (positive is numerator minus denominator)."""
     if effect is None:
         return "unmeasured"
     expected = expected.lower()
@@ -60,6 +67,10 @@ def support(expected: str, effect: float | None) -> str:
 
 
 def main() -> None:
+    """For one contrast, score each configured hypothesis's gene, pathway, and
+    regulator items against DE, GSEA, GSVA, and regulator evidence, then write a
+    per-line evidence table, a per-hypothesis summary table, a summary JSON, and
+    an HTML report."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--project-config", required=True)
     parser.add_argument("--contrast-id", required=True)
