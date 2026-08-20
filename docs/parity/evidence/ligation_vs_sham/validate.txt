@@ -1,2 +1,0 @@
-validation error:
-unsupported project configuration version: None

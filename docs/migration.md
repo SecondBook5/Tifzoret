@@ -1,9 +1,7 @@
 # Migration guide
 
-The authoritative path-by-path capability ledger, current parity status, gap
-register, and retirement gates are maintained in the
-[full migration map](full-migration-map.md). This shorter guide describes the
-consumer procedure.
+This guide describes how to move an existing project onto BulkRNAFrame and
+verify that the migrated run reproduces your established results.
 
 BulkRNAFrame v2 separates reusable workflow behavior from study biology. Keep
 sample metadata, hypotheses, gene programs, panel recipes, and golden-reference

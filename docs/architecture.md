@@ -66,8 +66,11 @@ whole-file checksums, samtools header checksums, integrity status, the GTF
 checksum, counting options, and assignment rates. Resource receipts record the
 provider, organism, release, request, retrieval time, license notice, and hash.
 
-## Initial repository relationship
+## Repository relationship
 
-`lymphatic-flow-homeostasis` remains a biological project and golden-reference
-consumer. Code is promoted into this repository only after its inputs and
-outputs have been expressed through neutral contracts.
+The engine is a project-agnostic package. Each study lives in its own thin
+consumer repository — sample metadata, hypotheses, gene programs, panel
+recipes, and golden-reference results — and points at the engine through the
+neutral configuration contract. Analysis code is promoted into the engine only
+after its inputs and outputs are expressed through those neutral contracts, so
+no study biology enters the engine.

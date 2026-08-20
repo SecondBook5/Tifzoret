@@ -1,9 +1,0 @@
-=== Capturing evidence for ligation_vs_sham ===
-Study config: /home/ajbook/projects/lymphatic-flow-homeostasis/studies/ligation_vs_sham/config.yaml
-Timestamp: 2026-08-12T22:54:13Z
-
-No pre-existing comparison outputs found; attempting fresh bridge run
-
---- Step 1: Validating study config ---
-Validation exit code: 2
-BLOCKED: Validation failed for ligation_vs_sham

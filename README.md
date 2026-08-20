@@ -117,4 +117,4 @@ results/<project>/<analysis_set>/
 
 Every rendered constructor declares PDF, PNG, and displayed-data artifacts. The release manifest records normalized configuration, inputs/results checksums, contrast semantics, provider receipts, random seeds, warnings, environment/container information, and repository revision.
 
-See the [study-authoring guide](docs/authoring-a-study.md) (start here), [configuration](docs/configuration.md), [architecture](docs/architecture.md), [methods](docs/methods.md), [hypothesis-driven figures](docs/figures.md), [migration](docs/migration.md), the [full source-to-tool migration map](docs/full-migration-map.md), and [troubleshooting](docs/troubleshooting.md).
+See the [study-authoring guide](docs/authoring-a-study.md) (start here), [configuration](docs/configuration.md), [architecture](docs/architecture.md), [methods](docs/methods.md), [hypothesis-driven figures](docs/figures.md), [migration](docs/migration.md), and [troubleshooting](docs/troubleshooting.md).
