@@ -51,6 +51,7 @@ rule study_qc:
         density_table=qc("tables/expression_density_displayed.tsv"),
         distance_table=qc("tables/sample_distance.tsv"),
         variable_table=qc("tables/variable_gene_heatmap_displayed.tsv"),
+        outlier_table=qc("tables/outlier_distances.tsv"),
         pca_correlation_layout=qc("tables/pca_correlation_layout.json"),
         pca_pdf=qc("figures/pca.pdf"),
         pca_png=qc("figures/pca.png"),
@@ -66,6 +67,8 @@ rule study_qc:
         distance_png=qc("figures/sample_distance.png"),
         variable_pdf=qc("figures/variable_gene_heatmap.pdf"),
         variable_png=qc("figures/variable_gene_heatmap.png"),
+        outlier_pdf=qc("figures/sample_outliers.pdf"),
+        outlier_png=qc("figures/sample_outliers.png"),
         overview_pdf=qc("figures/qc_overview.pdf"),
         overview_png=qc("figures/qc_overview.png"),
         summary=qc("qc_summary.json")
