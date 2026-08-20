@@ -2,6 +2,11 @@
 
 BulkRNAFrame is a configuration-driven, end-to-end downstream bulk RNA-seq workflow. It accepts aligned BAMs, nf-core/rnaseq BAM outputs, ZIP/TAR archives containing BAMs, or validated integer count matrices. FASTQ processing remains upstream in nf-core/rnaseq.
 
+> **New to the tool, or coming from the wet lab?** Start with the
+> **[study-authoring guide](docs/authoring-a-study.md)** — it walks through
+> describing an experiment and its hypotheses in one file and getting a
+> publication-grade report back, with no code required.
+
 The stable v1 target is mouse. The analysis contracts are species-neutral, and the human provider implementation is already exercised at the schema boundary while parity fixtures are completed.
 
 ## What it runs
@@ -46,6 +51,8 @@ my-study/
 ├── hypothesis_panels.yaml   # publication/full profiles
 └── figure_recipe.yaml       # publication/full profiles
 ```
+
+The three publication companion files carry the hypothesis claims, the gene/pathway panels, and the figure recipe. Each may instead be **inlined into `project.yaml`** — as a mapping under `hypotheses.claims`, `hypotheses.panels`, and `publication.recipe` — so an entire study is one self-contained file. This single-file form is what an authoring UI generates and edits; the engine accepts either form interchangeably.
 
 Positive effects always mean `numerator - denominator`. No rule infers direction from group names or sample order.
 
@@ -110,4 +117,4 @@ results/<project>/<analysis_set>/
 
 Every rendered constructor declares PDF, PNG, and displayed-data artifacts. The release manifest records normalized configuration, inputs/results checksums, contrast semantics, provider receipts, random seeds, warnings, environment/container information, and repository revision.
 
-See [configuration](docs/configuration.md), [architecture](docs/architecture.md), [methods](docs/methods.md), [hypothesis-driven figures](docs/figures.md), [migration](docs/migration.md), the [full source-to-tool migration map](docs/full-migration-map.md), and [troubleshooting](docs/troubleshooting.md).
+See the [study-authoring guide](docs/authoring-a-study.md) (start here), [configuration](docs/configuration.md), [architecture](docs/architecture.md), [methods](docs/methods.md), [hypothesis-driven figures](docs/figures.md), [migration](docs/migration.md), the [full source-to-tool migration map](docs/full-migration-map.md), and [troubleshooting](docs/troubleshooting.md).

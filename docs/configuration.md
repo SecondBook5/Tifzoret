@@ -101,6 +101,12 @@ Publication/full projects declare:
   variants, contrast IDs, letters, grid positions, dimensions, and legend
   policy.
 
+Each of `hypotheses.claims`, `hypotheses.panels`, and `publication.recipe` may
+be given either as a path to a sibling file or as an inline mapping written
+directly in `project.yaml`. Inlining all three yields a single self-contained
+study file — the form an authoring UI produces — and the engine validates and
+runs it identically to the multi-file form.
+
 Run `bulk-rna figures init project.yaml` to scaffold all three publication
 files. Constructor-based recipes are validated against the enabled modules and
 declared contrasts. Run `bulk-rna figures catalog` to inspect the available
