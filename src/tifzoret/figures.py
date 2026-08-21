@@ -80,6 +80,10 @@ PANEL_REGISTRY: dict[str, PanelConstructor] = {
         "library_metrics", "Library metrics", "Per-sample library size and detected-gene sequencing-depth metrics.", False, "default",
         {"default": _variant("qc/figures/library_metrics", "qc", "Library metrics", "qc/tables/library_metrics.tsv")},
     ),
+    "detected_genes": PanelConstructor(
+        "detected_genes", "Detected genes", "Per-sample detected-gene counts as dots on a data-focused axis with a median reference line.", False, "default",
+        {"default": _variant("qc/figures/detected_genes", "qc", "Detected genes", "qc/tables/detected_genes_displayed.tsv")},
+    ),
     "expression_density": PanelConstructor(
         "expression_density", "Expression density", "Per-sample log-expression density distributions.", False, "default",
         {"default": _variant("qc/figures/expression_density", "qc", "Expression density", "qc/tables/expression_density_displayed.tsv")},

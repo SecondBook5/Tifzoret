@@ -413,6 +413,65 @@ def test_materialize_stages_inline_companions(tmp_path):
     assert yaml.safe_load(project.figure_recipe.read_text()) == RECIPE_DOC
 
 
+def test_standard_profile_loads_inline_figure_recipe(tmp_path):
+    # A standard-profile study (QC + DE only, no publication module) may still
+    # declare a figure recipe: `tifzoret figures build` is a standalone step that
+    # assembles QC/DE panels. Regression for the loader only reading the recipe
+    # when the publication module was enabled.
+    config = project_copy(tmp_path)
+    data = yaml.safe_load(config.read_text())
+    assert data["analysis"]["profile"] == "standard"
+    data["publication"] = {
+        "recipe": {
+            "figure_sets": {
+                "supplementary": {
+                    "width": 10,
+                    "height": 6,
+                    "columns": 2,
+                    "panels": [
+                        {"id": "A", "constructor": "pca_correlation"},
+                        {"id": "B", "constructor": "volcano", "contrast": "treatment_a_vs_control"},
+                    ],
+                }
+            }
+        }
+    }
+    config.write_text(yaml.safe_dump(data, sort_keys=False))
+    project = load_project(config)
+    assert "publication" not in project.modules
+    assert project.figure_recipe == project.result_root / "inputs" / "figure_recipe.yaml"
+    assert set(project.recipe_config["figure_sets"]) == {"supplementary"}
+
+
+def test_standard_profile_rejects_publication_only_panel(tmp_path):
+    # The recipe contract still guards: a constructor/variant that needs a module
+    # this profile did not enable is rejected even though the recipe now loads.
+    config = project_copy(tmp_path)
+    data = yaml.safe_load(config.read_text())
+    data["publication"] = {
+        "recipe": {
+            "figure_sets": {
+                "supplementary": {
+                    "width": 10,
+                    "height": 6,
+                    "columns": 1,
+                    "panels": [
+                        {
+                            "id": "A",
+                            "constructor": "de_heatmap",
+                            "variant": "global_clustered",
+                            "contrast": "treatment_a_vs_control",
+                        }
+                    ],
+                }
+            }
+        }
+    }
+    config.write_text(yaml.safe_dump(data, sort_keys=False))
+    with pytest.raises(ProjectValidationError, match="requires analysis module 'publication'"):
+        load_project(config)
+
+
 def _dry_run_rules(config: Path) -> str:
     """Return `snakemake --dry-run` stdout for a project's manifest target."""
     project = load_project(config)

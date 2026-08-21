@@ -294,6 +294,35 @@ metrics_plot <- ggplot(metrics_long, aes(sample_id, value, fill = .data[[group_c
   theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "top")
 save_plot_pair(metrics_plot, file.path(dirs$figures, "library_metrics"), 7.2, 5.6)
 
+# --- Detected-genes panel (single metric, focused axis) -----------------------
+# A standalone "detected genes by sample" QC panel. Detection counts cluster in
+# a narrow high band, so zero-anchored bars would compress the between-sample
+# spread into the top few percent of each bar and every sample would look
+# identical -- defeating the one thing a detection panel exists to show. Draw
+# shape-21 dots on a data-focused y-axis (not anchored at zero) with a dashed
+# median reference line, reusing the PCA panel's fill + darker-ink styling so the
+# two panels read as one figure.
+detected_genes_table <- library_metrics %>%
+  select(sample_id, all_of(group_col), detected_genes) %>%
+  mutate(sample_id = factor(sample_id, levels = colnames(counts)))
+readr::write_tsv(detected_genes_table, file.path(dirs$tables, "detected_genes_displayed.tsv"))
+detected_genes_median <- stats::median(detected_genes_table$detected_genes)
+detected_genes_plot <- ggplot(detected_genes_table, aes(sample_id, detected_genes)) +
+  geom_hline(yintercept = detected_genes_median, linetype = "22", colour = MID_GREY, linewidth = 0.5) +
+  geom_point(aes(fill = .data[[group_col]], colour = .data[[group_col]]), shape = 21, size = 3.8, stroke = 0.9) +
+  scale_fill_manual(values = palette, drop = FALSE, labels = cond_display) +
+  scale_colour_manual(values = ink_palette, drop = FALSE) +
+  scale_y_continuous(labels = scales::label_number(), expand = expansion(mult = 0.12)) +
+  labs(
+    title = "Detected genes by sample",
+    subtitle = "Genes with a non-zero count in each sample; dashed line marks the median",
+    x = NULL, y = "Detected genes", fill = NULL, colour = NULL
+  ) +
+  theme_panel(8.5) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "top") +
+  guides(colour = "none", fill = guide_legend(override.aes = list(shape = 21, size = 3, stroke = 0.7)))
+save_plot_pair(detected_genes_plot, file.path(dirs$figures, "detected_genes"), 6.2, 5.0)
+
 density_plot <- ggplot(density_table, aes(log2_cpm, density, colour = .data[[group_col]], group = sample_id)) +
   geom_line(linewidth = 0.65, alpha = 0.85) +
   scale_colour_manual(values = palette, drop = FALSE) +

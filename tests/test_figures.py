@@ -64,6 +64,15 @@ def test_constructor_catalog_is_public_and_contains_derived_variants(capsys):
     assert "program_violins" in PANEL_REGISTRY
 
 
+def test_detected_genes_is_a_contrast_free_qc_panel():
+    constructor = PANEL_REGISTRY["detected_genes"]
+    assert constructor.contrast_specific is False
+    variant = constructor.variants[constructor.default_variant]
+    assert variant.required_module == "qc"
+    assert variant.source == "qc/figures/detected_genes"
+    assert variant.displayed_data == ("qc/tables/detected_genes_displayed.tsv",)
+
+
 def test_constructor_recipe_rejects_unknown_variant_and_missing_contrast(tmp_path):
     project_path = _project(tmp_path)
     assert main(["figures", "init", str(project_path)]) == 0

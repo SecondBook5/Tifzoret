@@ -794,16 +794,20 @@ def load_project(config_path: str | Path) -> ResolvedProject:
                 errors.extend(document_errors)
                 if hypothesis_config is not None:
                     hypothesis_path = canonical_inputs / "hypotheses.yaml"
-    if modules["publication"]:
-        if "publication" not in config:
-            errors.append("modules.publication requires publication.recipe")
-        else:
-            recipe_config, document_errors = _load_companion(
-                base, config["publication"]["recipe"], "figure_recipe"
-            )
-            errors.extend(document_errors)
-            if recipe_config is not None:
-                recipe_path = canonical_inputs / "figure_recipe.yaml"
+    if modules["publication"] and "publication" not in config:
+        errors.append("modules.publication requires publication.recipe")
+    elif "publication" in config:
+        # Load the figure recipe whenever one is declared, even under a profile
+        # that leaves the publication *module* off. `tifzoret figures build` is a
+        # standalone step, so a standard-profile study (QC/DE panels only) can
+        # still assemble its figure set. The recipe contract check below rejects
+        # any panel whose constructor needs a module this profile did not enable.
+        recipe_config, document_errors = _load_companion(
+            base, config["publication"]["recipe"], "figure_recipe"
+        )
+        errors.extend(document_errors)
+        if recipe_config is not None:
+            recipe_path = canonical_inputs / "figure_recipe.yaml"
     if hypothesis_config is not None:
         known_contrasts = set(contrast_ids)
         known_gene_panels = set((panel_config or {}).get("gene_panels", {})) | set(
