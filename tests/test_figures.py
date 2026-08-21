@@ -11,13 +11,13 @@ import yaml
 from PIL import Image
 from reportlab.pdfgen import canvas
 
-from bulk_rna_frame.cli import main
-from bulk_rna_frame.config import ProjectValidationError, load_project
-from bulk_rna_frame.figures import PANEL_REGISTRY, build_gallery, resolve_panel
+from tifzoret.cli import main
+from tifzoret.config import ProjectValidationError, load_project
+from tifzoret.figures import PANEL_REGISTRY, build_gallery, resolve_panel
 
 
 ROOT = Path(__file__).resolve().parents[1]
-TEMPLATE = ROOT / "src" / "bulk_rna_frame" / "templates" / "minimal"
+TEMPLATE = ROOT / "src" / "tifzoret" / "templates" / "minimal"
 
 
 def _project(tmp_path: Path) -> Path:
@@ -105,7 +105,7 @@ def test_gallery_and_assembly_stage_auditable_panel_artifacts(tmp_path):
     assembled = project.result_root / "publication" / "primary"
     command = [
         sys.executable,
-        str(ROOT / "src" / "bulk_rna_frame" / "workflow" / "scripts" / "assemble.py"),
+        str(ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "assemble.py"),
         "--project-config", str(project_path),
         "--results", str(project.result_root),
         "--figure-set", "primary",

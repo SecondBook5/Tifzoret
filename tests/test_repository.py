@@ -8,7 +8,17 @@ SELF = Path(__file__).resolve()
 # Directories/artifacts that are never part of the engine's source tree.
 _SKIP_DIRS = {"__pycache__", ".pytest_cache"}
 _SCAN_DIRS = ("src", "docs", "tests")
-_ROOT_FILES = ("README.md", "CHANGELOG.md")
+# Root files that must also stay project-agnostic: the two docs plus the
+# packaging/citation metadata, where a study name is just as damaging as in
+# source (a leaked token in pyproject/MANIFEST/environment/CITATION ships too).
+_ROOT_FILES = (
+    "README.md",
+    "CHANGELOG.md",
+    "pyproject.toml",
+    "MANIFEST.in",
+    "environment.yaml",
+    "CITATION.cff",
+)
 _SCANNED_SUFFIXES = {".py", ".R", ".smk", ".yaml", ".yml", ".md", ".sh"}
 
 
@@ -42,7 +52,21 @@ def test_engine_contains_no_reference_project_names():
     # token is matched only when not preceded by a letter, so genuine names
     # ("cape", "cape_thoracic_duct", "thoracicduct_cape_...") are caught while
     # innocent superstrings ("escape", "obligation", "intrathoracic") are not.
-    forbidden = ("cape", "thoracic", "ligation", "lymphatic-flow-homeostasis")
+    # The list spans every planned reference cohort so a new study's name cannot
+    # slip in via config or docs. Tokens are chosen to be fingerprint-specific:
+    # "rela_ko" (not bare "rela", which would flag "related"/"relative") and
+    # "nfkb"/"xizhao"/"pten"/"taxol" have no innocent-superstring collisions.
+    forbidden = (
+        "cape",
+        "thoracic",
+        "ligation",
+        "lymphatic-flow-homeostasis",
+        "xizhao",
+        "pten",
+        "taxol",
+        "nfkb",
+        "rela_ko",
+    )
     patterns = [re.compile(rf"(?<![a-z]){re.escape(term)}") for term in forbidden]
     for path in _engine_source_files():
         text = path.read_text(errors="ignore").lower()
@@ -51,7 +75,7 @@ def test_engine_contains_no_reference_project_names():
 
 
 def test_all_figure_contracts_declare_pdf_and_png():
-    snakefile = (ROOT / "src" / "bulk_rna_frame" / "workflow" / "Snakefile").read_text()
+    snakefile = (ROOT / "src" / "tifzoret" / "workflow" / "Snakefile").read_text()
     for stem in (
         "pca",
         "sample_correlation",
@@ -68,6 +92,6 @@ def test_all_figure_contracts_declare_pdf_and_png():
 def test_r_scripts_parse():
     # Full execution is covered by the synthetic acceptance workflow. This test
     # ensures every shipped R entry point remains present for that check.
-    scripts = ROOT / "src" / "bulk_rna_frame" / "workflow" / "scripts"
+    scripts = ROOT / "src" / "tifzoret" / "workflow" / "scripts"
     for name in ("utils.R", "qc.R", "de.R", "pathways.R"):
         assert (scripts / name).is_file()

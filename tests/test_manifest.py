@@ -11,7 +11,7 @@ import yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "src" / "bulk_rna_frame" / "workflow" / "scripts" / "manifest.py"
+SCRIPT = ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "manifest.py"
 
 
 def _load_manifest_module():

@@ -9,12 +9,12 @@ from pathlib import Path
 import pytest
 import yaml
 
-from bulk_rna_frame.config import ProjectValidationError, load_project, validation_report
+from tifzoret.config import ProjectValidationError, load_project, validation_report
 
 
 ROOT = Path(__file__).resolve().parents[1]
-TEMPLATE = ROOT / "src" / "bulk_rna_frame" / "templates" / "minimal"
-MATERIALIZE = ROOT / "src" / "bulk_rna_frame" / "workflow" / "scripts" / "materialize_inputs.py"
+TEMPLATE = ROOT / "src" / "tifzoret" / "templates" / "minimal"
+MATERIALIZE = ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "materialize_inputs.py"
 
 
 def project_copy(tmp_path: Path) -> Path:
@@ -216,7 +216,7 @@ def test_publication_profile_validates_cross_file_contracts(tmp_path):
     assert project.panel_config["gsea_programs"] == ["contractile"]
     publication_dry_run = subprocess.run(
         [
-            "snakemake", "--snakefile", str(ROOT / "src" / "bulk_rna_frame" / "workflow" / "Snakefile"),
+            "snakemake", "--snakefile", str(ROOT / "src" / "tifzoret" / "workflow" / "Snakefile"),
             "--configfile", str(config), "--cores", "1", "--dry-run",
             str(project.result_root / "manifest.json"),
         ],
@@ -247,7 +247,7 @@ def test_publication_profile_validates_cross_file_contracts(tmp_path):
     assert {"sva", "wgcna", "mediation", "multilayer"}.issubset(full.modules)
     full_dry_run = subprocess.run(
         [
-            "snakemake", "--snakefile", str(ROOT / "src" / "bulk_rna_frame" / "workflow" / "Snakefile"),
+            "snakemake", "--snakefile", str(ROOT / "src" / "tifzoret" / "workflow" / "Snakefile"),
             "--configfile", str(config), "--cores", "1", "--dry-run",
             str(full.result_root / "manifest.json"),
         ],
@@ -411,3 +411,265 @@ def test_materialize_stages_inline_companions(tmp_path):
     assert yaml.safe_load(project.hypothesis_panels.read_text()) == PANELS_DOC
     assert yaml.safe_load(project.hypotheses.read_text()) == CLAIMS_DOC
     assert yaml.safe_load(project.figure_recipe.read_text()) == RECIPE_DOC
+
+
+def _dry_run_rules(config: Path) -> str:
+    """Return `snakemake --dry-run` stdout for a project's manifest target."""
+    project = load_project(config)
+    proc = subprocess.run(
+        [
+            "snakemake", "--snakefile",
+            str(ROOT / "src" / "tifzoret" / "workflow" / "Snakefile"),
+            "--configfile", str(config), "--cores", "1", "--dry-run",
+            str(project.result_root / "manifest.json"),
+        ],
+        cwd=config.parent, check=True, capture_output=True, text=True,
+    )
+    return proc.stdout
+
+
+def test_opt_in_modules_wire_into_the_dag(tmp_path):
+    """batch, de_confirm, deconvolution, and curvature belong to no profile and
+    appear in the DAG only when toggled on under analysis.modules (curvature
+    drags in its wgcna prerequisite)."""
+    config = project_copy(tmp_path)
+    data = yaml.safe_load(config.read_text())
+    data["analysis"]["batch"] = "batch"
+    data["analysis"]["modules"] = {
+        "wgcna": True, "batch": True, "de_confirm": True,
+        "deconvolution": True, "curvature": True,
+    }
+    data["analysis"]["settings"] = {
+        "wgcna": {
+            "top_variable_genes": 100, "minimum_module_size": 5,
+            "minimum_recommended_samples": 5, "network_neighbors": 5,
+        },
+        "de": {"shrinkage": "ashr", "confirm_method": "edger"},
+        "deconvolution": {"method": "nnls", "min_genes": 3},
+        "curvature": {"alpha": 0.5, "top_bridges": 10},
+    }
+    data["resources"]["deconvolution_signature"] = "signature.tsv"
+    config.write_text(yaml.safe_dump(data, sort_keys=False))
+    (config.parent / "signature.tsv").write_text(
+        "gene\tMural\tEpithelial\tImmune\n"
+        "Acta2\t8.0\t0.1\t0.2\nCnn1\t7.5\t0.1\t0.1\nMyh11\t9.0\t0.0\t0.1\n"
+        "Epcam\t0.1\t8.0\t0.2\nKrt5\t0.1\t7.0\t0.1\nKrt18\t0.2\t7.5\t0.1\n"
+        "Lst1\t0.1\t0.2\t8.0\nTyrobp\t0.0\t0.1\t7.5\nCtss\t0.1\t0.2\t7.0\n"
+    )
+    project = load_project(config)
+    assert {"batch", "de_confirm", "deconvolution", "curvature", "wgcna"}.issubset(project.modules)
+    stdout = _dry_run_rules(config)
+    for rule in ("study_batch", "study_deconvolution", "contrast_de_confirm",
+                 "contrast_curvature", "contrast_wgcna"):
+        assert rule in stdout
+
+
+def test_omnibus_contrast_type_is_accepted(tmp_path):
+    """A `type: omnibus` contrast row carries no numerator/denominator and
+    resolves to a distinct omnibus contrast id."""
+    config = project_copy(tmp_path)
+    contrasts = config.parent / "contrasts.tsv"
+    contrasts.write_text(
+        "contrast_id\tfactor\tnumerator\tdenominator\ttype\treduced\n"
+        "treatment_a_vs_control\tcondition\ttreatment_a\tcontrol\tpairwise\t\n"
+        "condition_any\tcondition\t\t\tomnibus\t~ batch\n"
+    )
+    project = load_project(config)
+    ids = [row["contrast_id"] for row in project.contrast_rows]
+    assert "condition_any" in ids
+
+
+def test_coefficient_contrast_type_is_accepted(tmp_path):
+    """A `type: coefficient` row names a resultsNames() coefficient under a
+    (possibly per-row) design; factor/numerator/denominator are labels only and
+    the coefficient itself is checked at DE time against the fitted model."""
+    config = project_copy(tmp_path)
+    (config.parent / "contrasts.tsv").write_text(
+        "contrast_id\tfactor\tnumerator\tdenominator\ttype\tcoefficient\tdesign\n"
+        "interaction_ab\tcondition\ttreatment_a\tcontrol\tcoefficient"
+        "\tconditiontreatment_a.batchb2\t~ batch + condition\n"
+    )
+    project = load_project(config)
+    assert "interaction_ab" in [row["contrast_id"] for row in project.contrast_rows]
+
+
+def test_coefficient_contrast_requires_a_coefficient(tmp_path):
+    """The named coefficient is the whole point of a coefficient contrast; an
+    empty one must be rejected rather than silently degrade to a pairwise test."""
+    config = project_copy(tmp_path)
+    (config.parent / "contrasts.tsv").write_text(
+        "contrast_id\tfactor\tnumerator\tdenominator\ttype\tcoefficient\n"
+        "interaction_ab\tcondition\ttreatment_a\tcontrol\tcoefficient\t\n"
+    )
+    with pytest.raises(ProjectValidationError, match="requires a non-empty coefficient"):
+        load_project(config)
+
+
+def test_coefficient_contrast_rejects_unknown_design_variable(tmp_path):
+    """A per-row design must reference only columns present in samples.tsv."""
+    config = project_copy(tmp_path)
+    (config.parent / "contrasts.tsv").write_text(
+        "contrast_id\tfactor\tnumerator\tdenominator\ttype\tcoefficient\tdesign\n"
+        "interaction_ab\tcondition\ttreatment_a\tcontrol\tcoefficient\tsomeCoef\t~ genotype\n"
+    )
+    with pytest.raises(ProjectValidationError, match="design variable 'genotype' is absent"):
+        load_project(config)
+
+
+def test_coefficient_contrast_validates_reference_levels(tmp_path):
+    """`reference_levels` entries must be factor=level with a level that exists
+    in the named design factor."""
+    config = project_copy(tmp_path)
+    (config.parent / "contrasts.tsv").write_text(
+        "contrast_id\tfactor\tnumerator\tdenominator\ttype\tcoefficient\tdesign\treference_levels\n"
+        "interaction_ab\tcondition\ttreatment_a\tcontrol\tcoefficient\tsomeCoef"
+        "\t~ batch + condition\tcondition=nonesuch\n"
+    )
+    with pytest.raises(ProjectValidationError, match="level 'nonesuch' is absent from condition"):
+        load_project(config)
+
+
+@pytest.mark.parametrize(
+    "reduced,expected",
+    [
+        ("", "requires a non-empty reduced design formula"),
+        ("~ batch + condition", "reduced formula must not contain the tested factor"),
+    ],
+)
+def test_omnibus_reduced_formula_is_validated(tmp_path, reduced, expected):
+    """An omnibus LRT needs a reduced design that drops the tested factor: a
+    missing reduced formula, or one that still contains the factor, is rejected."""
+    config = project_copy(tmp_path)
+    (config.parent / "contrasts.tsv").write_text(
+        "contrast_id\tfactor\tnumerator\tdenominator\ttype\treduced\n"
+        f"condition_any\tcondition\t\t\tomnibus\t{reduced}\n"
+    )
+    with pytest.raises(ProjectValidationError, match=expected):
+        load_project(config)
+
+
+def test_shrinkage_rejects_an_unknown_prior(tmp_path):
+    """DE shrinkage is a fixed enum (apeglm/ashr/normal/none); a typo must fail
+    schema validation rather than silently fall through to the default."""
+    config = project_copy(tmp_path)
+    data = yaml.safe_load(config.read_text())
+    data["analysis"]["settings"] = {"de": {"shrinkage": "bogus"}}
+    config.write_text(yaml.safe_dump(data, sort_keys=False))
+    with pytest.raises(ProjectValidationError, match="shrinkage"):
+        load_project(config)
+
+
+def test_go_domains_are_opt_in_and_bounded(tmp_path):
+    """CC/MF are strictly opt-in: with `resources.go_domains` unset the resolved
+    config carries no domain list (the GO-BP default is applied downstream), so
+    legacy GO-BP studies gain no cellular-component/molecular-function content
+    unless explicitly requested. The domain vocabulary is also bounded — an
+    unknown domain fails schema validation rather than resolving silently.
+    (The faceted `ontology_domains` figure is emitted unconditionally as an
+    additive artifact; the BP-only guarantee is about content, not its presence.)"""
+    project = load_project(project_copy(tmp_path))  # standard profile, no go_domains set
+    assert project.config["resources"].get("go_domains") is None
+
+    config = project_copy(tmp_path / "unknown")
+    data = yaml.safe_load(config.read_text())
+    data.setdefault("resources", {})["go_domains"] = ["BP", "XYZ"]
+    config.write_text(yaml.safe_dump(data, sort_keys=False))
+    with pytest.raises(ProjectValidationError, match="go_domains"):
+        load_project(config)
+
+
+def test_counting_boundary_emits_tpm_fpkm(tmp_path):
+    """BAM (counting) boundaries add TPM/FPKM and per-gene exon-length outputs
+    to the materialize rule; count-matrix inputs do not."""
+    config = project_copy(tmp_path)
+    _replace_with_bam_input(config, "bam")
+    stdout = _dry_run_rules(config)
+    for token in ("tpm.tsv", "fpkm.tsv", "gene_lengths.tsv"):
+        assert token in stdout
+
+
+def test_wave2_opt_in_modules_wire_into_the_dag(tmp_path):
+    """consensus, spia, variance_partition, and enrichment_map belong to no
+    profile and appear in the DAG only when toggled on; enabling extra GO
+    domains and Reactome still validates, and the additive ontology-domain
+    outputs are produced (the front door requires them)."""
+    config = project_copy(tmp_path)
+    data = yaml.safe_load(config.read_text())
+    data["analysis"]["batch"] = "batch"
+    data["analysis"]["modules"] = {
+        "consensus": True, "spia": True,
+        "variance_partition": True, "enrichment_map": True,
+    }
+    data["analysis"]["settings"] = {
+        "consensus": {"min_contrasts": 2},
+        "spia": {"top_pathways": 15},
+        "variance_partition": {"top_variable_genes": 200},
+        "enrichment_map": {"min_similarity": 0.25, "top_terms": 40},
+    }
+    data["resources"]["go_domains"] = ["BP", "CC", "MF"]
+    data["resources"]["providers"] = {"kegg": True, "reactome": True}
+    config.write_text(yaml.safe_dump(data, sort_keys=False))
+    project = load_project(config)
+    assert {"consensus", "spia", "variance_partition", "enrichment_map"}.issubset(project.modules)
+    assert project.config["resources"]["go_domains"] == ["BP", "CC", "MF"]
+    stdout = _dry_run_rules(config)
+    for rule in ("study_consensus", "contrast_spia",
+                 "study_variance_partition", "contrast_enrichment_map"):
+        assert rule in stdout
+    # The GO CC/MF + Reactome breadth is emitted as an additive faceted view
+    # whose outputs the front-door index collects; a missing producer here is
+    # exactly the class of DAG break this test guards.
+    assert "ontology_domains.pdf" in stdout
+    assert "ontology_domain_displayed.tsv" in stdout
+
+
+def test_consensus_requires_two_pairwise_contrasts(tmp_path):
+    """A single pairwise contrast cannot form a cross-contrast consensus."""
+    config = project_copy(tmp_path)
+    (config.parent / "contrasts.tsv").write_text(
+        "contrast_id\tfactor\tnumerator\tdenominator\n"
+        "treatment_a_vs_control\tcondition\ttreatment_a\tcontrol\n"
+    )
+    data = yaml.safe_load(config.read_text())
+    data["analysis"]["modules"] = {"consensus": True}
+    config.write_text(yaml.safe_dump(data, sort_keys=False))
+    with pytest.raises(ProjectValidationError, match="at least two pairwise contrasts"):
+        load_project(config)
+
+
+def test_spia_requires_the_kegg_provider(tmp_path):
+    """SPIA perturbs KEGG pathway topology, so it needs the KEGG provider."""
+    config = project_copy(tmp_path)
+    data = yaml.safe_load(config.read_text())
+    data["analysis"]["modules"] = {"spia": True}
+    config.write_text(yaml.safe_dump(data, sort_keys=False))
+    with pytest.raises(ProjectValidationError, match="resources.providers.kegg"):
+        load_project(config)
+
+
+def test_deconvolution_preset_resolves_and_is_exclusive(tmp_path):
+    """A named packaged preset resolves to its shipped signature matrix, is
+    mutually exclusive with a supplied signature, and an unknown name fails
+    with the installed presets listed."""
+    config = project_copy(tmp_path)
+    data = yaml.safe_load(config.read_text())
+    data["analysis"]["modules"] = {"deconvolution": True}
+    data["analysis"]["settings"] = {"deconvolution": {"method": "nnls", "min_genes": 3}}
+    data["resources"]["deconvolution_preset"] = "mouse_immune"
+    config.write_text(yaml.safe_dump(data, sort_keys=False))
+    project = load_project(config)
+    assert "deconvolution" in project.modules
+    assert project.deconvolution_signature.name == "mouse_immune.tsv"
+    assert project.deconvolution_signature.is_file()
+
+    data["resources"]["deconvolution_signature"] = "signature.tsv"
+    (config.parent / "signature.tsv").write_text("gene\tA\tB\nActa2\t1\t0\nEpcam\t0\t1\n")
+    config.write_text(yaml.safe_dump(data, sort_keys=False))
+    with pytest.raises(ProjectValidationError, match="mutually exclusive"):
+        load_project(config)
+
+    del data["resources"]["deconvolution_signature"]
+    data["resources"]["deconvolution_preset"] = "does_not_exist"
+    config.write_text(yaml.safe_dump(data, sort_keys=False))
+    with pytest.raises(ProjectValidationError, match="available presets"):
+        load_project(config)

@@ -10,8 +10,8 @@ from reportlab.pdfgen.canvas import Canvas
 
 
 ROOT = Path(__file__).resolve().parents[1]
-TEMPLATE = ROOT / "src" / "bulk_rna_frame" / "templates" / "minimal"
-SCRIPT = ROOT / "src" / "bulk_rna_frame" / "workflow" / "scripts" / "front_door.py"
+TEMPLATE = ROOT / "src" / "tifzoret" / "templates" / "minimal"
+SCRIPT = ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "front_door.py"
 
 
 def test_front_door_promotes_figure_pair_and_metadata(tmp_path: Path):

@@ -2,12 +2,12 @@ import csv
 import shutil
 from pathlib import Path
 
-from bulk_rna_frame.config import load_project
-from bulk_rna_frame.verification import verify_project, verify_runs
+from tifzoret.config import load_project
+from tifzoret.verification import verify_project, verify_runs
 
 
 ROOT = Path(__file__).resolve().parents[1]
-TEMPLATE = ROOT / "src" / "bulk_rna_frame" / "templates" / "minimal"
+TEMPLATE = ROOT / "src" / "tifzoret" / "templates" / "minimal"
 
 
 def test_verification_detects_and_reports_table_differences(tmp_path: Path):

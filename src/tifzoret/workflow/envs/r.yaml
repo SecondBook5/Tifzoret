@@ -1,0 +1,55 @@
+name: tifzoret-r
+channels: [conda-forge, bioconda]
+dependencies:
+  - r-base=4.5.3
+  - bioconductor-deseq2=1.50.2
+  - bioconductor-apeglm=1.32.0
+  # Opt-in module dependencies. r-ashr: alternative lfcShrink prior
+  # (de.shrinkage: ashr). bioconductor-edger: confirmatory second DE engine
+  # (de_confirm module). r-nnls: non-negative least squares for signature-matrix
+  # cell-fraction deconvolution (deconvolution module).
+  # bioconductor-variancepartition + r-matrixstats: per-gene variance
+  # decomposition over design covariates (variance_partition module).
+  # bioconductor-spia + bioconductor-graphite: signed pathway-topology impact
+  # analysis over KEGG reaction graphs (spia module).
+  - r-ashr=2.2_63
+  - bioconductor-edger=4.8.2
+  - r-nnls=1.6
+  - bioconductor-variancepartition=1.40.1
+  - r-matrixstats=1.5.0
+  - bioconductor-spia=2.62.0
+  - bioconductor-graphite=1.56.0
+  - bioconductor-fgsea=1.36.2
+  - bioconductor-gsva=2.4.4
+  - bioconductor-limma=3.66.0
+  - bioconductor-biocparallel=1.44.0
+  - bioconductor-annotationdbi=1.72.0
+  - bioconductor-org.mm.eg.db=3.22.0
+  - bioconductor-org.hs.eg.db=3.22.0
+  - bioconductor-go.db=3.22.0
+  - bioconductor-keggrest=1.50.0
+  - bioconductor-decoupler=2.16.0
+  - bioconductor-dorothea=1.22.0
+  - bioconductor-viper=1.44.0
+  - bioconductor-sva=3.58.0
+  - bioconductor-complexheatmap=2.26.1
+  - r-circlize=0.4.18
+  - r-dendextend=1.19.1
+  - r-igraph=2.3.3
+  - r-ggforce=0.5.0
+  - r-colorspace=2.1_3
+  - r-wgcna=1.74
+  - r-mediation=4.5.1
+  - r-msigdbr=26.1.0
+  - r-digest=0.6.39
+  - r-ggplot2=4.0.3
+  - r-ggrepel=0.9.8
+  - r-patchwork=1.3.2
+  - r-scales=1.4.0
+  - r-readr=2.2.0
+  - r-dplyr=1.2.1
+  - r-tidyr=1.3.2
+  - r-tibble=3.3.1
+  - r-yaml=2.3.12
+  - r-jsonlite=2.0.0
+  - r-stringr=1.6.0

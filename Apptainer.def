@@ -2,18 +2,18 @@ Bootstrap: docker
 From: mambaorg/micromamba:2.3.2
 
 %files
-    . /opt/bulk-rna-frame
+    . /opt/tifzoret
 
 %post
     export MAMBA_ROOT_PREFIX=/opt/conda
-    cd /opt/bulk-rna-frame
+    cd /opt/tifzoret
     micromamba install --yes --name base --file environment.yaml
     micromamba clean --all --yes
 
 %labels
-    org.opencontainers.image.title BulkRNAFrame
+    org.opencontainers.image.title Tifzoret
     org.opencontainers.image.licenses MIT
 
 %runscript
     export PATH=/opt/conda/bin:$PATH
-    exec bulk-rna "$@"
+    exec tifzoret "$@"

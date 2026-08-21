@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
-from bulk_rna_frame.cli import main
+from tifzoret.cli import main
 import yaml
 
 
@@ -43,7 +43,7 @@ def test_prepare_targets_only_the_canonical_input_manifest(tmp_path, monkeypatch
         observed["cwd"] = kwargs["cwd"]
         return SimpleNamespace(returncode=0)
 
-    monkeypatch.setattr("bulk_rna_frame.cli.subprocess.run", fake_run)
+    monkeypatch.setattr("tifzoret.cli.subprocess.run", fake_run)
     assert main(["prepare", str(destination / "project.yaml"), "--no-conda"]) == 0
     assert observed["command"][-1].endswith(
         "results/synthetic_demo/all/inputs/input_manifest.json"
@@ -60,7 +60,7 @@ def test_run_explicitly_targets_the_release_manifest(tmp_path, monkeypatch):
         observed["command"] = command
         return SimpleNamespace(returncode=0)
 
-    monkeypatch.setattr("bulk_rna_frame.cli.subprocess.run", fake_run)
+    monkeypatch.setattr("tifzoret.cli.subprocess.run", fake_run)
     assert main(["run", str(destination / "project.yaml"), "--no-conda"]) == 0
     assert observed["command"][-1].endswith("results/synthetic_demo/all/manifest.json")
 

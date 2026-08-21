@@ -1,0 +1,11 @@
+name: tifzoret-core
+channels: [conda-forge, bioconda]
+dependencies:
+  - python=3.12
+  - pyyaml=6.0
+  - jsonschema=4.23
+  - pillow=11
+  - pypdf=5
+  - reportlab=4
+  - samtools=1.22.1
+  - subread=2.0.8

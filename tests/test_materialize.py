@@ -13,9 +13,9 @@ import yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "src" / "bulk_rna_frame" / "workflow" / "scripts" / "materialize_inputs.py"
+SCRIPT = ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "materialize_inputs.py"
 FIXTURES = ROOT / "tests" / "fixtures"
-MINIMAL = ROOT / "src" / "bulk_rna_frame" / "templates" / "minimal"
+MINIMAL = ROOT / "src" / "tifzoret" / "templates" / "minimal"
 
 
 def test_count_adapter_materializes_the_canonical_contract(tmp_path):

@@ -5,11 +5,11 @@ from pathlib import Path
 
 import yaml
 
-from bulk_rna_frame.cli import main
+from tifzoret.cli import main
 
 
 ROOT = Path(__file__).resolve().parents[1]
-TEMPLATE = ROOT / "src" / "bulk_rna_frame" / "templates" / "minimal"
+TEMPLATE = ROOT / "src" / "tifzoret" / "templates" / "minimal"
 
 
 def test_collection_validate_and_run_signed_meta_analysis(tmp_path: Path):

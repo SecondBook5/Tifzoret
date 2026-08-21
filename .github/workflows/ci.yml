@@ -14,8 +14,8 @@ jobs:
           python-version: "3.12"
       - run: python -m pip install -e '.[workflow,test]'
       - run: pytest -q
-      - run: bulk-rna validate src/bulk_rna_frame/templates/minimal/project.yaml
-      - run: bulk-rna dry-run src/bulk_rna_frame/templates/minimal/project.yaml --no-conda
+      - run: tifzoret validate src/tifzoret/templates/minimal/project.yaml
+      - run: tifzoret dry-run src/tifzoret/templates/minimal/project.yaml --no-conda
       - run: python -m build
 
   r-syntax:
@@ -24,7 +24,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: r-lib/actions/setup-r@v2
       - run: |
-          for script in src/bulk_rna_frame/workflow/scripts/*.R; do
+          for script in src/tifzoret/workflow/scripts/*.R; do
             Rscript -e "parse(file='$script')"
           done
 
@@ -34,7 +34,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: conda-incubator/setup-miniconda@v3
         with:
-          activate-environment: bulk-rna-frame
+          activate-environment: tifzoret
           environment-file: environment.yaml
           miniforge-version: latest
           use-mamba: true
@@ -42,9 +42,9 @@ jobs:
         shell: bash -el {0}
         run: |
           study_dir="$(mktemp -d)"
-          bulk-rna init "$study_dir" --input counts
-          bulk-rna validate "$study_dir/project.yaml"
-          bulk-rna run "$study_dir/project.yaml" --cores 2 --no-conda
+          tifzoret init "$study_dir" --input counts
+          tifzoret validate "$study_dir/project.yaml"
+          tifzoret run "$study_dir/project.yaml" --cores 2 --no-conda
           test -s "$study_dir/results/synthetic_demo/all/REPORT.html"
           test -s "$study_dir/results/synthetic_demo/all/manifest.json"
           test -s "$study_dir/results/synthetic_demo/all/figures/index.json"

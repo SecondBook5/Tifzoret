@@ -3,7 +3,7 @@ requires = ["setuptools>=69", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "bulk-rna-frame"
+name = "tifzoret"
 version = "0.1.0.dev0"
 description = "Configuration-driven bulk RNA-seq analysis and publication figure workflow"
 readme = "README.md"
@@ -24,18 +24,21 @@ workflow = ["snakemake>=8,<10"]
 test = ["pytest>=8", "build>=1.2"]
 
 [project.scripts]
-bulk-rna = "bulk_rna_frame.cli:main"
+tifzoret = "tifzoret.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-bulk_rna_frame = [
+tifzoret = [
   "schemas/*.yaml",
   "templates/*/*",
+  "data/deconvolution/*.tsv",
+  "data/deconvolution/*.md",
   "workflow/Snakefile",
   "workflow/rules/*.smk",
   "workflow/envs/*.yaml",
+  "workflow/envs/locks/*",
   "workflow/scripts/*.R",
   "workflow/scripts/*.py",
 ]

@@ -1,6 +1,6 @@
 # Hypothesis-driven publication figures
 
-BulkRNAFrame separates statistical discovery from presentation choices. Analysis
+Tifzoret separates statistical discovery from presentation choices. Analysis
 modules produce complete tables and standard figures. A publication project then
 declares biological programs, expected effects, registered panel constructors,
 variants, and assembly geometry without modifying analysis code.
@@ -25,7 +25,7 @@ results, significance thresholds, or contrast direction.
 From an existing version 2 project:
 
 ```bash
-bulk-rna figures init project.yaml
+tifzoret figures init project.yaml
 ```
 
 This creates `hypotheses.yaml`, `hypothesis_panels.yaml`, and
@@ -90,8 +90,8 @@ disappearing.
 List the installed catalog:
 
 ```bash
-bulk-rna figures catalog
-bulk-rna figures catalog --json
+tifzoret figures catalog
+tifzoret figures catalog --json
 ```
 
 Recipes should use a constructor instead of a raw result path:
@@ -137,17 +137,26 @@ contains a visible audit warning.
 | Constructor | Variants |
 |---|---|
 | `pca`, `sample_correlation`, `pca_correlation` | `default` |
+| `library_metrics`, `expression_density`, `sample_distance` | `default` |
+| `variable_gene_heatmap`, `sample_outliers`, `qc_overview` | `default` |
 | `volcano`, `ma`, `de_overview` | `default` |
 | `de_heatmap` | `default`, `global_clustered`, `program_grouped`, `direct_program_labels` |
 | `cell_state_effects` | `default` |
 | `ora_bidirectional`, `go_ora` | `default` |
 | `gsva_heatmap`, `gsea_multitrack` | `default` |
 | `program_heatmap_effects`, `program_violins` | `default` |
-| `string_enrichment` | `default` |
+| `string_enrichment` | `faceted`, `combined` |
 | `string_network` | `upregulated`, `downregulated` |
 | `regulator_activity` | `default` |
 | `dorothea_grn` | `rectangular`, `radial` |
 | `wgcna_module_trait`, `multilayer_network` | `default` |
+
+This table lists the primary variant of each constructor. A few constructors
+also carry a `*_legacy` matplotlib-rendered fallback (for example
+`string_network`'s `upregulated_legacy`); the complete, always-current
+enumeration is `tifzoret figures catalog`, and every registered variant is
+rendered in the review gallery. Omitting `variant` selects the constructor's
+default (shown first above where a constructor has several).
 
 Configuration validation rejects unknown constructors/variants, missing
 contrast IDs, and constructors whose analysis module is disabled.
@@ -155,14 +164,14 @@ contrast IDs, and constructors whose analysis module is disabled.
 ## Build and review
 
 ```bash
-bulk-rna figures build project.yaml --cores 8
-bulk-rna figures gallery project.yaml
+tifzoret figures build project.yaml --cores 8
+tifzoret figures gallery project.yaml
 ```
 
 Build one configured figure set with:
 
 ```bash
-bulk-rna figures build project.yaml --figure-set primary --cores 8
+tifzoret figures build project.yaml --figure-set primary --cores 8
 ```
 
 The gallery contains `index.html`, `contact_sheet.png`, `gallery.json`, and

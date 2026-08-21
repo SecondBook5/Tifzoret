@@ -1,0 +1,596 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+type: object
+additionalProperties: false
+required:
+  - version
+  - project
+  - species
+  - reference
+  - inputs
+  - analysis
+  - resources
+  - figures
+  - output
+properties:
+  version:
+    const: 2
+  project:
+    type: object
+    additionalProperties: false
+    required: [id, title]
+    properties:
+      id: {type: string, pattern: "^[a-z0-9][a-z0-9_-]*$"}
+      title: {type: string, minLength: 1}
+      description: {type: string}
+  species:
+    type: object
+    additionalProperties: false
+    required: [provider, scientific_name]
+    properties:
+      provider: {enum: [mouse, human, custom]}
+      scientific_name: {type: string, minLength: 1}
+      taxonomy_id: {type: [integer, "null"], minimum: 1}
+  reference:
+    type: object
+    additionalProperties: false
+    required: [genome_build]
+    properties:
+      genome_build: {type: string, minLength: 1}
+      annotation_release: {type: [string, integer, "null"]}
+      expected_contigs: {type: [integer, "null"], minimum: 1}
+  inputs:
+    oneOf:
+      - {$ref: "#/$defs/countInputs"}
+      - {$ref: "#/$defs/bamInputs"}
+      - {$ref: "#/$defs/nfcoreInputs"}
+      - {$ref: "#/$defs/archiveInputs"}
+  counting:
+    $ref: "#/$defs/counting"
+  analysis:
+    type: object
+    additionalProperties: false
+    required: [design, contrasts, profile]
+    properties:
+      design: {type: string, pattern: "^~"}
+      contrasts: {type: string, minLength: 1}
+      profile: {enum: [standard, publication, full]}
+      random_seed: {type: integer, minimum: 0}
+      # Optional batch variable (a samples.tsv column) consumed by the batch
+      # module: limma::removeBatchEffect-corrected PCA + sample-distance views.
+      batch: {type: string, minLength: 1}
+      modules:
+        type: object
+        additionalProperties: false
+        properties:
+          qc: {type: boolean}
+          de: {type: boolean}
+          pathways: {type: boolean}
+          ontology: {type: boolean}
+          composition: {type: boolean}
+          regulators: {type: boolean}
+          networks: {type: boolean}
+          hypotheses: {type: boolean}
+          publication: {type: boolean}
+          report: {type: boolean}
+          sva: {type: boolean}
+          wgcna: {type: boolean}
+          mediation: {type: boolean}
+          multilayer: {type: boolean}
+          # Opt-in extensions (off in every profile; enable explicitly). batch
+          # requires qc + analysis.batch; de_confirm requires de; deconvolution
+          # requires resources.deconvolution_signature; curvature requires wgcna;
+          # consensus requires de + >=2 pairwise contrasts; spia requires de +
+          # providers.kegg; variance_partition requires qc; enrichment_map
+          # requires pathways.
+          batch: {type: boolean}
+          de_confirm: {type: boolean}
+          deconvolution: {type: boolean}
+          curvature: {type: boolean}
+          consensus: {type: boolean}
+          spia: {type: boolean}
+          variance_partition: {type: boolean}
+          enrichment_map: {type: boolean}
+      settings:
+        type: object
+        additionalProperties: false
+        properties:
+          composition:
+            type: object
+            additionalProperties: false
+            properties:
+              min_genes: {type: integer, minimum: 2}
+          regulators:
+            type: object
+            additionalProperties: false
+            properties:
+              confidence: {type: array, uniqueItems: true, items: {enum: [A, B, C, D, E]}}
+              min_targets: {type: integer, minimum: 2}
+              max_targets: {type: integer, minimum: 2}
+              top_regulators: {type: integer, minimum: 2}
+              # Optional per-study curation for the DoRothEA radial regulon map
+              # (Fig2 Panel E). Absent -> grn.py falls back to gene-panel-majority
+              # program labels and the R radial writes a placeholder deferring to
+              # the matplotlib legacy view.
+              grn: {$ref: '#/$defs/grn_curation'}
+          networks:
+            type: object
+            additionalProperties: false
+            properties:
+              required_score: {type: integer, minimum: 0, maximum: 1000}
+              max_nodes: {type: integer, minimum: 10}
+              seed_max_nodes: {type: integer, minimum: 1}
+              seed_required_score: {type: integer, minimum: 0, maximum: 1000}
+              seed: {type: integer, minimum: 0}
+              # Optional per-study curation for the STRING community-network
+              # panels (Fig2 B/C). Absent -> renderer falls back to generic
+              # topology labels, a default palette, and a data-ranged gradient.
+              community_curation:
+                type: object
+                additionalProperties: false
+                properties:
+                  up: {$ref: '#/$defs/community_curation_direction'}
+                  down: {$ref: '#/$defs/community_curation_direction'}
+          sva:
+            type: object
+            additionalProperties: false
+            properties:
+              minimum_recommended_samples: {type: integer, minimum: 2}
+          wgcna:
+            type: object
+            additionalProperties: false
+            properties:
+              top_variable_genes: {type: integer, minimum: 100}
+              minimum_module_size: {type: integer, minimum: 5}
+              minimum_recommended_samples: {type: integer, minimum: 2}
+              # Top-k neighbours per gene retained when wgcna.R exports the
+              # sparsified co-expression edge list the curvature module consumes.
+              network_neighbors: {type: integer, minimum: 2}
+          mediation:
+            type: object
+            additionalProperties: false
+            properties:
+              mediator_pathway: {type: string, minLength: 1}
+              outcome_pathways:
+                type: array
+                minItems: 1
+                uniqueItems: true
+                items: {type: string, minLength: 1}
+              simulations: {type: integer, minimum: 100}
+              minimum_recommended_samples: {type: integer, minimum: 2}
+          de:
+            type: object
+            additionalProperties: false
+            properties:
+              # lfcShrink estimator for the reported log2 fold-changes. Omit for
+              # apeglm (the validated default). ashr/normal are alternative
+              # shrinkage priors; none reports the raw MLE (no shrinkage).
+              shrinkage: {type: string, enum: [apeglm, ashr, normal, none]}
+              # Confirmatory second DE engine run by the de_confirm module.
+              confirm_method: {type: string, enum: [edger]}
+          deconvolution:
+            type: object
+            additionalProperties: false
+            properties:
+              method: {type: string, enum: [nnls]}
+              # Minimum number of signature genes that must overlap the count
+              # matrix before fractions are estimated (else the sample warns).
+              min_genes: {type: integer, minimum: 2}
+          curvature:
+            type: object
+            additionalProperties: false
+            properties:
+              # Ollivier-Ricci idleness (mass held at each node); 0.5 is standard.
+              alpha: {type: number, minimum: 0, maximum: 1}
+              # Number of most-negative-curvature inter-module bridge genes to report.
+              top_bridges: {type: integer, minimum: 1}
+          consensus:
+            type: object
+            additionalProperties: false
+            properties:
+              # Genes shown in the signed-direction heatmap (all genes are tabled).
+              top_genes: {type: integer, minimum: 2}
+              # A consensus gene is significant in a consistent direction in at
+              # least this many contrasts. Omit for 2.
+              min_contrasts: {type: integer, minimum: 2}
+          spia:
+            type: object
+            additionalProperties: false
+            properties:
+              # DE genes are those with adjusted p below this FDR (SPIA needs an
+              # explicit DE subset against the tested universe). Omit to reuse
+              # figures.de.fdr.
+              fdr: {type: number, exclusiveMinimum: 0, exclusiveMaximum: 1}
+              # Number of perturbed pathways drawn in the two-evidence plot.
+              top_pathways: {type: integer, minimum: 1}
+          variance_partition:
+            type: object
+            additionalProperties: false
+            properties:
+              # Design terms whose variance contribution is decomposed. Omit to
+              # use every fixed covariate parsed from analysis.design.
+              covariates:
+                type: array
+                minItems: 1
+                uniqueItems: true
+                items: {type: string, minLength: 1}
+              # Most-variable genes retained for the decomposition (kept bounded
+              # because fitLMM per gene is the cost). Omit for 2000.
+              top_variable_genes: {type: integer, minimum: 100}
+          enrichment_map:
+            type: object
+            additionalProperties: false
+            properties:
+              # Minimum Jaccard overlap of two terms' gene sets to draw an edge.
+              min_similarity: {type: number, exclusiveMinimum: 0, maximum: 1}
+              # Most-significant enriched terms per direction taken into the map.
+              top_terms: {type: integer, minimum: 2}
+  resources:
+    type: object
+    additionalProperties: false
+    required: [gene_sets]
+    properties:
+      cache: {type: string, minLength: 1}
+      offline: {type: boolean}
+      refresh: {type: boolean}
+      gene_sets:
+        type: object
+        additionalProperties: false
+        required: [gmt, min_size, max_size]
+        properties:
+          gmt: {type: string, minLength: 1}
+          min_size: {type: integer, minimum: 2}
+          max_size: {type: integer, minimum: 2}
+          collections:
+            type: array
+            uniqueItems: true
+            items: {type: string, minLength: 1}
+      cell_state_signatures: {type: string, minLength: 1}
+      regulon_edges: {type: string, minLength: 1}
+      # Signature matrix (TSV) for the deconvolution module: a gene column
+      # (gene_symbol or gene_id) followed by >=2 cell-type reference columns.
+      # Mutually exclusive with deconvolution_preset (a named packaged matrix).
+      deconvolution_signature: {type: string, minLength: 1}
+      # Named cell-type reference shipped with the package (see the deconvolution
+      # data directory for the installed presets and their provenance). Resolved
+      # to a packaged signature matrix when deconvolution_signature is not given.
+      deconvolution_preset: {type: string, minLength: 1}
+      # GO ontology domains pulled by the `go` provider. Omit for ["BP"] (the
+      # validated default), so existing GO-BP studies are unchanged; add CC/MF
+      # for cellular-component / molecular-function breadth.
+      go_domains:
+        type: array
+        minItems: 1
+        uniqueItems: true
+        items: {enum: [BP, CC, MF]}
+      providers:
+        type: object
+        additionalProperties: false
+        properties:
+          msigdb: {type: boolean}
+          go: {type: boolean}
+          kegg: {type: boolean}
+          string: {type: boolean}
+          gtrd: {type: boolean}
+          dorothea: {type: boolean}
+          # Reactome pathways via the MSigDB CP:REACTOME subcollection (msigdbr),
+          # so no extra dependency beyond the existing MSigDB provider.
+          reactome: {type: boolean}
+  hypotheses:
+    type: object
+    additionalProperties: false
+    required: [claims, panels]
+    # Each block is either a path to a companion YAML or the companion document
+    # inlined as a mapping (so a UI can author a single self-contained config).
+    # The inline mapping is validated against its own companion schema in
+    # config.load_project, not here.
+    properties:
+      claims:
+        oneOf: [{type: string, minLength: 1}, {type: object}]
+      panels:
+        oneOf: [{type: string, minLength: 1}, {type: object}]
+  publication:
+    type: object
+    additionalProperties: false
+    required: [recipe]
+    properties:
+      recipe:
+        oneOf: [{type: string, minLength: 1}, {type: object}]
+  figures:
+    type: object
+    additionalProperties: false
+    required: [group, palette, pca, de, pathways]
+    properties:
+      group: {type: string, minLength: 1}
+      palette:
+        type: object
+        minProperties: 2
+        additionalProperties: {type: string, pattern: "^#[0-9A-Fa-f]{6}$"}
+      pca:
+        type: object
+        additionalProperties: false
+        required: [ellipse_level]
+        properties:
+          ellipse_level: {type: number, exclusiveMinimum: 0, exclusiveMaximum: 1}
+      qc:
+        type: object
+        additionalProperties: false
+        properties:
+          top_variable_genes: {type: integer, minimum: 2}
+          # Optional PCA-distance outlier screen (display-only): number of
+          # leading PCs the Euclidean distance is computed over, and the robust
+          # threshold multiplier (median + sigma x MAD). Omit for 5 PCs / 3 MAD.
+          outlier_pcs: {type: integer, minimum: 1}
+          outlier_sigma: {type: number, exclusiveMinimum: 0}
+      de:
+        type: object
+        additionalProperties: false
+        required: [fdr, abs_log2fc, top_labels, top_heatmap_genes, z_limit]
+        properties:
+          fdr: {type: number, exclusiveMinimum: 0, exclusiveMaximum: 1}
+          abs_log2fc: {type: number, minimum: 0}
+          top_labels: {type: integer, minimum: 0}
+          top_heatmap_genes: {type: integer, minimum: 2}
+          z_limit: {type: number, exclusiveMinimum: 0}
+          # Optional: restrict the top-DE heatmap to one direction of the
+          # contrast (up = higher in the numerator). Omit for both directions.
+          heatmap_direction: {type: string, enum: [up, down, both]}
+          # Optional: balance volcano labels across up/down directions. Omit
+          # (or `pooled`) for a single top-N by (padj, |log2FC|); `directional`
+          # splits the top_labels budget into up/down halves. Ignored when
+          # volcano_style is `clipped` (which uses its own tiered selector).
+          label_balance: {type: string, enum: [pooled, directional]}
+          # Optional volcano rendering style. `standard` (default) is the
+          # house-style volcano. `clipped` reproduces the validated
+          # primary-analysis volcano: a display-clipped y-axis with off-scale
+          # up-triangles, a four-class legend, and a tiered salience label
+          # selector.
+          volcano_style: {type: string, enum: [standard, clipped]}
+          # Optional mechanism genes labelled first on the `clipped` volcano
+          # (only when FDR-significant). Case-insensitive symbol match.
+          priority_genes:
+            type: array
+            uniqueItems: true
+            items: {type: string, minLength: 1}
+      pathways:
+        type: object
+        additionalProperties: false
+        required: [top_ora_terms, top_gsva_terms, gsea_curves_per_direction, seed]
+        properties:
+          top_ora_terms: {type: integer, minimum: 1}
+          top_gsva_terms: {type: integer, minimum: 2}
+          gsea_curves_per_direction: {type: integer, minimum: 1}
+          seed: {type: integer, minimum: 0}
+          # Optional GSVA-panel curation (Figure 1F). Omit for the generic
+          # default (ssGSEA over every measured set, top-N, clustered).
+          gsva_method: {type: string, enum: [ssgsea, gsva]}
+          gsva_order: {type: string, enum: [differential, effect]}
+          gsva_cluster: {type: boolean}
+          gsva_sets:
+            type: array
+            minItems: 1
+            items: {type: string, minLength: 1}
+  output:
+    type: object
+    additionalProperties: false
+    required: [root]
+    properties:
+      root: {type: string, minLength: 1}
+allOf:
+  - if:
+      properties:
+        inputs:
+          properties:
+            kind: {enum: [bam, nfcore_rnaseq, archive]}
+    then:
+      required: [counting]
+$defs:
+  grn_curation:
+    # Curation for the anchored network-diffusion program assignment (grn.py) and
+    # the radial render (grn_radial.R). Exactly two anchored programs are required
+    # (the diffusion uses an epithelial/(epithelial+myogenic)-style probability).
+    type: object
+    additionalProperties: false
+    required: [programs]
+    properties:
+      # Personalized-PageRank damping and the probability threshold above which a
+      # node is assigned to a program (else "shared / bridging").
+      damping: {type: number, exclusiveMinimum: 0, exclusiveMaximum: 1}
+      assignment_threshold: {type: number, exclusiveMinimum: 0.5, maximum: 1}
+      # Radial geometry: sweep start (degrees) and inter-sector gap (degrees).
+      start_angle: {type: number}
+      sector_gap: {type: number, minimum: 0}
+      # ggrepel seed for reproducible regulator label placement.
+      seed: {type: integer, minimum: 0}
+      # Fixed regulator display order (breaks target-ordering ties within a
+      # sector, matching the bespoke regulator_order).
+      regulator_order: {type: array, items: {type: string, minLength: 1}}
+      # Diverging DE-effect fill (target log2FC / regulator activity).
+      fill_limits: {type: array, minItems: 2, maxItems: 2, items: {type: number}}
+      fill_breaks: {type: array, items: {type: number}}
+      fill_colours:
+        type: object
+        additionalProperties: false
+        properties:
+          low: {type: string, minLength: 1}
+          mid: {type: string, minLength: 1}
+          high: {type: string, minLength: 1}
+      # Signed-edge palette keyed by mode of regulation.
+      edge_colours:
+        type: object
+        additionalProperties: false
+        properties:
+          Activating: {type: string, minLength: 1}
+          Repressing: {type: string, minLength: 1}
+      # Prior-likelihood -> edge-width scale.
+      likelihood:
+        type: object
+        additionalProperties: false
+        properties:
+          range: {type: array, minItems: 2, maxItems: 2, items: {type: number}}
+          limits: {type: array, minItems: 2, maxItems: 2, items: {type: number}}
+          breaks: {type: array, items: {type: number}}
+      # The two anchored programs. anchors are curated regulator symbols the
+      # diffusion seeds from; a node clearing the threshold toward a program is
+      # assigned it. Missing anchors (absent from the top regulators) are dropped
+      # gracefully -- at least one present anchor per program is required.
+      programs:
+        type: array
+        minItems: 2
+        maxItems: 2
+        items:
+          type: object
+          additionalProperties: false
+          required: [key, label, anchors]
+          properties:
+            key: {type: string, minLength: 1}
+            label: {type: string, minLength: 1}
+            short: {type: string, minLength: 1}
+            colour: {type: string, minLength: 1}
+            anchors: {type: array, minItems: 1, items: {type: string, minLength: 1}}
+      # Node label/colour for bridging nodes (below the assignment threshold).
+      shared:
+        type: object
+        additionalProperties: false
+        properties:
+          label: {type: string, minLength: 1}
+          short: {type: string, minLength: 1}
+          colour: {type: string, minLength: 1}
+      # Node label/colour for regulators outside the diffusion main component.
+      peripheral:
+        type: object
+        additionalProperties: false
+        properties:
+          label: {type: string, minLength: 1}
+          short: {type: string, minLength: 1}
+          colour: {type: string, minLength: 1}
+  community_curation_direction:
+    type: object
+    additionalProperties: false
+    properties:
+      # Fruchterman-Reingold layout seed (also seeds ggrepel label placement).
+      # Community detection no longer depends on a single seed: it is a
+      # deterministic max-modularity multi-start Louvain (see restarts).
+      seed: {type: integer, minimum: 0}
+      # Displayed vertex set: largest connected component or every degree>0 node.
+      display: {enum: [main_component, connected]}
+      # Louvain resolution (>1 = more/finer communities). Default 1.0.
+      resolution: {type: number, exclusiveMinimum: 0}
+      # Number of Louvain restarts for the max-modularity multi-start. The
+      # highest-modularity partition wins (canonical-signature tie-break), which
+      # is independent of edge/vertex order and the igraph RNG version. Default 200.
+      restarts: {type: integer, minimum: 1}
+      # Optional exact partition to REPRODUCE a specific published figure
+      # deterministically (bypasses detection). Each entry is one community's full
+      # member gene set; the union must cover every displayed node exactly once.
+      # Community labels/colours are still resolved via `communities` rules.
+      pinned_partition:
+        type: array
+        minItems: 1
+        items: {type: array, minItems: 1, items: {type: string, minLength: 1}}
+      # Diverging/sequential log2FC fill for the point interiors.
+      fill_gradient:
+        type: object
+        additionalProperties: false
+        required: [colours]
+        properties:
+          colours: {type: array, minItems: 2, items: {type: string, minLength: 1}}
+          values: {type: array, items: {type: number}}
+          limits: {type: array, minItems: 2, maxItems: 2, items: {type: number}}
+          breaks: {type: array, items: {type: number}}
+      # Degree->point-size scale.
+      size:
+        type: object
+        additionalProperties: false
+        properties:
+          range: {type: array, minItems: 2, maxItems: 2, items: {type: number}}
+          limits: {type: array, minItems: 2, maxItems: 2, items: {type: number}}
+          breaks: {type: array, items: {type: number}}
+      # Ordered curation rules: first rule whose gene set intersects a community
+      # names + colours it (mirrors the bespoke case_when); unmatched communities
+      # get a generic "Topology community N" label.
+      communities:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [label, genes]
+          properties:
+            label: {type: string, minLength: 1}
+            colour: {type: string, minLength: 1}
+            genes: {type: array, minItems: 1, items: {type: string, minLength: 1}}
+  sharedInputs:
+    type: object
+    properties:
+      samples: {type: string, minLength: 1}
+      analysis_set: {type: string, minLength: 1}
+  countInputs:
+    type: object
+    additionalProperties: false
+    required: [kind, counts, samples, annotation]
+    properties:
+      kind: {const: counts}
+      counts: {type: string, minLength: 1}
+      samples: {type: string, minLength: 1}
+      annotation: {type: string, minLength: 1}
+      analysis_set: {type: string, minLength: 1}
+  bamInputs:
+    type: object
+    additionalProperties: false
+    required: [kind, bam_root, samples, gtf]
+    properties:
+      kind: {const: bam}
+      bam_root: {type: string, minLength: 1}
+      samples: {type: string, minLength: 1}
+      gtf: {type: string, minLength: 1}
+      analysis_set: {type: string, minLength: 1}
+  nfcoreInputs:
+    type: object
+    additionalProperties: false
+    required: [kind, root, samples, gtf, bam_pattern]
+    properties:
+      kind: {const: nfcore_rnaseq}
+      root: {type: string, minLength: 1}
+      samples: {type: string, minLength: 1}
+      gtf: {type: string, minLength: 1}
+      bam_pattern: {type: string, minLength: 1}
+      analysis_set: {type: string, minLength: 1}
+  archiveInputs:
+    type: object
+    additionalProperties: false
+    required: [kind, archive, samples, gtf]
+    properties:
+      kind: {const: archive}
+      archive: {type: string, minLength: 1}
+      member_root: {type: string}
+      samples: {type: string, minLength: 1}
+      gtf: {type: string, minLength: 1}
+      analysis_set: {type: string, minLength: 1}
+  counting:
+    type: object
+    additionalProperties: false
+    required:
+      - threads
+      - feature_type
+      - attribute
+      - paired_end
+      - count_read_pairs
+      - require_both_ends_aligned
+      - exclude_chimeric_fragments
+      - strandedness
+      - strand_test_modes
+      - strand_min_dominance
+    properties:
+      threads: {type: integer, minimum: 1}
+      feature_type: {type: string, minLength: 1}
+      attribute: {type: string, minLength: 1}
+      paired_end: {type: boolean}
+      count_read_pairs: {type: boolean}
+      require_both_ends_aligned: {type: boolean}
+      exclude_chimeric_fragments: {type: boolean}
+      strandedness: {enum: [infer, unstranded, forward, reverse]}
+      strand_test_modes:
+        type: array
+        minItems: 1
+        uniqueItems: true
+        items: {type: integer, minimum: 0, maximum: 2}
+      strand_min_dominance: {type: number, minimum: 0.5, maximum: 1}

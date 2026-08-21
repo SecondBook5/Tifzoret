@@ -9,8 +9,8 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "src" / "bulk_rna_frame" / "workflow" / "scripts" / "networks.py"
-SPEC = importlib.util.spec_from_file_location("bulk_rna_frame_networks", SCRIPT)
+SCRIPT = ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "networks.py"
+SPEC = importlib.util.spec_from_file_location("tifzoret_networks", SCRIPT)
 NETWORKS = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
 SPEC.loader.exec_module(NETWORKS)

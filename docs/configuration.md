@@ -11,7 +11,7 @@ Publication profiles require claims, panels, signatures, and a figure recipe. Th
 Legacy development configurations can be converted without enabling new modules:
 
 ```bash
-bulk-rna migrate-config old.yaml --output project.yaml \
+tifzoret migrate-config old.yaml --output project.yaml \
   --species mouse --genome-build GRCm39 --annotation-release 107
 ```
 
@@ -37,23 +37,50 @@ Every input declares `samples` and may declare `analysis_set`.
 
 BAM boundaries require `counting`: threads, feature type, GTF attribute,
 paired-end flags, strandedness (`infer`, `unstranded`, `forward`, or `reverse`),
-strand test modes, and minimum inference dominance.
+strand test modes, and minimum inference dominance. Every counting boundary also
+writes per-gene exon lengths and length-normalized TPM/FPKM matrices next to the
+integer counts; the `counts` input carries no exon lengths and so emits no
+abundance.
 
 ## Analysis
 
 `analysis.design` is an R formula and can include arbitrary covariates.
-`analysis.contrasts` points to the explicit contrast table. `profile` selects
+`analysis.contrasts` points to the explicit contrast table; each row's optional
+`type` column selects `pairwise` (default), `coefficient` (a named design
+coefficient), or `omnibus` (a DESeq2 likelihood-ratio test across all levels of
+a multi-level factor, which carries no numerator/denominator). `profile` selects
 `standard`, `publication`, or `full`; `analysis.modules` can override each
-resolved module. `random_seed` is inherited by deterministic selections and
-layouts.
+resolved module. Batch correction, edgeR confirmation, signature-matrix
+deconvolution, Ollivier-Ricci curvature, cross-contrast consensus, SPIA
+pathway-topology impact, variancePartition variance decomposition, and
+enrichment-map term clustering belong to no profile and run only when switched
+on under `analysis.modules`; batch correction additionally reads
+`analysis.batch`, a `samples.tsv` column, curvature requires `wgcna`, consensus
+requires at least two pairwise contrasts, and SPIA requires
+`resources.providers.kegg`. `random_seed` is inherited by deterministic
+selections and layouts.
 
-Optional settings are namespaced by module:
+Optional settings live under `analysis.settings.<module>` (for example
+`analysis.settings.de.shrinkage` or `analysis.settings.deconvolution.min_genes`),
+namespaced by module:
 
 - composition: minimum matched genes;
 - regulators: confidence classes, minimum targets, and display count;
 - networks: STRING score, display node cap, and layout seed;
+- de: `shrinkage` (`apeglm`, `ashr`, `normal`, or `none`) and, for the optional
+  confirmatory fit, `confirm_method` (`edger`);
+- deconvolution: `method` (`nnls`) and `min_genes`;
+- curvature: lazy-random-walk `alpha` and the reported `top_bridges` count;
+- consensus: `min_contrasts` (the count in which a gene must agree in direction)
+  and displayed `top_genes`;
+- spia: DE-subset `fdr` (defaults to `figures.de.fdr`) and displayed
+  `top_pathways`;
+- variance_partition: `covariates` (defaults to every fixed design term) and
+  `top_variable_genes`;
+- enrichment_map: edge `min_similarity` (Jaccard) and `top_terms` per direction;
 - SVA/WGCNA/mediation: method parameters and recommended-sample warning
-  thresholds.
+  thresholds. WGCNA `network_neighbors` sets the per-gene edge count of the
+  co-expression graph exported for curvature.
 
 Dependency errors are reported at validation time. Enabling a module never
 silently enables a missing resource or changes contrast direction.
@@ -62,9 +89,19 @@ silently enables a missing resource or changes contrast direction.
 
 `resources.gene_sets` always declares a custom GMT and size bounds; optional
 collection identifiers select live MSigDB content. Provider switches control
-MSigDB, GO, KEGG, STRING, DoRothEA, and snapshot-backed GTRD. Publication
-composition also requires `cell_state_signatures`; custom regulator analysis
-may use `regulon_edges`.
+MSigDB, GO, KEGG, Reactome, STRING, DoRothEA, and snapshot-backed GTRD.
+`resources.go_domains` selects the GO domains the `go` provider resolves; it
+defaults to `["BP"]` so existing GO-BP studies are byte-identical, and `CC`
+and/or `MF` add cellular-component and molecular-function breadth. Reactome
+pathways are drawn from the MSigDB `CP:REACTOME` subcollection, so the provider
+needs no dependency beyond MSigDB. Publication composition also requires
+`cell_state_signatures`; custom regulator analysis may use `regulon_edges`.
+Signature-matrix deconvolution requires either `resources.deconvolution_signature`,
+a gene-by-cell-type reference table (a gene column and at least two cell-type
+columns), or `resources.deconvolution_preset` naming a reference matrix shipped
+with the package; the two are mutually exclusive. Presets are curated binary
+marker panels (see the deconvolution data directory's provenance note), so their
+fractions are a relative screen rather than calibrated abundances.
 
 Provider resources use explicit species metadata. Mouse is taxonomy 10090;
 human is 9606. Cached resource receipts include provider, organism, release,
@@ -107,10 +144,10 @@ directly in `project.yaml`. Inlining all three yields a single self-contained
 study file — the form an authoring UI produces — and the engine validates and
 runs it identically to the multi-file form.
 
-Run `bulk-rna figures init project.yaml` to scaffold all three publication
+Run `tifzoret figures init project.yaml` to scaffold all three publication
 files. Constructor-based recipes are validated against the enabled modules and
-declared contrasts. Run `bulk-rna figures catalog` to inspect the available
-constructors and `bulk-rna figures gallery project.yaml` to compare built
+declared contrasts. Run `tifzoret figures catalog` to inspect the available
+constructors and `tifzoret figures gallery project.yaml` to compare built
 variants. See [hypothesis-driven publication figures](figures.md) for the full
 contract.
 

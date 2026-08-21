@@ -106,8 +106,11 @@ analyzing.
 ## 5. `project.yaml` — the main file
 
 This describes your data and what analyses to run. You do not write it from
-scratch — run `bulk-rna init my-study --input counts` (or `--input bam`) to get a
-filled-in scaffold, then edit the values. The important sections, in plain terms:
+scratch — run `tifzoret init my-study --input counts` (or `--input bam`) to get a
+filled-in scaffold, then edit the values. The abbreviated example below shows the
+important sections in plain terms; it is illustrative, not a complete file — the
+scaffold `init` writes is the authoritative starting point, and `tifzoret validate
+project.yaml` reports anything required that is missing or malformed:
 
 ```yaml
 project:
@@ -204,17 +207,17 @@ Each command is one line you type in a terminal. Run them in order the first tim
 afterwards you only re-run the steps you need.
 
 ```bash
-bulk-rna validate my-study/project.yaml      # check every file is consistent before doing work
-bulk-rna dry-run  my-study/project.yaml      # show the plan without running it
-bulk-rna run      my-study/project.yaml --cores 4   # run the full analysis
-bulk-rna report   my-study/project.yaml      # build the browsable HTML report
+tifzoret validate my-study/project.yaml      # check every file is consistent before doing work
+tifzoret dry-run  my-study/project.yaml      # show the plan without running it
+tifzoret run      my-study/project.yaml --cores 4   # run the full analysis
+tifzoret report   my-study/project.yaml      # build the browsable HTML report
 ```
 
 For the publication profile, also:
 
 ```bash
-bulk-rna figures build   my-study/project.yaml --cores 4   # render the panels
-bulk-rna figures gallery my-study/project.yaml             # side-by-side variant comparison
+tifzoret figures build   my-study/project.yaml --cores 4   # render the panels
+tifzoret figures gallery my-study/project.yaml             # side-by-side variant comparison
 ```
 
 `validate` is your friend — it catches typos, a colour missing from the palette, a

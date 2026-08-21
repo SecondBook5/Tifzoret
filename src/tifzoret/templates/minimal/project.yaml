@@ -1,0 +1,49 @@
+version: 2
+project:
+  id: synthetic_demo
+  title: Synthetic three-condition demonstration
+species:
+  provider: custom
+  scientific_name: synthetic
+  taxonomy_id: null
+reference:
+  genome_build: synthetic
+  annotation_release: null
+inputs:
+  kind: counts
+  counts: counts.tsv
+  samples: samples.tsv
+  annotation: annotation.tsv
+analysis:
+  design: "~ batch + condition"
+  contrasts: contrasts.tsv
+  profile: standard
+resources:
+  cache: ~/.cache/tifzoret/resources
+  offline: false
+  refresh: false
+  gene_sets:
+    gmt: gene_sets.gmt
+    min_size: 4
+    max_size: 100
+figures:
+  group: condition
+  palette:
+    control: "#A6CEE3"
+    treatment_a: "#F4A6A6"
+    treatment_b: "#A8D5BA"
+  pca:
+    ellipse_level: 0.80
+  de:
+    fdr: 0.05
+    abs_log2fc: 1.0
+    top_labels: 12
+    top_heatmap_genes: 30
+    z_limit: 1.5
+  pathways:
+    top_ora_terms: 8
+    top_gsva_terms: 12
+    gsea_curves_per_direction: 2
+    seed: 1
+output:
+  root: results

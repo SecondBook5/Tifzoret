@@ -1,0 +1,497 @@
+from pathlib import Path
+import csv
+import shlex
+
+from snakemake.utils import min_version
+from tifzoret.config import load_project
+from tifzoret.figures import resolve_panel
+
+min_version("8.0")
+
+WORKFLOW_ROOT = Path(workflow.basedir).resolve()
+CONFIG_PATH = Path(workflow.configfiles[0]).resolve()
+PROJECT_ROOT = CONFIG_PATH.parent
+
+def resolve_project_path(value):
+    path = Path(value).expanduser()
+    return str((path if path.is_absolute() else PROJECT_ROOT / path).resolve())
+
+PROJECT = load_project(CONFIG_PATH)
+CONFIG = PROJECT.config
+PROJECT_ID = PROJECT.project_id
+RESULTS = PROJECT.result_root
+SOURCE_FILES = [str(path) for path in PROJECT.source_files]
+SOURCE_SAMPLES = str(PROJECT.samples)
+INPUTS = RESULTS / "inputs"
+COUNTS = str(INPUTS / "counts.tsv")
+SAMPLES = str(INPUTS / "samples.tsv")
+ANNOTATION = str(INPUTS / "annotation.tsv")
+INPUT_MANIFEST = str(INPUTS / "input_manifest.json")
+SOURCE_CONTRASTS = str(PROJECT.contrasts)
+CONTRASTS = str(INPUTS / "contrasts.tsv")
+# Companion documents (hypotheses/panels/recipe) may be authored as sibling files
+# or inlined in the main config; either way load_project points these at their
+# canonical INPUTS location and materialize_inputs stages the resolved document
+# there, so every downstream rule consumes str(PROJECT.*) from one place.
+PANELS = str(PROJECT.hypothesis_panels) if PROJECT.hypothesis_panels else None
+CLAIMS = str(PROJECT.hypotheses) if PROJECT.hypotheses else None
+RECIPE = str(PROJECT.figure_recipe) if PROJECT.figure_recipe else None
+COMPANION_OUTPUTS = {
+    name: value
+    for name, value in (("panels", PANELS), ("claims", CLAIMS), ("recipe", RECIPE))
+    if value
+}
+COMPANION_ARGS = " ".join(
+    f"--{name} {shlex.quote(value)}" for name, value in COMPANION_OUTPUTS.items()
+)
+# TPM/FPKM abundances are derived from the featureCounts exon-union Length column,
+# so they exist only when counting runs; a precomputed count matrix ships no
+# per-gene exon lengths. Declared (and requested) only for non-counts sources.
+ABUNDANCE_OUTPUTS = (
+    {
+        "tpm": str(INPUTS / "tpm.tsv"),
+        "fpkm": str(INPUTS / "fpkm.tsv"),
+        "gene_lengths": str(INPUTS / "gene_lengths.tsv"),
+    }
+    if PROJECT.source_kind != "counts"
+    else {}
+)
+ABUNDANCE_ARGS = " ".join(
+    f"--{name.replace('_', '-')} {shlex.quote(value)}"
+    for name, value in ABUNDANCE_OUTPUTS.items()
+)
+CUSTOM_GMT = str(PROJECT.gmt)
+RESOURCE_CACHE = RESULTS / ".cache" / "resources"
+GMT = str(RESOURCE_CACHE / "gene_sets.gmt")
+RESOURCE_TABLE = str(RESOURCE_CACHE / "gene_sets.tsv")
+RESOURCE_RECEIPT = str(RESOURCE_CACHE / "gene_sets.receipt.json")
+MODULES = {
+    name: name in PROJECT.modules
+    for name in (
+        "qc", "de", "pathways", "ontology", "composition", "regulators",
+        "networks", "hypotheses", "publication", "report", "sva", "wgcna",
+        "mediation", "multilayer",
+        # Opt-in modules (off in every profile; enabled via analysis.modules).
+        "batch", "de_confirm", "deconvolution", "curvature",
+        "consensus", "spia", "variance_partition", "enrichment_map",
+    )
+}
+
+with open(SOURCE_CONTRASTS, newline="") as handle:
+    CONTRAST_ROWS = list(csv.DictReader(handle, delimiter="\t"))
+CONTRAST_IDS = [row["contrast_id"] for row in CONTRAST_ROWS]
+# DE and pathways understand both pairwise and coefficient (difference-in-
+# differences) contrasts. The remaining per-contrast modules assume a two-group
+# design and would mis-specify or fail on a coefficient contrast, so they expand
+# over pairwise contrasts only. A row is pairwise when its optional `type` column
+# is absent, empty, or the literal "pairwise" (every row in a pairwise-only study).
+PAIRWISE_CONTRAST_IDS = [
+    row["contrast_id"]
+    for row in CONTRAST_ROWS
+    if (row.get("type") or "pairwise").strip().lower() == "pairwise"
+]
+# Signed contrasts (pairwise + coefficient) produce a directional effect and run
+# through contrast_de + pathways. Omnibus (LRT) contrasts have no signed effect,
+# so they run through contrast_omnibus instead. With no omnibus rows present,
+# SIGNED_CONTRAST_IDS == CONTRAST_IDS, so pairwise-only studies are unchanged.
+SIGNED_CONTRAST_IDS = [
+    row["contrast_id"]
+    for row in CONTRAST_ROWS
+    if (row.get("type") or "pairwise").strip().lower() in ("pairwise", "coefficient")
+]
+OMNIBUS_CONTRAST_IDS = [
+    row["contrast_id"]
+    for row in CONTRAST_ROWS
+    if (row.get("type") or "pairwise").strip().lower() == "omnibus"
+]
+
+R_ENV = str(WORKFLOW_ROOT / "envs" / "r.yaml")
+CORE_ENV = str(WORKFLOW_ROOT / "envs" / "core.yaml")
+NETWORK_ENV = str(WORKFLOW_ROOT / "envs" / "network.yaml")
+UTILS_R = str(WORKFLOW_ROOT / "scripts" / "utils.R")
+
+def qc(path):
+    return str(RESULTS / "qc" / path)
+
+def batch(path):
+    return str(RESULTS / "batch" / path)
+
+def deconvolution(path):
+    return str(RESULTS / "deconvolution" / path)
+
+def comparison(path):
+    return str(RESULTS / "comparison" / path)
+
+def variance_partition(path):
+    return str(RESULTS / "variance_partition" / path)
+
+def contrast(path):
+    return str(RESULTS / "contrasts" / "{contrast_id}" / path)
+
+def analysis(module, path):
+    return contrast(str(Path("analyses") / module / path))
+
+QC_OUTPUTS = [
+    qc("objects/vst.rds"),
+    qc("tables/vst_expression.tsv"),
+    qc("tables/pca_coordinates.tsv"),
+    qc("tables/pca_variance.tsv"),
+    qc("tables/sample_correlation.tsv"),
+    qc("tables/library_metrics.tsv"),
+    qc("tables/expression_density_displayed.tsv"),
+    qc("tables/sample_distance.tsv"),
+    qc("tables/variable_gene_heatmap_displayed.tsv"),
+    qc("tables/pca_correlation_layout.json"),
+    qc("figures/pca.pdf"),
+    qc("figures/pca.png"),
+    qc("figures/sample_correlation.pdf"),
+    qc("figures/sample_correlation.png"),
+    qc("figures/pca_correlation.pdf"),
+    qc("figures/pca_correlation.png"),
+    qc("figures/library_metrics.pdf"),
+    qc("figures/library_metrics.png"),
+    qc("figures/expression_density.pdf"),
+    qc("figures/expression_density.png"),
+    qc("figures/sample_distance.pdf"),
+    qc("figures/sample_distance.png"),
+    qc("figures/variable_gene_heatmap.pdf"),
+    qc("figures/variable_gene_heatmap.png"),
+    qc("figures/qc_overview.pdf"),
+    qc("figures/qc_overview.png"),
+    qc("qc_summary.json"),
+]
+
+# Batch-corrected ordination (batch module, study-level; consumes qc's VST and
+# removes analysis.batch with limma::removeBatchEffect). Opt-in, off in every
+# profile; requires qc (enforced in load_project).
+BATCH_OUTPUTS = [
+    batch("tables/batch_corrected_expression.tsv"),
+    batch("tables/batch_pca_coordinates.tsv"),
+    batch("tables/batch_sample_distance.tsv"),
+    batch("figures/batch_pca.pdf"),
+    batch("figures/batch_pca.png"),
+    batch("figures/batch_sample_distance.pdf"),
+    batch("figures/batch_sample_distance.png"),
+    batch("batch_summary.json"),
+]
+
+# Signature-matrix cell-fraction deconvolution (deconvolution module, study-level;
+# NNLS of per-sample CPM against a user-supplied signature matrix). Opt-in, off in
+# every profile; requires resources.deconvolution_signature (enforced in load_project).
+DECONVOLUTION_OUTPUTS = [
+    deconvolution("tables/cell_fractions.tsv"),
+    deconvolution("figures/cell_fractions.pdf"),
+    deconvolution("figures/cell_fractions.png"),
+    deconvolution("deconvolution_summary.json"),
+]
+
+# Cross-contrast consensus (consensus module, study-level; reduces over every
+# pairwise contrast's DE table). Opt-in, off in every profile; requires de and
+# >=2 pairwise contrasts (enforced in load_project).
+CONSENSUS_OUTPUTS = [
+    comparison("tables/consensus_membership.tsv"),
+    comparison("tables/consensus_genes.tsv"),
+    comparison("tables/contrast_overlap.tsv"),
+    comparison("tables/consensus_intersections_displayed.tsv"),
+    comparison("figures/consensus_upset.pdf"),
+    comparison("figures/consensus_upset.png"),
+    comparison("figures/consensus_sign_heatmap.pdf"),
+    comparison("figures/consensus_sign_heatmap.png"),
+    comparison("consensus_summary.json"),
+]
+
+# variancePartition (variance_partition module, study-level; decomposes the QC
+# VST expression into the fraction of per-gene variance attributable to each
+# design covariate). Opt-in, off in every profile; requires qc.
+VARIANCE_PARTITION_OUTPUTS = [
+    variance_partition("tables/variance_fractions.tsv"),
+    variance_partition("tables/variance_summary.tsv"),
+    variance_partition("figures/variance_partition.pdf"),
+    variance_partition("figures/variance_partition.png"),
+    variance_partition("variance_partition_summary.json"),
+]
+
+DE_PATTERNS = [
+    analysis("de", "objects/deseq2.rds"),
+    analysis("de", "tables/de_results.tsv"),
+    analysis("de", "tables/volcano_displayed.tsv"),
+    analysis("de", "tables/de_heatmap_displayed.tsv"),
+    analysis("de", "tables/ma_displayed.tsv"),
+    analysis("de", "tables/pvalue_distribution_displayed.tsv"),
+    analysis("de", "tables/lfc_distribution_displayed.tsv"),
+    analysis("de", "tables/de_pca_coordinates.tsv"),
+    analysis("de", "tables/de_pca_ellipses.tsv"),
+    analysis("de", "figures/volcano.pdf"),
+    analysis("de", "figures/volcano.png"),
+    analysis("de", "figures/de_heatmap.pdf"),
+    analysis("de", "figures/de_heatmap.png"),
+    analysis("de", "figures/ma.pdf"),
+    analysis("de", "figures/ma.png"),
+    analysis("de", "figures/pvalue_distribution.pdf"),
+    analysis("de", "figures/pvalue_distribution.png"),
+    analysis("de", "figures/lfc_distribution.pdf"),
+    analysis("de", "figures/lfc_distribution.png"),
+    analysis("de", "figures/de_pca.pdf"),
+    analysis("de", "figures/de_pca.png"),
+    analysis("de", "figures/de_overview.pdf"),
+    analysis("de", "figures/de_overview.png"),
+    analysis("de", "de_summary.json"),
+]
+
+OMNIBUS_PATTERNS = [
+    analysis("omnibus", "objects/deseq2_lrt.rds"),
+    analysis("omnibus", "tables/omnibus_results.tsv"),
+    analysis("omnibus", "tables/pvalue_distribution_displayed.tsv"),
+    analysis("omnibus", "tables/omnibus_heatmap_displayed.tsv"),
+    analysis("omnibus", "figures/pvalue_distribution.pdf"),
+    analysis("omnibus", "figures/pvalue_distribution.png"),
+    analysis("omnibus", "figures/omnibus_heatmap.pdf"),
+    analysis("omnibus", "figures/omnibus_heatmap.png"),
+    analysis("omnibus", "omnibus_summary.json"),
+]
+
+# Confirmatory edgeR quasi-likelihood run + DESeq2 concordance (de_confirm
+# module, pairwise contrasts only).
+DE_CONFIRM_PATTERNS = [
+    analysis("de_confirm", "tables/edger_results.tsv"),
+    analysis("de_confirm", "tables/de_concordance_displayed.tsv"),
+    analysis("de_confirm", "figures/de_concordance.pdf"),
+    analysis("de_confirm", "figures/de_concordance.png"),
+    analysis("de_confirm", "de_confirm_summary.json"),
+]
+
+# Signed pathway-topology impact (spia module, per-contrast; SPIA over the DE
+# table and KEGG topology). Opt-in, off in every profile; requires de + KEGG.
+SPIA_PATTERNS = [
+    analysis("spia", "tables/spia_pathways.tsv"),
+    analysis("spia", "tables/spia_displayed.tsv"),
+    analysis("spia", "figures/spia_two_evidence.pdf"),
+    analysis("spia", "figures/spia_two_evidence.png"),
+    analysis("spia", "spia_summary.json"),
+]
+
+PATHWAY_PATTERNS = [
+    analysis("pathways", "tables/fgsea.tsv"),
+    analysis("pathways", "tables/ora.tsv"),
+    analysis("pathways", "tables/ora_displayed.tsv"),
+    analysis("pathways", "tables/gsva_scores.tsv"),
+    analysis("pathways", "tables/gsva_differential.tsv"),
+    analysis("pathways", "tables/gsva_heatmap_displayed.tsv"),
+    analysis("pathways", "tables/gsea_curves_displayed.tsv"),
+    analysis("pathways", "figures/ora_bidirectional.pdf"),
+    analysis("pathways", "figures/ora_bidirectional.png"),
+    analysis("pathways", "figures/gsva_heatmap.pdf"),
+    analysis("pathways", "figures/gsva_heatmap.png"),
+    analysis("pathways", "figures/gsea_curves.pdf"),
+    analysis("pathways", "figures/gsea_curves.png"),
+    analysis("pathways", "pathways_summary.json"),
+]
+
+ONTOLOGY_PATTERNS = [
+    analysis("ontology", "tables/ontology.tsv"),
+    analysis("ontology", "tables/ontology_displayed.tsv"),
+    analysis("ontology", "tables/ontology_domain_displayed.tsv"),
+    analysis("ontology", "figures/ontology_bidirectional.pdf"),
+    analysis("ontology", "figures/ontology_bidirectional.png"),
+    analysis("ontology", "figures/ontology_domains.pdf"),
+    analysis("ontology", "figures/ontology_domains.png"),
+    analysis("ontology", "ontology_summary.json"),
+]
+
+# Enrichment-similarity map (enrichment_map module, per-contrast; Jaccard-overlap
+# network of enriched terms with deterministic community clustering). Opt-in, off
+# in every profile; requires pathways.
+ENRICHMENT_MAP_PATTERNS = [
+    analysis("enrichment_map", "tables/enrichment_map_nodes.tsv"),
+    analysis("enrichment_map", "tables/enrichment_map_edges.tsv"),
+    analysis("enrichment_map", "tables/enrichment_map_clusters.tsv"),
+    analysis("enrichment_map", "figures/enrichment_map.pdf"),
+    analysis("enrichment_map", "figures/enrichment_map.png"),
+    analysis("enrichment_map", "enrichment_map_summary.json"),
+]
+
+COMPOSITION_PATTERNS = [
+    analysis("composition", "tables/cell_state_scores.tsv"),
+    analysis("composition", "tables/cell_state_differential.tsv"),
+    analysis("composition", "tables/cell_state_displayed.tsv"),
+    analysis("composition", "figures/cell_state_signatures.pdf"),
+    analysis("composition", "figures/cell_state_signatures.png"),
+    analysis("composition", "composition_summary.json"),
+]
+
+REGULATOR_PATTERNS = [
+    analysis("regulators", "tables/regulon_edges.tsv"),
+    analysis("regulators", "tables/dorothea_activity_scores.tsv"),
+    analysis("regulators", "tables/regulator_target_program_scores.tsv"),
+    analysis("regulators", "tables/regulator_differential.tsv"),
+    analysis("regulators", "tables/regulator_activity_displayed.tsv"),
+    analysis("regulators", "figures/regulator_activity.pdf"),
+    analysis("regulators", "figures/regulator_activity.png"),
+    analysis("regulators", "regulators_summary.json"),
+    analysis("regulators", "tables/grn_nodes_displayed.tsv"),
+    analysis("regulators", "tables/grn_edges_displayed.tsv"),
+    analysis("regulators", "tables/grn_program_separation_test.tsv"),
+    analysis("regulators", "tables/grn_sector_summary.tsv"),
+    analysis("regulators", "figures/grn_rectangular.pdf"),
+    analysis("regulators", "figures/grn_rectangular.png"),
+    analysis("regulators", "figures/grn_radial_legacy.pdf"),
+    analysis("regulators", "figures/grn_radial_legacy.png"),
+    # grn_radial.{pdf,png} is rendered by rule contrast_grn_radial (R_ENV).
+    analysis("regulators", "figures/grn_radial.pdf"),
+    analysis("regulators", "figures/grn_radial.png"),
+    analysis("regulators", "grn_summary.json"),
+]
+
+NETWORK_PATTERNS = [
+    *[
+        analysis("networks", f"tables/string_{direction}_{suffix}.tsv")
+        for direction in ("up", "down")
+        for suffix in ("input_genes", "unmapped_genes", "unconnected_genes", "nodes", "edges", "nodes_displayed", "edges_displayed")
+    ],
+    analysis("networks", "tables/string_enrichment.tsv"),
+    analysis("networks", "tables/string_enrichment_displayed.tsv"),
+    *[
+        analysis("networks", f"tables/string_{group}_{suffix}.tsv")
+        for group in ("up", "down", "leading_edge")
+        for suffix in ("enrichment", "seed_genes")
+    ],
+    analysis("networks", "figures/string_up_network.pdf"),
+    analysis("networks", "figures/string_up_network.png"),
+    analysis("networks", "figures/string_down_network.pdf"),
+    analysis("networks", "figures/string_down_network.png"),
+    analysis("networks", "figures/string_enrichment.pdf"),
+    analysis("networks", "figures/string_enrichment.png"),
+    analysis("networks", "networks_summary.json"),
+]
+
+# Rendered by rule contrast_string_figures (R_ENV) from the directional STRING
+# enrichment tables emitted by contrast_networks — kept separate from
+# NETWORK_PATTERNS because that list is the (Python) contrast_networks output.
+STRING_FIGURE_PATTERNS = [
+    analysis("networks", "figures/string_enrichment_faceted.pdf"),
+    analysis("networks", "figures/string_enrichment_faceted.png"),
+    analysis("networks", "figures/string_up_network_community.pdf"),
+    analysis("networks", "figures/string_up_network_community.png"),
+    analysis("networks", "figures/string_down_network_community.pdf"),
+    analysis("networks", "figures/string_down_network_community.png"),
+]
+
+HYPOTHESIS_PATTERNS = [
+    analysis("hypotheses", "tables/hypothesis_evidence.tsv"),
+    analysis("hypotheses", "tables/hypothesis_summary.tsv"),
+    analysis("hypotheses", "hypotheses_summary.json"),
+    analysis("hypotheses", "hypotheses_report.html"),
+]
+
+PUBLICATION_PATTERNS = [
+    analysis("publication", "tables/program_definitions.tsv"),
+    analysis("publication", "tables/de_gene_program_assignments.tsv"),
+    analysis("publication", "tables/de_heatmap_global_displayed.tsv"),
+    analysis("publication", "tables/de_heatmap_program_grouped_displayed.tsv"),
+    analysis("publication", "tables/de_heatmap_compact_displayed.tsv"),
+    analysis("publication", "tables/program_integrated_displayed.tsv"),
+    analysis("publication", "tables/program_violins_displayed.tsv"),
+    analysis("publication", "tables/program_violins_tests.tsv"),
+    *[
+        analysis("publication", f"figures/{name}.{extension}")
+        for name in ("de_heatmap_global", "de_heatmap_program_grouped", "de_heatmap_compact", "program_integrated", "program_violins")
+        for extension in ("pdf", "png")
+    ],
+    analysis("publication", "publication_summary.json"),
+]
+
+SVA_PATTERNS = [analysis("advanced/sva", "tables/surrogate_variables.tsv"), analysis("advanced/sva", "tables/sva_de_sensitivity.tsv"), analysis("advanced/sva", "sva_summary.json")]
+WGCNA_PATTERNS = [analysis("advanced/wgcna", "tables/wgcna_module_trait.tsv"), analysis("advanced/wgcna", "tables/wgcna_membership.tsv"), analysis("advanced/wgcna", "tables/wgcna_hubs.tsv"), analysis("advanced/wgcna", "tables/coexpression_nodes.tsv"), analysis("advanced/wgcna", "tables/coexpression_edges.tsv"), analysis("advanced/wgcna", "figures/wgcna_module_trait.pdf"), analysis("advanced/wgcna", "figures/wgcna_module_trait.png"), analysis("advanced/wgcna", "wgcna_summary.json")]
+# Ollivier-Ricci curvature of the WGCNA co-expression graph (curvature module,
+# per-contrast). Opt-in, off in every profile; requires wgcna (enforced in
+# load_project) since it consumes the coexpression edge/node export.
+CURVATURE_PATTERNS = [analysis("advanced/curvature", "tables/edge_curvature.tsv"), analysis("advanced/curvature", "tables/gene_curvature.tsv"), analysis("advanced/curvature", "tables/module_curvature.tsv"), analysis("advanced/curvature", "tables/curvature_bridges.tsv"), analysis("advanced/curvature", "figures/curvature_histogram.pdf"), analysis("advanced/curvature", "figures/curvature_histogram.png"), analysis("advanced/curvature", "figures/curvature_network.pdf"), analysis("advanced/curvature", "figures/curvature_network.png"), analysis("advanced/curvature", "curvature_summary.json")]
+MEDIATION_PATTERNS = [analysis("advanced/mediation", "tables/mediation_inputs.tsv"), analysis("advanced/mediation", "tables/mediation_results.tsv"), analysis("advanced/mediation", "mediation_summary.json"), analysis("advanced/mediation", "tables/mediation_power.tsv"), analysis("advanced/mediation", "mediation_power_summary.json")]
+MULTILAYER_PATTERNS = [analysis("advanced/multilayer", "tables/multilayer_nodes.tsv"), analysis("advanced/multilayer", "tables/multilayer_triangulated.tsv"), analysis("advanced/multilayer", "tables/multilayer_edges.tsv"), analysis("advanced/multilayer", "figures/multilayer_network.pdf"), analysis("advanced/multilayer", "figures/multilayer_network.png"), analysis("advanced/multilayer", "multilayer_summary.json")]
+
+CANONICAL_INPUTS = [COUNTS, SAMPLES, ANNOTATION, CONTRASTS, INPUT_MANIFEST]
+FINAL_OUTPUTS = list(CANONICAL_INPUTS)
+FINAL_OUTPUTS.extend(ABUNDANCE_OUTPUTS.values())
+if MODULES["pathways"] or MODULES["ontology"]:
+    FINAL_OUTPUTS.extend([GMT, RESOURCE_TABLE, RESOURCE_RECEIPT])
+if MODULES["qc"]:
+    FINAL_OUTPUTS.extend(QC_OUTPUTS)
+if MODULES["batch"]:
+    FINAL_OUTPUTS.extend(BATCH_OUTPUTS)
+if MODULES["deconvolution"]:
+    FINAL_OUTPUTS.extend(DECONVOLUTION_OUTPUTS)
+if MODULES["variance_partition"]:
+    FINAL_OUTPUTS.extend(VARIANCE_PARTITION_OUTPUTS)
+if MODULES["de"]:
+    FINAL_OUTPUTS.extend(expand(DE_PATTERNS, contrast_id=SIGNED_CONTRAST_IDS))
+    FINAL_OUTPUTS.extend(expand(OMNIBUS_PATTERNS, contrast_id=OMNIBUS_CONTRAST_IDS))
+if MODULES["de_confirm"]:
+    FINAL_OUTPUTS.extend(expand(DE_CONFIRM_PATTERNS, contrast_id=PAIRWISE_CONTRAST_IDS))
+if MODULES["consensus"]:
+    FINAL_OUTPUTS.extend(CONSENSUS_OUTPUTS)
+if MODULES["spia"]:
+    FINAL_OUTPUTS.extend(expand(SPIA_PATTERNS, contrast_id=PAIRWISE_CONTRAST_IDS))
+if MODULES["pathways"]:
+    FINAL_OUTPUTS.extend(expand(PATHWAY_PATTERNS, contrast_id=SIGNED_CONTRAST_IDS))
+if MODULES["ontology"]:
+    FINAL_OUTPUTS.extend(expand(ONTOLOGY_PATTERNS, contrast_id=PAIRWISE_CONTRAST_IDS))
+if MODULES["enrichment_map"]:
+    FINAL_OUTPUTS.extend(expand(ENRICHMENT_MAP_PATTERNS, contrast_id=PAIRWISE_CONTRAST_IDS))
+if MODULES["composition"]:
+    FINAL_OUTPUTS.extend(expand(COMPOSITION_PATTERNS, contrast_id=PAIRWISE_CONTRAST_IDS))
+if MODULES["regulators"]:
+    FINAL_OUTPUTS.extend(expand(REGULATOR_PATTERNS, contrast_id=PAIRWISE_CONTRAST_IDS))
+if MODULES["networks"]:
+    FINAL_OUTPUTS.extend(expand(NETWORK_PATTERNS, contrast_id=PAIRWISE_CONTRAST_IDS))
+    FINAL_OUTPUTS.extend(expand(STRING_FIGURE_PATTERNS, contrast_id=PAIRWISE_CONTRAST_IDS))
+if MODULES["hypotheses"]:
+    FINAL_OUTPUTS.extend(expand(HYPOTHESIS_PATTERNS, contrast_id=PAIRWISE_CONTRAST_IDS))
+if MODULES["publication"]:
+    FINAL_OUTPUTS.extend(expand(PUBLICATION_PATTERNS, contrast_id=PAIRWISE_CONTRAST_IDS))
+if MODULES["sva"]:
+    FINAL_OUTPUTS.extend(expand(SVA_PATTERNS, contrast_id=PAIRWISE_CONTRAST_IDS))
+if MODULES["wgcna"]:
+    FINAL_OUTPUTS.extend(expand(WGCNA_PATTERNS, contrast_id=PAIRWISE_CONTRAST_IDS))
+if MODULES["curvature"]:
+    FINAL_OUTPUTS.extend(expand(CURVATURE_PATTERNS, contrast_id=PAIRWISE_CONTRAST_IDS))
+if MODULES["mediation"]:
+    FINAL_OUTPUTS.extend(expand(MEDIATION_PATTERNS, contrast_id=PAIRWISE_CONTRAST_IDS))
+if MODULES["multilayer"]:
+    FINAL_OUTPUTS.extend(expand(MULTILAYER_PATTERNS, contrast_id=PAIRWISE_CONTRAST_IDS))
+
+FIGURE_SET_IDS = list((PROJECT.recipe_config or {}).get("figure_sets", {}))
+ASSEMBLY_PATTERNS = [
+    str(RESULTS / "publication" / "{figure_set}" / "assembled" / "{figure_set}.pdf"),
+    str(RESULTS / "publication" / "{figure_set}" / "assembled" / "{figure_set}.png"),
+    str(RESULTS / "publication" / "{figure_set}" / "assembled" / "assembly.json"),
+    str(RESULTS / "publication" / "{figure_set}" / "panels" / "index.json"),
+]
+ASSEMBLY_OUTPUTS = expand(ASSEMBLY_PATTERNS, figure_set=FIGURE_SET_IDS)
+if MODULES["publication"]:
+    FINAL_OUTPUTS.extend(ASSEMBLY_OUTPUTS)
+
+ANALYSIS_OUTPUTS = list(FINAL_OUTPUTS)
+FRONT_DOOR_OUTPUTS = [
+    str(RESULTS / "figures" / "index.json"),
+    str(RESULTS / "tables" / "index.json"),
+]
+FINAL_OUTPUTS.extend(FRONT_DOOR_OUTPUTS)
+REPORT_INPUTS = list(FINAL_OUTPUTS)
+REPORT = str(RESULTS / "REPORT.html")
+if MODULES["report"]:
+    FINAL_OUTPUTS.append(REPORT)
+
+def figure_panel_inputs(wildcards):
+    recipe = PROJECT.recipe_config["figure_sets"][wildcards.figure_set]
+    paths = []
+    for panel in recipe["panels"]:
+        stem = resolve_panel(PROJECT, panel).source
+        paths.extend([str(stem.with_suffix(".pdf")), str(stem.with_suffix(".png"))])
+    return paths
+
+include: "rules/core.smk"
+include: "rules/providers.smk"
+include: "rules/modules.smk"
+include: "rules/advanced.smk"
+include: "rules/publication.smk"
+include: "rules/report.smk"

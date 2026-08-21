@@ -1,22 +1,22 @@
 # Migration guide
 
-This guide describes how to move an existing project onto BulkRNAFrame and
+This guide describes how to move an existing project onto Tifzoret and
 verify that the migrated run reproduces your established results.
 
-BulkRNAFrame v2 separates reusable workflow behavior from study biology. Keep
+Tifzoret v2 separates reusable workflow behavior from study biology. Keep
 sample metadata, hypotheses, gene programs, panel recipes, and golden-reference
 results in the study repository; keep analysis implementations in
-BulkRNAFrame.
+Tifzoret.
 
 ## Convert a v1 project
 
 ```bash
-bulk-rna migrate-config old-project.yaml \
+tifzoret migrate-config old-project.yaml \
   --output project.yaml \
   --species mouse \
   --genome-build GRCm39
-bulk-rna validate project.yaml
-bulk-rna dry-run project.yaml
+tifzoret validate project.yaml
+tifzoret dry-run project.yaml
 ```
 
 Review the migrated file before execution. In particular, confirm the input
@@ -25,15 +25,15 @@ contrast, analysis profile, and output root.
 
 ## Preserve the old analysis during migration
 
-Point v2 at a new output root. Run `bulk-rna prepare` first and compare the
+Point v2 at a new output root. Run `tifzoret prepare` first and compare the
 canonical counts, samples, annotation, contrasts, and input manifest. Then run
 the configured profile and compare it with the declared reference:
 
 ```bash
-bulk-rna prepare project.yaml
-bulk-rna verify project.yaml --reference /path/to/golden/results --scope counts
-bulk-rna run project.yaml
-bulk-rna verify project.yaml --reference /path/to/golden/results
+tifzoret prepare project.yaml
+tifzoret verify project.yaml --reference /path/to/golden/results --scope counts
+tifzoret run project.yaml
+tifzoret verify project.yaml --reference /path/to/golden/results
 ```
 
 Do not remove the established workflow until counts are exactly equal and the

@@ -1,4 +1,14 @@
-name: bulk-rna-frame
+# Single "run everything in one environment" convenience env for `--no-conda`.
+# It is the UNION of the three per-rule envs (workflow/envs/{core,network,r}.yaml)
+# plus snakemake and an editable install, so `tifzoret run ... --no-conda` can
+# execute every module without Snakemake managing per-rule conda envs.
+#
+# This env is intentionally floating (minor pins for python/system deps, R deps
+# unpinned) — it is the developer/CI convenience env, NOT the reproducibility
+# record. The byte-exact witnesses of the published numbers are the locked
+# per-rule envs under workflow/envs/locks/. tests/test_env_locks.py enforces
+# that this file stays a superset of the per-rule env dependencies.
+name: tifzoret
 channels: [conda-forge, bioconda]
 dependencies:
   - python=3.12
@@ -9,12 +19,15 @@ dependencies:
   - pypdf=5
   - reportlab=4
   - networkx=3.4
+  - scipy=1.18
   - matplotlib=3.10
   - samtools=1.22
   - subread=2.0
   - r-base=4.5
   - bioconductor-deseq2
   - bioconductor-apeglm
+  - r-ashr
+  - bioconductor-edger
   - bioconductor-fgsea
   - bioconductor-gsva
   - bioconductor-limma
@@ -26,7 +39,19 @@ dependencies:
   - bioconductor-keggrest
   - bioconductor-decoupler
   - bioconductor-dorothea
+  - bioconductor-viper
   - bioconductor-sva
+  - bioconductor-variancepartition
+  - bioconductor-spia
+  - bioconductor-graphite
+  - bioconductor-complexheatmap
+  - r-circlize
+  - r-dendextend
+  - r-igraph
+  - r-ggforce
+  - r-colorspace
+  - r-nnls
+  - r-matrixstats
   - r-wgcna
   - r-mediation
   - r-msigdbr

@@ -10,7 +10,7 @@ from pathlib import Path
 SCRIPT = (
     Path(__file__).parents[1]
     / "src"
-    / "bulk_rna_frame"
+    / "tifzoret"
     / "workflow"
     / "scripts"
     / "multilayer.py"

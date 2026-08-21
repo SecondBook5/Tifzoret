@@ -1,9 +1,9 @@
 include LICENSE README.md CHANGELOG.md CITATION.cff
 include Dockerfile Apptainer.def environment.yaml
 recursive-include docs *.md
-recursive-include src/bulk_rna_frame/schemas *.yaml
-recursive-include src/bulk_rna_frame/templates *
-recursive-include src/bulk_rna_frame/workflow *
-prune src/bulk_rna_frame/templates/minimal/.snakemake
-prune src/bulk_rna_frame/workflow/**/__pycache__
+recursive-include src/tifzoret/schemas *.yaml
+recursive-include src/tifzoret/templates *
+recursive-include src/tifzoret/workflow *
+prune src/tifzoret/templates/minimal/.snakemake
+prune src/tifzoret/workflow/**/__pycache__
 global-exclude *.py[cod]
