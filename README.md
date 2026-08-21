@@ -50,92 +50,14 @@ The CLI compiles `project.yaml` into a Snakemake DAG: any of four input kinds is
 normalized to one canonical count boundary, study-scoped QC runs once, and every
 declared contrast fans out through the analysis modules its profile enables
 before the results converge on figure assembly, an HTML report, and a checksummed
-manifest. Nodes below are the actual workflow rules, colored by the profile that
-turns them on.
+manifest. Nodes below are the workflow rules — per-contrast names drop their shared
+`contrast_` prefix — colored by the profile that turns them on.
 
-```mermaid
-flowchart TB
-    %% ===== ① INPUT BOUNDARY =====
-    subgraph IN["① Input boundary · choose one kind"]
-        direction LR
-        BAM[/"aligned BAMs"/]
-        NFC[/"nf-core/rnaseq"/]
-        ARC[/"ZIP · TAR archive"/]
-        CNT[/"integer count matrix"/]
-    end
-    MAT["<b>materialize_inputs</b><br/>featureCounts · GTF-first annotation<br/>counts · TPM/FPKM · gene lengths"]
-    RES["<b>resolve_resources</b><br/>MSigDB · GO · KEGG · Reactome<br/>STRING · DoRothEA — cached snapshots"]
-    BAM --> MAT
-    NFC --> MAT
-    ARC --> MAT
-    CNT -. "skips featureCounts" .-> MAT
+<p align="center">
+  <img src="docs/dag.svg" alt="Tifzoret pipeline: the workflow rules grouped into five phases — input boundary, study scope, per-contrast analysis, advanced modules, and figure assembly plus provenance — with each node colored by the profile that first enables it." width="100%">
+</p>
 
-    %% ===== ② STUDY SCOPE =====
-    subgraph STUDY["② Study scope · once per study"]
-        QC["<b>study_qc</b><br/>VST · PCA · correlation · distances"]
-        BATCH["study_batch<br/>limma removeBatchEffect"]
-    end
-    MAT --> QC --> BATCH
-
-    %% ===== ③ PER-CONTRAST FAN-OUT =====
-    subgraph PC["③ Per contrast · effect = numerator − denominator"]
-        DE["<b>contrast_de</b><br/>DESeq2 · shrinkage · 5-class"]
-        CONF["contrast_de_confirm<br/>edgeR"]
-        OMNI["contrast_omnibus<br/>LRT"]
-        PATH["<b>contrast_pathways</b><br/>fgsea · GSVA · GSEA"]
-        ONT["contrast_ontology<br/>GO/KEGG/Reactome ORA"]
-        SPIA["contrast_spia"]
-        EMAP["contrast_enrichment_map"]
-        COMP["contrast_composition<br/>cell-state · NNLS"]
-        REG["contrast_regulators<br/>DoRothEA / VIPER"]
-        NET["contrast_networks<br/>STRING"]
-        GRN["contrast_grn → grn_radial"]
-        HYP["<b>contrast_hypotheses</b><br/>evidence scoring"]
-    end
-    QC --> DE
-    DE --> CONF
-    DE --> OMNI
-    DE --> PATH & ONT & COMP & REG & NET & GRN
-    RES --> PATH & ONT & REG & NET & GRN
-    PATH --> SPIA & EMAP
-    DE & PATH & REG & NET --> HYP
-
-    %% ===== ④ ADVANCED (full) =====
-    subgraph ADV["④ Advanced · full profile · flagged exploratory"]
-        direction LR
-        SVA[sva]
-        WGCNA[wgcna]
-        CURV[curvature]
-        MED[mediation]
-        MULTI[multilayer]
-        CONS[consensus]
-        VP[variancePartition]
-    end
-    DE --> ADV
-
-    %% ===== ⑤ ASSEMBLE + PROVENANCE =====
-    subgraph OUT["⑤ Assemble + provenance"]
-        PUB["<b>contrast_publication → assemble_figure</b> (×N sets)<br/>vector PDF + raster PNG panels"]
-        FRONT["front_door_artifacts<br/>promote figures/tables · index.json"]
-        REPORT["<b>report_html</b><br/>REPORT.html"]
-        MANIFEST["<b>release_manifest</b><br/>manifest.json · checksums · seeds<br/>env · provider receipts · git rev"]
-    end
-    DE & PATH & COMP & REG & NET & GRN & HYP --> PUB
-    PUB --> FRONT
-    QC --> FRONT
-    FRONT --> REPORT & MANIFEST
-    ADV --> MANIFEST
-
-    %% ===== profile tiers =====
-    classDef io   fill:#E8EAED,stroke:#555555,color:#111111
-    classDef std  fill:#A6CEE3,stroke:#2C6E9B,color:#08263B
-    classDef pub  fill:#B7E4C7,stroke:#2D8659,color:#0B3320
-    classDef full fill:#FAD7A0,stroke:#B9770E,color:#5B3A08
-    class BAM,NFC,ARC,CNT,MAT,RES,FRONT,REPORT,MANIFEST io
-    class QC,BATCH,DE,CONF,OMNI,PATH,ONT,SPIA,EMAP std
-    class COMP,REG,NET,GRN,HYP,PUB pub
-    class SVA,WGCNA,CURV,MED,MULTI,CONS,VP full
-```
+<sub>Regenerate with `python docs/render_dag.py` (needs Graphviz `dot`). The picture is a curated view; a drift guard in that script aborts the render unless every workflow rule is accounted for by a node.</sub>
 
 **Profile tiers** — each is a superset of the one before:
 🟦 `standard` (QC · DE · pathways · ontology) · 🟩 `publication` adds composition,
