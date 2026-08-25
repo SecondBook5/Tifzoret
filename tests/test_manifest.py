@@ -215,9 +215,11 @@ def _run_manifest(config_path: Path, results: Path) -> subprocess.CompletedProce
     )
 
 
-def _strict_manifest_project(tmp_path: Path, strict: bool) -> tuple[Path, Path]:
+def _strict_manifest_project(tmp_path: Path, strict: bool, *, degradation: bool = True) -> tuple[Path, Path]:
     """Minimal-template project (optionally strict) with one stage summary that
-    carries a degradation warning, ready for the terminal manifest gate."""
+    carries a warning, ready for the terminal manifest gate. ``degradation`` picks
+    the severity: a degradation-tagged object (which blocks a strict build) versus
+    a bare-string standing caveat (which is recorded but never blocks)."""
     destination = tmp_path / "project"
     shutil.copytree(TEMPLATE, destination)
     config_path = destination / "project.yaml"
@@ -227,30 +229,53 @@ def _strict_manifest_project(tmp_path: Path, strict: bool) -> tuple[Path, Path]:
     config_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
     results = destination / "results"
     (results / "qc").mkdir(parents=True)
+    warning = (
+        {"message": "deterministic proxy used -- NOT canonical scoring", "severity": "degradation"}
+        if degradation
+        else "STRING edges are association evidence, not causal edges."
+    )
     (results / "qc" / "qc_summary.json").write_text(
-        json.dumps({"warnings": ["deterministic proxy used -- NOT canonical scoring"]}),
+        json.dumps({"warnings": [warning]}),
         encoding="utf-8",
     )
     return config_path, results
 
 
-def test_strict_mode_fails_when_a_stage_recorded_a_warning(tmp_path):
+def test_strict_mode_fails_on_a_degradation_warning(tmp_path):
     """In strict (publication) mode the terminal manifest step fails if any stage
-    recorded a degradation warning, so a publication run cannot report success on a
-    degraded result. The manifest is still written (for inspection) before failing."""
-    config_path, results = _strict_manifest_project(tmp_path, strict=True)
+    recorded a DEGRADATION-severity warning, so a publication run cannot report
+    success on a degraded result. The manifest is still written (for inspection)
+    before failing."""
+    config_path, results = _strict_manifest_project(tmp_path, strict=True, degradation=True)
     proc = _run_manifest(config_path, results)
     assert proc.returncode != 0, proc.stdout
     assert "strict mode" in proc.stderr
+    assert "degradation" in proc.stderr
     manifest = json.loads((results / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["strict"] is True
     assert manifest["warnings"]  # recorded on disk despite the failure
+    assert manifest["warnings"][0]["severity"] == "degradation"
+
+
+def test_strict_mode_tolerates_standing_caveats(tmp_path):
+    """A standing scientific CAVEAT (a bare-string interpretation note a clean run
+    always emits, e.g. the STRING association disclaimer) is recorded but must NOT
+    fail a strict build -- otherwise strict mode would be unusable for any real
+    study, all of which emit such caveats. When a run's only warnings are caveats,
+    strict passes."""
+    config_path, results = _strict_manifest_project(tmp_path, strict=True, degradation=False)
+    proc = _run_manifest(config_path, results)
+    assert proc.returncode == 0, proc.stderr
+    manifest = json.loads((results / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["strict"] is True
+    assert manifest["warnings"]  # the caveat is recorded as provenance
+    assert manifest["warnings"][0]["severity"] == "caveat"
 
 
 def test_lenient_mode_tolerates_stage_warnings(tmp_path):
-    """Absent execution.strict, the same warning is recorded but the run succeeds --
-    byte-for-byte the historical behavior."""
-    config_path, results = _strict_manifest_project(tmp_path, strict=False)
+    """Absent execution.strict, even a degradation warning is recorded but the run
+    succeeds -- byte-for-byte the historical behavior."""
+    config_path, results = _strict_manifest_project(tmp_path, strict=False, degradation=True)
     proc = _run_manifest(config_path, results)
     assert proc.returncode == 0, proc.stderr
     manifest = json.loads((results / "manifest.json").read_text(encoding="utf-8"))

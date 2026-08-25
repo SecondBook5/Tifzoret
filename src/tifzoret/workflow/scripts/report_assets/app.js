@@ -998,7 +998,21 @@
     if (!warns.length) wcard.appendChild(el("p", { class: "section-blurb", text: "None recorded." }));
     else {
       var ul = el("ul", { class: "warnlist" });
-      warns.forEach(function (w) { ul.appendChild(el("li", null, [el("span", { class: "wicon", text: "▲" }), el("span", { text: String(w) })])); });
+      warns.forEach(function (w) {
+        // Each entry is an object {source, message, severity} (older runs may
+        // carry a bare string). Degradations are fidelity losses; everything else
+        // is a standing scientific caveat.
+        var msg = (w && typeof w === "object") ? (w.message || "") : String(w);
+        var isDeg = (w && typeof w === "object" && w.severity === "degradation");
+        var src = (w && typeof w === "object" && w.source) ? w.source : "";
+        var icon = isDeg ? "■" : "▲";
+        var label = isDeg ? "Degradation" : "Caveat";
+        var text = src ? (msg + "  (" + src + ")") : msg;
+        ul.appendChild(el("li", { title: label }, [
+          el("span", { class: "wicon", text: icon }),
+          el("span", { text: text }),
+        ]));
+      });
       wcard.appendChild(ul);
     }
     grid.appendChild(wcard);

@@ -226,7 +226,13 @@ def assemble(
             "pdf_sha256": _sha256(source_pdf),
             "png_sha256": _sha256(source_png),
             "displayed_data": displayed_records,
-            "warnings": [] if displayed_records else ["No displayed-data path was declared for this legacy source panel."],
+            # A panel with no declared displayed-data source cannot be covered by
+            # the Source Data bundle, so it is a publication-blocking degradation
+            # (not a standing caveat): strict mode must fail rather than ship it.
+            "warnings": [] if displayed_records else [
+                {"message": "No displayed-data path was declared for this legacy source panel.",
+                 "severity": "degradation"}
+            ],
         }
         (staged_dir / "panel.json").write_text(
             json.dumps({"schema_version": 1, **panel_record}, indent=2) + "\n",

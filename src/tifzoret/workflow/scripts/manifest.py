@@ -123,8 +123,39 @@ def repository_revision(start: Path) -> dict[str, object]:
     }
 
 
+# A stage ``warnings`` entry is one of two things, distinguished by severity:
+#   * CAVEAT (default) — a standing scientific interpretation note that a clean
+#     run legitimately emits every time (e.g. "STRING edges are associations, not
+#     causal"; "composition scores are not cell fractions"). A bare string, or an
+#     object without an explicit severity, is a caveat. Caveats NEVER block.
+#   * DEGRADATION — the stage flagged a fidelity loss that must not survive into a
+#     publication build (e.g. a panel with no declared source data). Emitted as an
+#     object ``{"message": ..., "severity": "degradation"}``. Only these trip the
+#     strict terminal gate. R stages route degradations through tz_degrade(), which
+#     hard-fails at the stage in strict mode; this gate is the backstop for
+#     degradations recorded by non-R stages.
+CAVEAT = "caveat"
+DEGRADATION = "degradation"
+
+
+def _normalize_warning(value: object) -> tuple[str, str]:
+    """Return ``(message, severity)`` for a raw ``warnings`` entry. Bare strings —
+    and any object that does not declare a recognized severity — are non-blocking
+    caveats, so configs and stages predating the severity field behave unchanged."""
+    if isinstance(value, dict):
+        message = str(value.get("message", "")).strip()
+        severity = str(value.get("severity", CAVEAT)).strip().lower()
+        if severity not in (CAVEAT, DEGRADATION):
+            severity = CAVEAT
+        return message, severity
+    return str(value), CAVEAT
+
+
 def collect_warnings(results: Path) -> list[dict[str, str]]:
-    """Gather ``warnings`` entries from every JSON artifact under ``results`` (except the manifest), each tagged with its source path relative to ``results``."""
+    """Gather ``warnings`` entries from every JSON artifact under ``results``
+    (except the manifest), each tagged with its source path relative to
+    ``results`` and a severity (``caveat`` by default; ``degradation`` when the
+    emitting stage explicitly flags a fidelity loss)."""
     warnings: list[dict[str, str]] = []
     for path in sorted(results.rglob("*.json")):
         if path.name == "manifest.json":
@@ -134,10 +165,11 @@ def collect_warnings(results: Path) -> list[dict[str, str]]:
         except (OSError, json.JSONDecodeError):
             continue
         values = data.get("warnings", []) if isinstance(data, dict) else []
-        if isinstance(values, str):
+        if isinstance(values, (str, dict)):
             values = [values]
         for value in values:
-            warnings.append({"source": str(path.relative_to(results)), "message": str(value)})
+            message, severity = _normalize_warning(value)
+            warnings.append({"source": str(path.relative_to(results)), "message": message, "severity": severity})
     return warnings
 
 
@@ -256,19 +288,22 @@ def main() -> None:
     output.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     print(f"Wrote {output} with {len(result_paths)} result files")
 
-    # Strict (publication) mode terminal gate. Every stage funnels a degraded or
-    # fallback decision into its summary JSON's `warnings` array, which we have
-    # just collected. The manifest is written first (so the warnings are on disk
-    # for inspection), then the run fails: a publication build must not report
-    # success while any stage recorded a degradation. Lenient mode is unaffected.
-    warnings = manifest["warnings"]
-    if project.strict and warnings:
+    # Strict (publication) mode terminal gate. The manifest is written first (so
+    # every warning is on disk for inspection), then the run fails IFF a stage
+    # recorded a DEGRADATION-severity warning — a fidelity loss that must not
+    # survive into a publication build. Standing scientific CAVEATS (the always-on
+    # interpretation notes a clean run legitimately emits) are recorded but never
+    # block; failing on them would make strict mode unusable for any real study.
+    # R-stage degradations already hard-fail at the stage via tz_degrade(); this
+    # backstops degradations recorded by non-R stages. Lenient mode is unaffected.
+    blocking = [w for w in manifest["warnings"] if w.get("severity") == DEGRADATION]
+    if project.strict and blocking:
         print(
-            f"strict mode (execution.strict): {len(warnings)} stage warning(s) "
+            f"strict mode (execution.strict): {len(blocking)} degradation warning(s) "
             "make this run non-publication-grade:",
             file=sys.stderr,
         )
-        for warning in warnings:
+        for warning in blocking:
             print(f"  [{warning['source']}] {warning['message']}", file=sys.stderr)
         sys.exit(1)
 
