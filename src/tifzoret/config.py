@@ -43,10 +43,11 @@ PROFILE_MODULES: dict[str, frozenset[str]] = {
 # confirmatory DE; deconvolution: signature-matrix cell fractions; curvature:
 # Ollivier-Ricci on the WGCNA co-expression graph; consensus: cross-contrast
 # direction consensus; spia: signed pathway-topology impact; variance_partition:
-# variance explained per design covariate; enrichment_map: term-similarity map.
+# variance explained per design covariate; enrichment_map: term-similarity map;
+# factorial: interaction views (effect-vs-effect, profile, four-group expression).
 OPT_IN_MODULES = frozenset({
     "batch", "de_confirm", "deconvolution", "curvature",
-    "consensus", "spia", "variance_partition", "enrichment_map",
+    "consensus", "spia", "variance_partition", "enrichment_map", "factorial",
 })
 ALL_MODULES = frozenset().union(*PROFILE_MODULES.values()) | OPT_IN_MODULES
 
@@ -156,12 +157,30 @@ class ResolvedProject:
     recipe_config: dict[str, Any] | None = None
     cell_state_signatures: Path | None = None
     regulon_edges: Path | None = None
+    binding_prior_edges: Path | None = None
+    # Generalized named regulator views (analysis.settings.regulators.views). Each
+    # entry is {name, edges (resolved absolute path str), signed (bool),
+    # provider_label (str | None)}; empty when the legacy regulon_edges(+binding)
+    # path is in use. The first view is the primary (canonical filenames).
+    regulator_views: tuple[dict[str, Any], ...] = ()
     deconvolution_signature: Path | None = None
 
     @property
     def project_id(self) -> str:
         """The filesystem-safe project identifier (``project.id``)."""
         return str(self.config["project"]["id"])
+
+    @property
+    def strict(self) -> bool:
+        """Whether ``execution.strict`` selects publication-execution mode.
+
+        In strict mode any degraded or fallback path (e.g. a non-VIPER
+        regulator-activity proxy) is a hard failure rather than a recorded
+        warning, and the terminal manifest step fails if any stage recorded a
+        warning. Absent/false is the default and behaves identically to the
+        historical engine.
+        """
+        return bool(self.config.get("execution", {}).get("strict", False))
 
     @property
     def source_files(self) -> tuple[Path, ...]:
@@ -696,9 +715,39 @@ def load_project(config_path: str | Path) -> ResolvedProject:
     # The enrichment map clusters enriched terms from the pathways stage outputs.
     if modules["enrichment_map"] and not modules["pathways"]:
         errors.append("modules.enrichment_map requires modules.pathways")
+    # The factorial views read the QC symbol-keyed VST expression and the two
+    # configured signed-contrast DE tables (one per crossed arm), so they require
+    # qc + de, the two crossed factors as samples columns, and effect_x/effect_y
+    # naming signed (pairwise/coefficient) contrasts that emit a directional table.
+    if modules["factorial"]:
+        if not modules["qc"]:
+            errors.append("modules.factorial requires modules.qc because it reads the QC VST expression")
+        if not modules["de"]:
+            errors.append("modules.factorial requires modules.de because it reads the two effect contrasts' DE tables")
+        factorial_settings = (config["analysis"].get("settings", {}) or {}).get("factorial") or {}
+        factors = factorial_settings.get("factors")
+        if not factors:
+            errors.append("modules.factorial requires analysis.settings.factorial.factors (two samples.tsv columns)")
+        else:
+            for factor_name in factors:
+                if factor_name not in sample_header:
+                    errors.append(f"modules.factorial factor {factor_name!r} is absent from samples.tsv")
+        signed_ids = {
+            row.get("contrast_id", "").strip()
+            for row in contrasts
+            if (row.get("type", "") or "pairwise").strip().lower() in ("pairwise", "coefficient")
+        }
+        for role in ("effect_x", "effect_y"):
+            effect = factorial_settings.get(role)
+            if not effect:
+                errors.append(f"modules.factorial requires analysis.settings.factorial.{role} (a signed contrast id)")
+            elif effect not in signed_ids:
+                errors.append(f"modules.factorial {role} {effect!r} is not a signed (pairwise/coefficient) contrast id")
 
     signature_path: Path | None = None
     regulon_path: Path | None = None
+    binding_prior_path: Path | None = None
+    regulator_views: list[dict[str, Any]] = []
     deconvolution_signature_path: Path | None = None
     if modules["composition"]:
         signature_value = config["resources"].get("cell_state_signatures")
@@ -715,20 +764,75 @@ def load_project(config_path: str | Path) -> ResolvedProject:
                     ids = [item["id"] for item in signature_config["signatures"]]
                     if len(ids) != len(set(ids)):
                         errors.append("cell-state signature ids must be unique")
-    if modules["regulators"] and config["resources"].get("regulon_edges"):
+    # Generalized named regulator views (analysis.settings.regulators.views): an
+    # arbitrary list of source/target edge tables, each scored as its own view in
+    # one run. Replaces the built-in primary(+binding) pair when present, and is
+    # mutually exclusive with it. The FIRST view is the primary (keeps the
+    # canonical output filenames the GRN/hypothesis stages read); every later view
+    # writes `_<name>` variants. Project-agnostic: the engine ships no view lists.
+    views_raw = (
+        config["analysis"].get("settings", {}).get("regulators", {}).get("views")
+        if modules["regulators"]
+        else None
+    )
+    if views_raw:
+        if config["resources"].get("regulon_edges") or config["resources"].get("binding_prior_edges"):
+            errors.append(
+                "analysis.settings.regulators.views cannot be combined with "
+                "resources.regulon_edges or resources.binding_prior_edges; use one "
+                "regulator-view mechanism"
+            )
+        names = [view["name"] for view in views_raw]
+        if len(names) != len(set(names)):
+            errors.append("analysis.settings.regulators.views names must be unique")
+        for view in views_raw:
+            edges_path = _resolve(base, view["edges"])
+            if not edges_path.is_file():
+                errors.append(f"regulator view {view['name']!r} edge file does not exist: {edges_path}")
+            else:
+                view_header, view_rows = _read_tsv(edges_path)
+                if not {"source", "target"}.issubset(view_header):
+                    errors.append(f"regulator view {view['name']!r} edges require source and target columns")
+                elif not view_rows:
+                    errors.append(f"regulator view {view['name']!r} edge file has no data rows: {edges_path}")
+            regulator_views.append(
+                {
+                    "name": view["name"],
+                    "edges": str(edges_path),
+                    "signed": bool(view["signed"]),
+                    "provider_label": view.get("provider_label"),
+                }
+            )
+    if modules["regulators"] and not views_raw and config["resources"].get("regulon_edges"):
         regulon_path = _resolve(base, config["resources"]["regulon_edges"])
         if not regulon_path.is_file():
             errors.append(f"regulon edge file does not exist: {regulon_path}")
         else:
-            regulon_header, _ = _read_tsv(regulon_path)
+            regulon_header, regulon_rows = _read_tsv(regulon_path)
             if not {"source", "target"}.issubset(regulon_header):
                 errors.append("resources.regulon_edges requires source and target columns")
-    if modules["regulators"] and regulon_path is None:
-        if config["resources"].get("providers", {}).get("gtrd", False):
+            elif not regulon_rows:
+                errors.append(f"regulon edge file has no data rows: {regulon_path}")
+    # Optional second regulon view: an unsigned binding prior (e.g. a GTRD-derived
+    # source/target snapshot) scored alongside the primary regulon in one run, so a
+    # single `tifzoret run` regenerates both the signed and the binding-prior
+    # regulator-activity panels. Validated exactly like regulon_edges; project-agnostic.
+    if modules["regulators"] and not views_raw and config["resources"].get("binding_prior_edges"):
+        binding_prior_path = _resolve(base, config["resources"]["binding_prior_edges"])
+        if not binding_prior_path.is_file():
+            errors.append(f"binding prior edge file does not exist: {binding_prior_path}")
+        else:
+            binding_header, binding_rows = _read_tsv(binding_prior_path)
+            if not {"source", "target"}.issubset(binding_header):
+                errors.append("resources.binding_prior_edges requires source and target columns")
+            elif not binding_rows:
+                errors.append(f"binding prior edge file has no data rows: {binding_prior_path}")
+    if modules["regulators"] and not views_raw and regulon_path is None:
+        if config["resources"].get("providers", {}).get("gtrd", False) and binding_prior_path is None:
             errors.append(
-                "resources.providers.gtrd requires resources.regulon_edges pointing to an "
-                "exported GTRD-derived source/target snapshot; Tifzoret does not silently "
-                "redistribute GTRD data"
+                "resources.providers.gtrd requires resources.regulon_edges or "
+                "resources.binding_prior_edges pointing to an exported GTRD-derived "
+                "source/target snapshot; Tifzoret does not silently redistribute GTRD data"
             )
         if not config["resources"].get("providers", {}).get("dorothea", False):
             errors.append("modules.regulators requires resources.regulon_edges or resources.providers.dorothea: true")
@@ -899,6 +1003,8 @@ def load_project(config_path: str | Path) -> ResolvedProject:
         recipe_config=recipe_config,
         cell_state_signatures=signature_path,
         regulon_edges=regulon_path,
+        binding_prior_edges=binding_prior_path,
+        regulator_views=tuple(regulator_views),
         deconvolution_signature=deconvolution_signature_path,
         output_root=output_root,
         sample_rows=tuple(samples),
@@ -922,6 +1028,7 @@ def validation_report(project: ResolvedProject) -> dict[str, Any]:
         "input_kind": project.source_kind,
         "analysis_set": project.analysis_set,
         "profile": project.config["analysis"]["profile"],
+        "strict": project.strict,
         "modules": list(project.modules),
         "species": project.config["species"],
         "output": str(project.result_root),

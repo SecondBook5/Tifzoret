@@ -10,7 +10,7 @@ and checksums.
 |------|-------------|----------|------|
 | `core.lock.txt`    | `../core.yaml`    | 90  | BAM validation, featureCounts, assembly, front-door, report |
 | `network.lock.txt` | `../network.yaml` | 152 | Python network/GRN figure rendering (networkx + scipy) |
-| `r.lock.txt`       | `../r.yaml`       | 456 | DESeq2, fgsea, GSVA, ComplexHeatmap, decoupleR/dorothea/viper, WGCNA, variancePartition/SPIA/graphite |
+| `r.lock.txt`       | `../r.yaml`       | 470 | DESeq2, fgsea, GSVA, ComplexHeatmap, decoupleR/dorothea/viper, WGCNA, variancePartition/SPIA/graphite, genome-track stack (rtracklayer/GenomicFeatures/txdbmaker/Rsamtools/GenomicAlignments) |
 
 ## Platform
 

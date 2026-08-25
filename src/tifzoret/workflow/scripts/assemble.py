@@ -44,6 +44,32 @@ def _positions(recipe: dict[str, object]) -> tuple[int, int, list[tuple[int, int
     return rows, columns, positions
 
 
+# Outer page margin and inter-panel gutter for the assembled figure, in inches.
+MARGIN_IN = 0.2
+GUTTER_IN = 0.15
+
+
+def _axis_sizes(panel_meta, count, pos_key, span_key, size_key):
+    """Return the natural size of each grid track (column widths or row heights) in
+    source points. A single-track panel forces its track to at least its own size; a
+    panel spanning several tracks that still does not fit spreads the deficit evenly
+    across the tracks it covers. Widest spans are resolved last so the result is
+    stable regardless of panel order."""
+    sizes = [0.0] * count
+    for meta in panel_meta:
+        if meta[span_key] == 1:
+            index = meta[pos_key] - 1
+            sizes[index] = max(sizes[index], meta[size_key])
+    for meta in sorted((m for m in panel_meta if m[span_key] > 1), key=lambda m: m[span_key]):
+        start, span = meta[pos_key] - 1, meta[span_key]
+        covered = range(start, start + span)
+        deficit = meta[size_key] - sum(sizes[i] for i in covered)
+        if deficit > 0:
+            for index in covered:
+                sizes[index] += deficit / span
+    return sizes
+
+
 def _label_overlay(
     width: float, height: float, label: str, x: float, y_top: float
 ) -> PageObject:
@@ -80,21 +106,81 @@ def assemble(
     recipe = project.recipe_config["figure_sets"][figure_set]
     units = recipe.get("units", "in")
     unit_scale = {"in": 1.0, "mm": 1 / 25.4, "cm": 1 / 2.54}[units]
-    width_in = float(recipe["width"]) * unit_scale
-    height_in = float(recipe["height"]) * unit_scale
-    page_width, page_height = width_in * 72, height_in * 72
+    # The recipe's declared size is a BOUNDING BOX, not a fixed frame: the grid is
+    # scaled to the largest size that fits inside it, then the page is trimmed to the
+    # packed content so no empty band survives when the content aspect differs from
+    # the declared aspect. bound_* are that maximum extent, in points.
+    bound_width = float(recipe["width"]) * unit_scale * 72
+    bound_height = float(recipe["height"]) * unit_scale * 72
     rows, columns, positions = _positions(recipe)
-    cell_width, cell_height = page_width / columns, page_height / rows
-    output_page = PageObject.create_blank_page(width=page_width, height=page_height)
     review_dpi = int(recipe.get("review_dpi", 150))
     background = recipe.get("background", "#FFFFFF")
-    review = Image.new("RGB", (round(width_in * review_dpi), round(height_in * review_dpi)), background)
-    review_draw = ImageDraw.Draw(review)
     font = ImageFont.load_default(size=24)
-    placements = []
-    panel_records = []
+
+    # Pre-pass: resolve every panel and read its native page size. Both the vector
+    # page and its dimensions feed the shared-scale grid computed below.
+    panel_meta = []
     for panel, (row, column) in zip(recipe["panels"], positions, strict=True):
         resolved = resolve_panel(project, panel)
+        source_pdf = resolved.source.with_suffix(".pdf")
+        source_png = resolved.source.with_suffix(".png")
+        if not source_pdf.is_file() or not source_png.is_file():
+            raise FileNotFoundError(f"panel {panel['id']}: expected {source_pdf} and {source_png}")
+        source_page = PdfReader(str(source_pdf)).pages[0]
+        panel_meta.append({
+            "panel": panel, "resolved": resolved,
+            "row": row, "column": column,
+            "row_span": int(panel.get("row_span", 1)),
+            "column_span": int(panel.get("column_span", 1)),
+            "source_pdf": source_pdf, "source_png": source_png,
+            "source_page": source_page,
+            "sw": float(source_page.mediabox.width),
+            "sh": float(source_page.mediabox.height),
+        })
+
+    # Content-proportional grid drawn at ONE shared scale. Each column takes the
+    # width of its widest panel and each row the height of its tallest (deficits
+    # from spanning panels spread across the tracks they cover); a single scale then
+    # fits the whole grid inside the bounding box. Because every panel is placed at
+    # that same scale, their absolute type sizes and line weights match and the sheet
+    # reads as one figure — instead of each panel being shrunk independently into an
+    # equal cell, which is what made dense and sparse panels clash.
+    col_native = _axis_sizes(panel_meta, columns, "column", "column_span", "sw")
+    row_native = _axis_sizes(panel_meta, rows, "row", "row_span", "sh")
+    margin, gutter = MARGIN_IN * 72.0, GUTTER_IN * 72.0
+    content_w = sum(col_native) or 1.0
+    content_h = sum(row_native) or 1.0
+    avail_w = max(bound_width - 2 * margin - (columns - 1) * gutter, 1.0)
+    avail_h = max(bound_height - 2 * margin - (rows - 1) * gutter, 1.0)
+    scale = min(avail_w / content_w, avail_h / content_h)
+    # Trim the page to the packed grid: content at `scale`, plus interior gutters and
+    # the outer margin. The declared bounding box caps the size; the actual page is
+    # exactly the content, so the figure fills its frame in both dimensions.
+    page_width = content_w * scale + (columns - 1) * gutter + 2 * margin
+    page_height = content_h * scale + (rows - 1) * gutter + 2 * margin
+    width_in, height_in = page_width / 72, page_height / 72
+    output_page = PageObject.create_blank_page(width=page_width, height=page_height)
+    review = Image.new("RGB", (round(width_in * review_dpi), round(height_in * review_dpi)), background)
+    review_draw = ImageDraw.Draw(review)
+    # Left edge (points from the left) of each column and top edge (points from the
+    # bottom, PDF origin) of each row, including the outer margin and gutters.
+    col_left = [margin]
+    for index in range(1, columns):
+        col_left.append(col_left[-1] + col_native[index - 1] * scale + gutter)
+    row_top = [page_height - margin]
+    for index in range(1, rows):
+        row_top.append(row_top[-1] - row_native[index - 1] * scale - gutter)
+    px_per_pt = review_dpi / 72.0
+
+    placements = []
+    panel_records = []
+    for meta in panel_meta:
+        panel, resolved = meta["panel"], meta["resolved"]
+        row, column = meta["row"], meta["column"]
+        row_span, column_span = meta["row_span"], meta["column_span"]
+        source_pdf, source_png = meta["source_pdf"], meta["source_png"]
+        source_page = meta["source_page"]
+        source_width, source_height = meta["sw"], meta["sh"]
         constructor_defaults = (
             (project.panel_config or {}).get("constructor_defaults", {}).get(
                 resolved.constructor, {}
@@ -103,9 +189,6 @@ def assemble(
             else {}
         )
         panel_options = {**constructor_defaults, **panel.get("options", {})}
-        source_pdf, source_png = resolved.source.with_suffix(".pdf"), resolved.source.with_suffix(".png")
-        if not source_pdf.is_file() or not source_png.is_file():
-            raise FileNotFoundError(f"panel {panel['id']}: expected {source_pdf} and {source_png}")
 
         staged_dir = panel_index.parent / str(panel["id"])
         staged_dir.mkdir(parents=True, exist_ok=True)
@@ -150,19 +233,31 @@ def assemble(
             encoding="utf-8",
         )
         panel_records.append(panel_record)
-        row_span = int(panel.get("row_span", 1))
-        column_span = int(panel.get("column_span", 1))
-        box_width, box_height = cell_width * column_span, cell_height * row_span
-        source_page = PdfReader(str(source_pdf)).pages[0]
-        source_width, source_height = float(source_page.mediabox.width), float(source_page.mediabox.height)
-        fit_fraction = float(panel_options.get("scale", 0.96))
+
+        # Optional per-panel fine-tune multiplier. Default 1.0 keeps the shared
+        # scale; a recipe may shrink one panel below the grid without disturbing
+        # the rest, but panels are never enlarged past the common scale.
+        fit_fraction = float(panel_options.get("scale", 1.0))
         if not 0.1 <= fit_fraction <= 1:
             raise ValueError(f"panel {panel['id']}: options.scale must be between 0.1 and 1")
-        scale = min(box_width / source_width, box_height / source_height) * fit_fraction
-        x = (column - 1) * cell_width + (box_width - source_width * scale) / 2
-        y_top = page_height - (row - 1) * cell_height
-        y = y_top - box_height + (box_height - source_height * scale) / 2
-        source_page.add_transformation(Transformation().scale(scale).translate(x, y))
+        panel_scale = scale * fit_fraction
+
+        # The panel's block spans col..col+column_span-1 and row..row+row_span-1,
+        # covering any interior gutters. Panels are centered within their block so
+        # narrower/shorter panels sit balanced against the shared gridlines.
+        last_col = column - 1 + column_span - 1
+        last_row = row - 1 + row_span - 1
+        block_left = col_left[column - 1]
+        block_right = col_left[last_col] + col_native[last_col] * scale
+        block_top = row_top[row - 1]
+        block_bottom = row_top[last_row] - row_native[last_row] * scale
+        block_width = block_right - block_left
+        block_height = block_top - block_bottom
+        panel_w = source_width * panel_scale
+        panel_h = source_height * panel_scale
+        x = block_left + (block_width - panel_w) / 2
+        y = block_bottom + (block_height - panel_h) / 2
+        source_page.add_transformation(Transformation().scale(panel_scale).translate(x, y))
         output_page.merge_page(source_page)
         if panel_options.get("show_panel_label", True):
             output_page.merge_page(
@@ -170,29 +265,25 @@ def assemble(
                     page_width,
                     page_height,
                     str(panel_options.get("panel_label", panel["id"])),
-                    (column - 1) * cell_width,
-                    y_top,
+                    block_left,
+                    block_top,
                 )
             )
 
+        # Mirror the exact same geometry into the raster review image (origin top-left).
         image = Image.open(source_png).convert("RGB")
-        px_box = (
-            round((column - 1) * review.width / columns),
-            round((row - 1) * review.height / rows),
-            round((column - 1 + column_span) * review.width / columns),
-            round((row - 1 + row_span) * review.height / rows),
-        )
-        available = (px_box[2] - px_box[0], px_box[3] - px_box[1])
-        image.thumbnail(
-            (round(available[0] * fit_fraction), round(available[1] * fit_fraction)),
-            Image.Resampling.LANCZOS,
-        )
-        image_x = px_box[0] + (available[0] - image.width) // 2
-        image_y = px_box[1] + (available[1] - image.height) // 2
+        target = (max(1, round(panel_w * px_per_pt)), max(1, round(panel_h * px_per_pt)))
+        image = image.resize(target, Image.Resampling.LANCZOS)
+        block_left_px = round(block_left * px_per_pt)
+        block_top_px = round((page_height - block_top) * px_per_pt)
+        block_w_px = round(block_width * px_per_pt)
+        block_h_px = round(block_height * px_per_pt)
+        image_x = block_left_px + (block_w_px - image.width) // 2
+        image_y = block_top_px + (block_h_px - image.height) // 2
         review.paste(image, (image_x, image_y))
         if panel_options.get("show_panel_label", True):
             review_draw.text(
-                (px_box[0] + 5, px_box[1] + 4),
+                (block_left_px + 5, block_top_px + 4),
                 str(panel_options.get("panel_label", panel["id"])),
                 fill="black",
                 font=font,
@@ -201,7 +292,7 @@ def assemble(
             "id": panel["id"], "constructor": resolved.constructor, "variant": resolved.variant,
             "contrast": resolved.contrast, "source_pdf": str(source_pdf), "source_png": str(source_png),
             "row": row, "column": column, "row_span": row_span, "column_span": column_span,
-            "pdf_box_points": [x, y, source_width * scale, source_height * scale],
+            "pdf_box_points": [x, y, panel_w, panel_h],
         })
     writer = PdfWriter()
     writer.add_page(output_page)
@@ -214,7 +305,13 @@ def assemble(
     metadata.write_text(json.dumps({
         "schema_version": 1, "figure_set": figure_set,
         "title": recipe.get("title"), "description": recipe.get("description"),
-        "dimensions": {"width": recipe["width"], "height": recipe["height"], "units": units},
+        "dimensions": {
+            "width": round(page_width / 72 / unit_scale, 3),
+            "height": round(page_height / 72 / unit_scale, 3),
+            "units": units,
+            "declared_width": recipe["width"],
+            "declared_height": recipe["height"],
+        },
         "shared_legends": recipe.get("shared_legends", False), "review_dpi": review_dpi,
         "panels": placements,
     }, indent=2) + "\n", encoding="utf-8")

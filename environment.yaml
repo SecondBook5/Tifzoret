@@ -36,6 +36,11 @@ dependencies:
   - bioconductor-org.mm.eg.db
   - bioconductor-org.hs.eg.db
   - bioconductor-go.db
+  - bioconductor-rtracklayer
+  - bioconductor-genomicfeatures
+  - bioconductor-txdbmaker
+  - bioconductor-rsamtools
+  - bioconductor-genomicalignments
   - bioconductor-keggrest
   - bioconductor-decoupler
   - bioconductor-dorothea

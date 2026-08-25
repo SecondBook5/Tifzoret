@@ -73,7 +73,7 @@ MODULES = {
         "mediation", "multilayer",
         # Opt-in modules (off in every profile; enabled via analysis.modules).
         "batch", "de_confirm", "deconvolution", "curvature",
-        "consensus", "spia", "variance_partition", "enrichment_map",
+        "consensus", "spia", "variance_partition", "enrichment_map", "factorial",
     )
 }
 
@@ -124,6 +124,9 @@ def comparison(path):
 
 def variance_partition(path):
     return str(RESULTS / "variance_partition" / path)
+
+def factorial(path):
+    return str(RESULTS / "factorial" / path)
 
 def contrast(path):
     return str(RESULTS / "contrasts" / "{contrast_id}" / path)
@@ -209,6 +212,28 @@ VARIANCE_PARTITION_OUTPUTS = [
     variance_partition("figures/variance_partition.pdf"),
     variance_partition("figures/variance_partition.png"),
     variance_partition("variance_partition_summary.json"),
+]
+
+# Factorial interaction views (factorial module, study-level; reads the QC
+# symbol-keyed VST expression and the two configured signed-contrast DE tables).
+# Opt-in, off in every profile; requires qc + de and a settings.factorial block
+# naming the two crossed factors and the two effect contrasts (enforced in
+# load_project). effect_x/effect_y select which contrasts' DE tables the rule
+# consumes; the disabled sentinel keeps the static path well-formed when off.
+FACTORIAL_SETTINGS = (CONFIG.get("analysis", {}).get("settings", {}) or {}).get("factorial", {}) or {}
+FACTORIAL_EFFECT_X = FACTORIAL_SETTINGS.get("effect_x") or "__factorial_disabled__"
+FACTORIAL_EFFECT_Y = FACTORIAL_SETTINGS.get("effect_y") or "__factorial_disabled__"
+FACTORIAL_OUTPUTS = [
+    factorial("tables/effect_vs_effect_displayed.tsv"),
+    factorial("tables/interaction_profile_displayed.tsv"),
+    factorial("tables/group_expression_displayed.tsv"),
+    factorial("figures/effect_vs_effect.pdf"),
+    factorial("figures/effect_vs_effect.png"),
+    factorial("figures/interaction_profile.pdf"),
+    factorial("figures/interaction_profile.png"),
+    factorial("figures/group_expression.pdf"),
+    factorial("figures/group_expression.png"),
+    factorial("factorial_summary.json"),
 ]
 
 DE_PATTERNS = [
@@ -422,6 +447,8 @@ if MODULES["deconvolution"]:
     FINAL_OUTPUTS.extend(DECONVOLUTION_OUTPUTS)
 if MODULES["variance_partition"]:
     FINAL_OUTPUTS.extend(VARIANCE_PARTITION_OUTPUTS)
+if MODULES["factorial"]:
+    FINAL_OUTPUTS.extend(FACTORIAL_OUTPUTS)
 if MODULES["de"]:
     FINAL_OUTPUTS.extend(expand(DE_PATTERNS, contrast_id=SIGNED_CONTRAST_IDS))
     FINAL_OUTPUTS.extend(expand(OMNIBUS_PATTERNS, contrast_id=OMNIBUS_CONTRAST_IDS))

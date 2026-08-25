@@ -66,6 +66,20 @@ parse_cli <- function(required) {
 }
 
 resolve_path <- function(base, value) {
+  # Match config.py::_resolve so validate-time and run-time agree: expand a
+  # leading ~ (or ~user) and any $VAR / ${VAR} from the environment BEFORE the
+  # relative-vs-absolute decision. An unset variable is a hard error (never
+  # silently resolve to a wrong or empty path). Longest tokens substitute first
+  # so "$VAR" cannot corrupt a "$VARLONG" occurrence.
+  value <- path.expand(value)
+  tokens <- regmatches(value, gregexpr("\\$\\{[A-Za-z_][A-Za-z0-9_]*\\}|\\$[A-Za-z_][A-Za-z0-9_]*", value))[[1]]
+  tokens <- unique(tokens)
+  for (token in tokens[order(-nchar(tokens))]) {
+    name <- gsub("^\\$\\{?|\\}$", "", token)
+    resolved <- Sys.getenv(name, unset = NA_character_)
+    if (is.na(resolved)) stop("required environment variable is not set: ", name, call. = FALSE)
+    value <- gsub(token, resolved, value, fixed = TRUE)
+  }
   if (grepl("^/", value)) normalizePath(value, mustWork = FALSE) else normalizePath(file.path(base, value), mustWork = FALSE)
 }
 
@@ -424,6 +438,24 @@ sample_display_labels <- function(ids, conditions = NULL) {
 write_json_file <- function(value, path) {
   dir.create(dirname(path), recursive = TRUE, showWarnings = FALSE)
   jsonlite::write_json(value, path, pretty = TRUE, auto_unbox = TRUE, na = "null")
+}
+
+# True when the project selects strict (publication) execution mode. Reads
+# execution.strict from the config read by read_project(); absent => FALSE, so
+# a config that predates the key behaves exactly as before.
+tz_strict <- function(cfg) isTRUE(cfg$execution$strict)
+
+# Strict-mode degrade gate. Every stage that would silently fall back to a
+# degraded result (a non-canonical scoring proxy, a skipped step, a coarser
+# statistic) routes that decision through here instead of appending to `warnings`
+# directly. In lenient mode (the default) it returns `c(warnings, message)` --
+# byte-identical to the historical `warnings <- c(warnings, message)` pattern, so
+# existing outputs are unchanged. In strict mode it stops the run so a publication
+# build fails loudly rather than emitting the degraded result. Use as:
+#   warnings <- tz_degrade(cfg, "…", warnings)
+tz_degrade <- function(cfg, message, warnings = NULL) {
+  if (tz_strict(cfg)) stop("strict mode (execution.strict): ", message, call. = FALSE)
+  c(warnings, message)
 }
 
 empty_plot <- function(title, subtitle = "No displayable results for the configured thresholds") {

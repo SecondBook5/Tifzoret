@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -12,6 +13,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "manifest.py"
+TEMPLATE = ROOT / "src" / "tifzoret" / "templates" / "minimal"
 
 
 def _load_manifest_module():
@@ -146,3 +148,127 @@ def test_manifest_expands_environment_variables_in_input_paths(tmp_path):
     assert str(tmp_path / "genes.gtf") in input_paths
     gtf_record = next(record for record in manifest["inputs"] if record["path"] == str(tmp_path / "genes.gtf"))
     assert gtf_record["sha256"] == prepared_gtf_checksum
+
+
+def test_manifest_checksums_binding_prior_edges(tmp_path):
+    """The unsigned binding-prior regulon is a declared analysis input and MUST be
+    checksummed in the manifest -- previously it was silently omitted, leaving the
+    second regulator view's source data unpinned. Uses the minimal template with
+    the regulators module and a DoRothEA primary regulon so the binding prior is
+    the only edge file on disk, and runs the manifest step directly (pure Python;
+    no R or Snakemake needed)."""
+    destination = tmp_path / "project"
+    shutil.copytree(TEMPLATE, destination)
+    config_path = destination / "project.yaml"
+    data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    data["species"] = {"provider": "mouse", "scientific_name": "Mus musculus", "taxonomy_id": 10090}
+    data["reference"] = {"genome_build": "GRCm39", "annotation_release": 107}
+    data["analysis"]["modules"] = {"regulators": True}
+    data["resources"]["providers"] = {"dorothea": True, "gtrd": True}
+    data["resources"]["binding_prior_edges"] = "binding.tsv"
+    (destination / "binding.tsv").write_text("source\ttarget\nTF1\tGene1\n", encoding="utf-8")
+    config_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+    results = destination / "results"
+    (results / "regulators").mkdir(parents=True)
+    (results / "regulators" / "result.tsv").write_text("value\n1\n", encoding="utf-8")
+    output = results / "manifest.json"
+
+    subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT),
+            "--project-config",
+            str(config_path),
+            "--results",
+            str(results),
+            "--output",
+            str(output),
+        ],
+        check=True,
+    )
+
+    manifest = json.loads(output.read_text(encoding="utf-8"))
+    input_paths = {record["path"] for record in manifest["inputs"]}
+    binding_path = str((destination / "binding.tsv").resolve())
+    assert binding_path in input_paths, sorted(input_paths)
+    binding_record = next(record for record in manifest["inputs"] if record["path"] == binding_path)
+    assert len(binding_record["sha256"]) == 64
+
+
+def _run_manifest(config_path: Path, results: Path) -> subprocess.CompletedProcess:
+    output = results / "manifest.json"
+    return subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT),
+            "--project-config",
+            str(config_path),
+            "--results",
+            str(results),
+            "--output",
+            str(output),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+
+def _strict_manifest_project(tmp_path: Path, strict: bool) -> tuple[Path, Path]:
+    """Minimal-template project (optionally strict) with one stage summary that
+    carries a degradation warning, ready for the terminal manifest gate."""
+    destination = tmp_path / "project"
+    shutil.copytree(TEMPLATE, destination)
+    config_path = destination / "project.yaml"
+    data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    if strict:
+        data["execution"] = {"strict": True}
+    config_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+    results = destination / "results"
+    (results / "qc").mkdir(parents=True)
+    (results / "qc" / "qc_summary.json").write_text(
+        json.dumps({"warnings": ["deterministic proxy used -- NOT canonical scoring"]}),
+        encoding="utf-8",
+    )
+    return config_path, results
+
+
+def test_strict_mode_fails_when_a_stage_recorded_a_warning(tmp_path):
+    """In strict (publication) mode the terminal manifest step fails if any stage
+    recorded a degradation warning, so a publication run cannot report success on a
+    degraded result. The manifest is still written (for inspection) before failing."""
+    config_path, results = _strict_manifest_project(tmp_path, strict=True)
+    proc = _run_manifest(config_path, results)
+    assert proc.returncode != 0, proc.stdout
+    assert "strict mode" in proc.stderr
+    manifest = json.loads((results / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["strict"] is True
+    assert manifest["warnings"]  # recorded on disk despite the failure
+
+
+def test_lenient_mode_tolerates_stage_warnings(tmp_path):
+    """Absent execution.strict, the same warning is recorded but the run succeeds --
+    byte-for-byte the historical behavior."""
+    config_path, results = _strict_manifest_project(tmp_path, strict=False)
+    proc = _run_manifest(config_path, results)
+    assert proc.returncode == 0, proc.stderr
+    manifest = json.loads((results / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["strict"] is False
+    assert manifest["warnings"]
+
+
+def test_strict_mode_succeeds_without_warnings(tmp_path):
+    """Strict mode is not punitive on a clean run: with no recorded warnings the
+    terminal gate passes."""
+    destination = tmp_path / "project"
+    shutil.copytree(TEMPLATE, destination)
+    config_path = destination / "project.yaml"
+    data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    data["execution"] = {"strict": True}
+    config_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+    results = destination / "results"
+    (results / "qc").mkdir(parents=True)
+    (results / "qc" / "qc_summary.json").write_text(json.dumps({"warnings": []}), encoding="utf-8")
+    proc = _run_manifest(config_path, results)
+    assert proc.returncode == 0, proc.stderr

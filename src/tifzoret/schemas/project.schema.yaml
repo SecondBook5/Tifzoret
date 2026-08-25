@@ -38,6 +38,37 @@ properties:
       genome_build: {type: string, minLength: 1}
       annotation_release: {type: [string, integer, "null"]}
       expected_contigs: {type: [integer, "null"], minimum: 1}
+      # Optional, deterministic, provenance-tracked gene-symbol resolution applied
+      # when building annotation.tsv from a GTF. Default off => byte-identical legacy
+      # output. When enabled, symbols resolve through GTF gene_name -> optional pinned
+      # secondary map (e.g. an org.*.eg.db export) -> retained accession, and three
+      # audit columns are added (symbol_source, provisional_name, provisional).
+      symbol_resolution:
+        type: object
+        additionalProperties: false
+        required: [enabled]
+        properties:
+          enabled: {type: boolean}
+          # Path to a pinned two-column id->symbol TSV (first two columns: id, symbol).
+          # A leading '#' provenance line is allowed. Optional: GTF names alone still apply.
+          secondary_map: {type: [string, "null"]}
+          # Regex patterns marking recovered names as placeholders (recorded, never
+          # promoted to the displayed symbol). Omit to use the mouse-oriented defaults.
+          provisional_patterns:
+            type: array
+            items: {type: string, minLength: 1}
+  execution:
+    type: object
+    additionalProperties: false
+    properties:
+      # Strict (publication) execution mode. Default false => lenient: a degraded or
+      # fallback path (e.g. a non-VIPER regulator-activity proxy when VIPER is
+      # absent) records a warning and continues, byte-identical to the historical
+      # engine. When true, any such degradation is a hard failure, and the run also
+      # fails at the terminal manifest step if any stage recorded a warning -- so a
+      # publication run cannot silently emit a degraded result. Distinct from
+      # analysis.profile, which only selects which modules run.
+      strict: {type: boolean, default: false}
   inputs:
     oneOf:
       - {$ref: "#/$defs/countInputs"}
@@ -90,6 +121,7 @@ properties:
           spia: {type: boolean}
           variance_partition: {type: boolean}
           enrichment_map: {type: boolean}
+          factorial: {type: boolean}
       settings:
         type: object
         additionalProperties: false
@@ -112,6 +144,33 @@ properties:
               # program labels and the R radial writes a placeholder deferring to
               # the matplotlib legacy view.
               grn: {$ref: '#/$defs/grn_curation'}
+              # Optional: score an arbitrary named list of regulator views in one
+              # run, generalizing the built-in primary(+binding) pair. Each view is
+              # a source/target edge TSV scored on its own; the FIRST view is the
+              # primary (its outputs keep the canonical filenames -- regulon_edges.tsv,
+              # regulator_differential.tsv, ... -- so the GRN/hypothesis stages and
+              # figure recipes read it unchanged), and every later view writes
+              # `<file>_<name>` variants. `signed: false` collapses target modes to +1
+              # (occupancy, not direction) and scores the view as unsigned
+              # target-program evidence; `provider_label` tags an unsigned view's
+              # method string (e.g. VIPER -> VIPER_unsigned_GTRD). Mutually exclusive
+              # with resources.regulon_edges / resources.binding_prior_edges (use one
+              # mechanism). Project-agnostic: the engine ships no view lists.
+              views:
+                type: array
+                minItems: 1
+                uniqueItems: true
+                items:
+                  type: object
+                  additionalProperties: false
+                  required: [name, edges, signed]
+                  properties:
+                    # Filename-safe view id; also the `_<name>` output suffix for
+                    # every non-primary view. Unique across the list.
+                    name: {type: string, pattern: "^[a-z0-9][a-z0-9_]*$"}
+                    edges: {type: string, minLength: 1}
+                    signed: {type: boolean}
+                    provider_label: {type: string, minLength: 1}
           networks:
             type: object
             additionalProperties: false
@@ -224,6 +283,34 @@ properties:
               min_similarity: {type: number, exclusiveMinimum: 0, maximum: 1}
               # Most-significant enriched terms per direction taken into the map.
               top_terms: {type: integer, minimum: 2}
+          factorial:
+            type: object
+            additionalProperties: false
+            required: [factors, effect_x, effect_y]
+            properties:
+              # The two crossed design factors (samples.tsv columns) whose
+              # interaction the views make legible; the interaction profile puts
+              # factors[2] on the x-axis with one line per level of factors[1].
+              factors:
+                type: array
+                minItems: 2
+                maxItems: 2
+                uniqueItems: true
+                items: {type: string, minLength: 1}
+              # The two signed contrasts compared as the x and y effects (each a
+              # pairwise/coefficient contrast id producing a directional DE table).
+              effect_x: {type: string, minLength: 1}
+              effect_y: {type: string, minLength: 1}
+              # Explicit genes shown in the profile/expression views. Omit to
+              # auto-select the genes with the largest interaction (|LFC_y-LFC_x|
+              # among genes significant in either arm).
+              genes:
+                type: array
+                minItems: 1
+                uniqueItems: true
+                items: {type: string, minLength: 1}
+              # Auto-selected gene count when `genes` is omitted. Omit for 16.
+              top_genes: {type: integer, minimum: 2}
   resources:
     type: object
     additionalProperties: false
@@ -246,6 +333,10 @@ properties:
             items: {type: string, minLength: 1}
       cell_state_signatures: {type: string, minLength: 1}
       regulon_edges: {type: string, minLength: 1}
+      # Optional second regulon view scored alongside regulon_edges in one run: an
+      # unsigned binding prior (source/target TSV, e.g. a GTRD-derived snapshot).
+      # Produces the *_binding regulator-activity outputs; project-agnostic.
+      binding_prior_edges: {type: string, minLength: 1}
       # Signature matrix (TSV) for the deconvolution module: a gene column
       # (gene_symbol or gene_id) followed by >=2 cell-type reference columns.
       # Mutually exclusive with deconvolution_preset (a named packaged matrix).

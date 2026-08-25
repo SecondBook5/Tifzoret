@@ -429,12 +429,16 @@ def gtf_annotations(gtf: Path) -> dict[str, dict[str, object]]:
                 continue
             gene_id = gene_match.group(1)
             name_match = re.search(r'(?:^|;\s*)gene_name "([^"]+)"', attributes)
-            symbol = name_match.group(1) if name_match else re.sub(r"\.\d+$", "", gene_id)
+            gene_name = name_match.group(1) if name_match else None
+            symbol = gene_name if gene_name else re.sub(r"\.\d+$", "", gene_id)
             biotype_match = re.search(r'(?:^|;\s*)gene_(?:bio)?type "([^"]+)"', attributes)
             record = annotations.setdefault(
                 gene_id,
                 {
                     "gene_symbol": symbol,
+                    # Raw GTF gene_name (None when Ensembl assigned no name): lets the
+                    # resolver distinguish a real curated symbol from a fallback accession.
+                    "gene_name": gene_name,
                     "seqname": fields[0],
                     "start": int(fields[3]),
                     "end": int(fields[4]),
@@ -447,22 +451,150 @@ def gtf_annotations(gtf: Path) -> dict[str, dict[str, object]]:
     return annotations
 
 
-def write_annotation(gtf: Path, gene_ids: list[str], output: Path) -> None:
-    """Write an annotation TSV for ``gene_ids`` from the GTF, falling back to a version-stripped id lookup."""
+# Recovered-symbol classes that are systematic placeholders, not curated names:
+# Ensembl/MGI predicted genes (``Gm#####``), NCBI uncharacterised loci (``LOC#####``),
+# and RIKEN cDNA clones (``...Rik``). These are recorded for audit but never promoted to
+# the displayed symbol -- a stable accession beats an unstable placeholder. Mouse-oriented
+# defaults; override per organism via ``reference.symbol_resolution.provisional_patterns``.
+DEFAULT_PROVISIONAL_SYMBOL_PATTERNS: tuple[str, ...] = (r"^Gm\d+$", r"^LOC\d+$", r"Rik\d*$")
+
+ANNOTATION_BASE_FIELDS = ["gene_id", "gene_symbol", "seqname", "start", "end", "strand", "gene_biotype"]
+ANNOTATION_RESOLUTION_FIELDS = ["symbol_source", "provisional_name", "provisional"]
+
+
+def _is_provisional(symbol: str, patterns: tuple[str, ...]) -> bool:
+    """True when ``symbol`` matches any placeholder pattern (predicted/uncharacterised name)."""
+    return any(re.search(pattern, symbol) for pattern in patterns)
+
+
+def _resolve_symbol(
+    stripped_id: str, gtf_name: str | None, secondary_name: str | None, patterns: tuple[str, ...]
+) -> tuple[str, str, str, bool]:
+    """Resolve one gene's symbol through the ordered chain.
+
+    Returns ``(symbol, symbol_source, provisional_name, provisional)``:
+    GTF ``gene_name`` wins; otherwise a non-placeholder secondary name is adopted; a
+    placeholder secondary name is recorded in ``provisional_name`` but the accession is kept;
+    with nothing to recover, the version-stripped accession is retained.
+    """
+    if gtf_name:
+        return gtf_name, "gtf", "", False
+    if secondary_name:
+        if _is_provisional(secondary_name, patterns):
+            return stripped_id, "ensembl_id", secondary_name, True
+        return secondary_name, "secondary", "", False
+    return stripped_id, "ensembl_id", "", False
+
+
+def _load_symbol_map(path: Path) -> dict[str, str]:
+    """Load a pinned secondary id->symbol map (e.g. an org.*.eg.db export).
+
+    First column is the gene id, second the symbol. Duplicate ids resolve deterministically to
+    the lexically smallest symbol so reruns are byte-identical. Fails loudly if absent.
+    """
+    if not path.exists():
+        raise FileNotFoundError(f"reference.symbol_resolution.secondary_map not found: {path}")
+    header, rows = read_tsv(path, comments=True)
+    if len(header) < 2:
+        raise ValueError(f"secondary symbol map requires at least two columns (id, symbol): {path}")
+    key_col, value_col = header[0], header[1]
+    mapping: dict[str, str] = {}
+    for row in rows:
+        gene_id = (row.get(key_col) or "").strip()
+        symbol = (row.get(value_col) or "").strip()
+        if not gene_id or not symbol:
+            continue
+        if gene_id not in mapping or symbol < mapping[gene_id]:
+            mapping[gene_id] = symbol
+    return mapping
+
+
+def _symbol_resolution_settings(project: ResolvedProject) -> dict[str, object] | None:
+    """Return the enabled symbol-resolution settings with the secondary map path resolved, else None."""
+    reference = project.config.get("reference", {}) or {}
+    settings = reference.get("symbol_resolution")
+    if not settings or not settings.get("enabled"):
+        return None
+    resolved = dict(settings)
+    raw_map = settings.get("secondary_map")
+    resolved["secondary_map"] = _resolve(project.config_path.parent, raw_map) if raw_map else None
+    return resolved
+
+
+def write_annotation(
+    gtf: Path,
+    gene_ids: list[str],
+    output: Path,
+    resolution: dict[str, object] | None = None,
+) -> None:
+    """Write an annotation TSV for ``gene_ids`` from the GTF.
+
+    By default each symbol is the GTF ``gene_name``, falling back to a version-stripped id
+    (legacy seven-column output, unchanged and byte-identical). When ``resolution`` is enabled
+    the symbol is resolved through an ordered, deterministic, provenance-tracked chain -- GTF
+    gene_name -> optional pinned secondary map (e.g. an org.*.eg.db export) -> retained
+    accession -- and three audit columns are appended (``symbol_source``, ``provisional_name``,
+    ``provisional``). A recovered name matching a placeholder pattern is recorded but never
+    promoted to the displayed symbol, so "all ids mapped" means every name any authority can
+    give is applied and the remainder is reported with its provenance, not silently dropped.
+    """
     annotations = gtf_annotations(gtf)
+    enabled = bool(resolution and resolution.get("enabled"))
+    if not enabled:
+        rows = []
+        for gene_id in gene_ids:
+            record = annotations.get(gene_id, annotations.get(re.sub(r"\.\d+$", "", gene_id), {}))
+            rows.append({
+                "gene_id": gene_id,
+                "gene_symbol": record.get("gene_symbol", gene_id),
+                "seqname": record.get("seqname", ""),
+                "start": record.get("start", ""),
+                "end": record.get("end", ""),
+                "strand": record.get("strand", ""),
+                "gene_biotype": record.get("gene_biotype", ""),
+            })
+        write_tsv(output, ANNOTATION_BASE_FIELDS, rows)
+        return
+
+    assert resolution is not None
+    secondary_map = _load_symbol_map(resolution["secondary_map"]) if resolution.get("secondary_map") else {}
+    patterns = tuple(resolution.get("provisional_patterns") or DEFAULT_PROVISIONAL_SYMBOL_PATTERNS)
+    counts = {"gtf": 0, "secondary": 0, "provisional": 0, "accession_retained": 0}
     rows = []
     for gene_id in gene_ids:
         record = annotations.get(gene_id, annotations.get(re.sub(r"\.\d+$", "", gene_id), {}))
+        stripped = re.sub(r"\.\d+$", "", gene_id)
+        secondary_name = secondary_map.get(gene_id) or secondary_map.get(stripped)
+        symbol, source, provisional_name, provisional = _resolve_symbol(
+            stripped, record.get("gene_name"), secondary_name, patterns
+        )
+        if source == "gtf":
+            counts["gtf"] += 1
+        elif source == "secondary":
+            counts["secondary"] += 1
+        elif provisional:
+            counts["provisional"] += 1
+        else:
+            counts["accession_retained"] += 1
         rows.append({
             "gene_id": gene_id,
-            "gene_symbol": record.get("gene_symbol", gene_id),
+            "gene_symbol": symbol,
             "seqname": record.get("seqname", ""),
             "start": record.get("start", ""),
             "end": record.get("end", ""),
             "strand": record.get("strand", ""),
             "gene_biotype": record.get("gene_biotype", ""),
+            "symbol_source": source,
+            "provisional_name": provisional_name,
+            "provisional": "TRUE" if provisional else "FALSE",
         })
-    write_tsv(output, ["gene_id", "gene_symbol", "seqname", "start", "end", "strand", "gene_biotype"], rows)
+    write_tsv(output, [*ANNOTATION_BASE_FIELDS, *ANNOTATION_RESOLUTION_FIELDS], rows)
+    print(
+        f"[symbol-resolution] {len(gene_ids)} genes: gtf={counts['gtf']} "
+        f"secondary_recovered={counts['secondary']} provisional_flagged={counts['provisional']} "
+        f"accession_retained={counts['accession_retained']}",
+        flush=True,
+    )
 
 
 def bam_record(sample_id: str, path: Path) -> dict[str, object]:
@@ -541,7 +673,9 @@ def materialize_bams(
             raw_counts = temporary / "featurecounts.tsv"
             final_log = run_featurecounts(project, raw_counts, mode)
         gene_ids, canonical, lengths = parse_featurecounts(raw_counts, project, counts_output)
-    write_annotation(project.gtf, gene_ids, annotation_output)
+    write_annotation(
+        project.gtf, gene_ids, annotation_output, resolution=_symbol_resolution_settings(project)
+    )
     abundance = (
         write_abundance(canonical, sample_ids, lengths, abundance_outputs)
         if abundance_outputs

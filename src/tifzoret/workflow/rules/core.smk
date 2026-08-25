@@ -179,6 +179,36 @@ rule study_variance_partition:
         "--vst {input.vst:q} --samples {input.samples:q} "
         "--outdir {RESULTS}/variance_partition > {log:q} 2>&1"
 
+rule study_factorial:
+    input:
+        vst_expression=qc("tables/vst_expression.tsv"),
+        samples=SAMPLES,
+        de_x=analysis("de", "tables/de_results.tsv").format(contrast_id=FACTORIAL_EFFECT_X),
+        de_y=analysis("de", "tables/de_results.tsv").format(contrast_id=FACTORIAL_EFFECT_Y),
+        config=str(CONFIG_PATH),
+        script=str(WORKFLOW_ROOT / "scripts" / "factorial.R"),
+        utils=UTILS_R
+    output:
+        effect=factorial("tables/effect_vs_effect_displayed.tsv"),
+        profile=factorial("tables/interaction_profile_displayed.tsv"),
+        expression=factorial("tables/group_expression_displayed.tsv"),
+        effect_pdf=factorial("figures/effect_vs_effect.pdf"),
+        effect_png=factorial("figures/effect_vs_effect.png"),
+        profile_pdf=factorial("figures/interaction_profile.pdf"),
+        profile_png=factorial("figures/interaction_profile.png"),
+        expression_pdf=factorial("figures/group_expression.pdf"),
+        expression_png=factorial("figures/group_expression.png"),
+        summary=factorial("factorial_summary.json")
+    log:
+        factorial("logs/factorial.log")
+    conda:
+        R_ENV
+    shell:
+        "Rscript --vanilla {input.script} --project-config {input.config:q} "
+        "--vst-expression {input.vst_expression:q} --samples {input.samples:q} "
+        "--de-x {input.de_x:q} --de-y {input.de_y:q} "
+        "--outdir {RESULTS}/factorial > {log:q} 2>&1"
+
 rule contrast_de:
     input:
         counts=COUNTS,

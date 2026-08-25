@@ -8,3 +8,6 @@ build/
 dist/
 .venv/
 results/
+
+# Brainstorming/design specs are never part of the public tree (see 3ecc445).
+docs/superpowers/

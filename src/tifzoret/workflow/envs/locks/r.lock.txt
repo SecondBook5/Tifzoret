@@ -64,7 +64,7 @@ https://conda.anaconda.org/conda-forge/linux-64/xorg-libxau-1.0.12-hb03c661_2.co
 https://conda.anaconda.org/conda-forge/linux-64/xorg-libxdmcp-1.1.5-hb03c661_2.conda
 https://conda.anaconda.org/conda-forge/linux-64/xorg-xorgproto-2025.1-h280c20c_1.conda
 https://conda.anaconda.org/conda-forge/linux-64/yaml-0.2.5-hebe6cf0_3.conda
-https://conda.anaconda.org/conda-forge/linux-64/aom-3.14.1-pl5321h039972f_1.conda
+https://conda.anaconda.org/conda-forge/linux-64/aom-3.14.1-pl5321h57e6904_2.conda
 https://conda.anaconda.org/conda-forge/linux-64/binutils_linux-64-2.46.1-default_h4852527_102.conda
 https://conda.anaconda.org/conda-forge/linux-64/bwidget-1.10.1-ha770c72_1.conda
 https://conda.anaconda.org/conda-forge/linux-64/dav1d-1.2.1-hd590300_0.conda
@@ -93,7 +93,7 @@ https://conda.anaconda.org/conda-forge/linux-64/libzip-1.11.2-h6991a6a_0.conda
 https://conda.anaconda.org/conda-forge/linux-64/pcre2-10.47-haa7fec5_0.conda
 https://conda.anaconda.org/conda-forge/linux-64/pixman-0.46.4-h54a6638_3.conda
 https://conda.anaconda.org/conda-forge/linux-64/readline-8.3-hd6e31c0_1.conda
-https://conda.anaconda.org/conda-forge/linux-64/svt-av1-4.2.0-hecca717_0.conda
+https://conda.anaconda.org/conda-forge/linux-64/svt-av1-4.2.0-hd2095e1_1.conda
 https://conda.anaconda.org/conda-forge/linux-64/wayland-1.26.0-h1964d1d_1.conda
 https://conda.anaconda.org/conda-forge/linux-64/xorg-libsm-1.2.6-h0d788c3_1.conda
 https://conda.anaconda.org/conda-forge/linux-64/fftw-3.3.11-nompi_h3b011a4_100.conda
@@ -156,7 +156,7 @@ https://conda.anaconda.org/conda-forge/noarch/xmltodict-1.0.4-pyhcf101f3_0.conda
 https://conda.anaconda.org/conda-forge/linux-64/xorg-libxcomposite-0.4.7-hb03c661_0.conda
 https://conda.anaconda.org/conda-forge/linux-64/xorg-libxcursor-1.2.3-hb9d3cd8_0.conda
 https://conda.anaconda.org/conda-forge/linux-64/xorg-libxdamage-1.1.6-hb9d3cd8_0.conda
-https://conda.anaconda.org/conda-forge/linux-64/xorg-libxi-1.8.3-hb03c661_0.conda
+https://conda.anaconda.org/conda-forge/linux-64/xorg-libxi-1.8.3-h7cc23a3_1.conda
 https://conda.anaconda.org/conda-forge/linux-64/xorg-libxinerama-1.1.6-hecca717_0.conda
 https://conda.anaconda.org/conda-forge/linux-64/xorg-libxrandr-1.5.5-h7cc23a3_1.conda
 https://conda.anaconda.org/conda-forge/linux-64/xorg-libxxf86vm-1.1.7-hb03c661_0.conda
@@ -183,6 +183,7 @@ https://conda.anaconda.org/bioconda/noarch/bioconductor-data-packages-20260207-h
 https://conda.anaconda.org/bioconda/linux-64/bioconductor-impute-1.84.0-r45h63f16b7_0.conda
 https://conda.anaconda.org/bioconda/linux-64/bioconductor-preprocesscore-1.72.0-r45h01b2380_0.conda
 https://conda.anaconda.org/bioconda/linux-64/bioconductor-rhdf5lib-1.32.0-r45h01b2380_0.conda
+https://conda.anaconda.org/bioconda/linux-64/bioconductor-rhtslib-3.6.0-r45h01b2380_0.conda
 https://conda.anaconda.org/conda-forge/linux-64/gtk3-3.24.52-ha5ea40c_0.conda
 https://conda.anaconda.org/conda-forge/linux-64/librsvg-2.62.3-h4c96295_0.conda
 https://conda.anaconda.org/conda-forge/noarch/r-abind-1.4_8-r45hc72bb7e_1.conda
@@ -285,6 +286,7 @@ https://conda.anaconda.org/conda-forge/linux-64/r-yaml-2.3.12-r45h54b55ab_0.cond
 https://conda.anaconda.org/conda-forge/noarch/adwaita-icon-theme-49.0-unix_0.conda
 https://conda.anaconda.org/bioconda/noarch/bioconductor-biocgenerics-0.56.0-r45hdfd78af_2.conda
 https://conda.anaconda.org/bioconda/noarch/bioconductor-dir.expiry-1.18.0-r45hdfd78af_0.conda
+https://conda.anaconda.org/bioconda/noarch/bioconductor-genomeinfodbdata-1.2.15-r45hdfd78af_0.conda
 https://conda.anaconda.org/bioconda/linux-64/bioconductor-limma-3.66.0-r45h01b2380_0.conda
 https://conda.anaconda.org/bioconda/noarch/bioconductor-matrixgenerics-1.22.0-r45hdfd78af_1.conda
 https://conda.anaconda.org/bioconda/linux-64/bioconductor-rhdf5filters-1.22.0-r45ha27e39d_0.conda
@@ -323,6 +325,7 @@ https://conda.anaconda.org/conda-forge/noarch/r-rdpack-2.6.6-r45hc72bb7e_0.conda
 https://conda.anaconda.org/conda-forge/linux-64/r-robustbase-0.99_7-r45h11cdb10_0.conda
 https://conda.anaconda.org/conda-forge/noarch/r-tinytex-0.60-r45hc72bb7e_0.conda
 https://conda.anaconda.org/conda-forge/linux-64/r-tzdb-0.5.0-r45h3697838_2.conda
+https://conda.anaconda.org/conda-forge/linux-64/r-xml2-1.6.0-r45he78afff_0.conda
 https://conda.anaconda.org/conda-forge/linux-64/r-zoo-1.8_15-r45h54b55ab_0.conda
 https://conda.anaconda.org/bioconda/linux-64/bioconductor-biobase-2.70.0-r45h01b2380_0.conda
 https://conda.anaconda.org/bioconda/linux-64/bioconductor-edger-4.8.2-r45h262fe30_1.conda
@@ -358,6 +361,7 @@ https://conda.anaconda.org/conda-forge/linux-64/r-urca-1.3_4-r45heaba542_2.conda
 https://conda.anaconda.org/conda-forge/linux-64/r-vctrs-0.7.3-r45h3697838_0.conda
 https://conda.anaconda.org/conda-forge/linux-64/r-xts-0.14.2-r45h54b55ab_0.conda
 https://conda.anaconda.org/bioconda/noarch/bioconductor-bcellviper-1.46.0-r45hdfd78af_0.conda
+https://conda.anaconda.org/bioconda/noarch/bioconductor-biocio-1.20.0-r45hdfd78af_0.conda
 https://conda.anaconda.org/bioconda/linux-64/bioconductor-biocparallel-1.44.0-r45ha27e39d_1.conda
 https://conda.anaconda.org/bioconda/linux-64/bioconductor-iranges-2.44.0-r45h01b2380_1.conda
 https://conda.anaconda.org/bioconda/linux-64/bioconductor-rgraphviz-2.54.0-r45ha27e39d_2.conda
@@ -378,6 +382,7 @@ https://conda.anaconda.org/conda-forge/linux-64/r-mixsqp-0.3_54-r45h3704496_4.co
 https://conda.anaconda.org/conda-forge/noarch/r-pillar-1.11.1-r45hc72bb7e_0.conda
 https://conda.anaconda.org/conda-forge/linux-64/r-purrr-1.2.2-r45h54b55ab_0.conda
 https://conda.anaconda.org/conda-forge/linux-64/r-rcppnumerical-0.7_0-r45h3697838_0.conda
+https://conda.anaconda.org/bioconda/linux-64/r-restfulr-0.0.17-r45hcdf289b_0.conda
 https://conda.anaconda.org/conda-forge/linux-64/r-robust-0.7_5-r45h11cdb10_2.conda
 https://conda.anaconda.org/conda-forge/linux-64/r-sass-0.4.10-r45h3697838_1.conda
 https://conda.anaconda.org/conda-forge/noarch/r-stringr-1.6.0-r45h785f33e_0.conda
@@ -388,6 +393,7 @@ https://conda.anaconda.org/bioconda/noarch/bioconductor-complexheatmap-2.26.1-r4
 https://conda.anaconda.org/bioconda/noarch/bioconductor-kegggraph-1.70.0-r45hdfd78af_0.conda
 https://conda.anaconda.org/bioconda/linux-64/bioconductor-s4arrays-1.10.1-r45h01b2380_0.conda
 https://conda.anaconda.org/bioconda/noarch/bioconductor-seqinfo-1.0.0-r45hdfd78af_0.conda
+https://conda.anaconda.org/bioconda/noarch/bioconductor-ucsc.utils-1.6.1-r45hdfd78af_0.conda
 https://conda.anaconda.org/bioconda/linux-64/bioconductor-xvector-0.50.0-r45h01b2380_0.conda
 https://conda.anaconda.org/conda-forge/linux-64/r-ashr-2.2_63-r45h3697838_3.conda
 https://conda.anaconda.org/conda-forge/noarch/r-bslib-0.12.0-r45hc72bb7e_0.conda
@@ -406,6 +412,7 @@ https://conda.anaconda.org/conda-forge/linux-64/r-tibble-3.3.1-r45h54b55ab_0.con
 https://conda.anaconda.org/conda-forge/noarch/r-viridis-0.6.5-r45hc72bb7e_2.conda
 https://conda.anaconda.org/bioconda/linux-64/bioconductor-biostrings-2.78.0-r45h01b2380_0.conda
 https://conda.anaconda.org/bioconda/linux-64/bioconductor-fgsea-1.36.2-r45ha27e39d_0.conda
+https://conda.anaconda.org/bioconda/noarch/bioconductor-genomeinfodb-1.46.2-r45hdfd78af_0.conda
 https://conda.anaconda.org/bioconda/linux-64/bioconductor-genomicranges-1.62.1-r45h01b2380_0.conda
 https://conda.anaconda.org/bioconda/linux-64/bioconductor-sparsearray-1.10.8-r45h01b2380_0.conda
 https://conda.anaconda.org/bioconda/noarch/bioconductor-spia-2.62.0-r45hdfd78af_0.conda
@@ -415,9 +422,11 @@ https://conda.anaconda.org/conda-forge/linux-64/r-remacor-0.0.20-r45h3704496_1.c
 https://conda.anaconda.org/conda-forge/noarch/r-rmarkdown-2.31-r45hc72bb7e_0.conda
 https://conda.anaconda.org/conda-forge/linux-64/r-tseries-0.10_63-r45hf1ecf5c_0.conda
 https://conda.anaconda.org/conda-forge/linux-64/r-vroom-1.7.1-r45h3697838_0.conda
+https://conda.anaconda.org/bioconda/linux-64/bioconductor-cigarillo-1.0.0-r45h01b2380_0.conda
 https://conda.anaconda.org/bioconda/linux-64/bioconductor-delayedarray-0.36.0-r45h01b2380_0.conda
 https://conda.anaconda.org/bioconda/linux-64/bioconductor-h5mread-1.2.1-r45h01b2380_1.conda
 https://conda.anaconda.org/bioconda/noarch/bioconductor-keggrest-1.50.0-r45hdfd78af_0.conda
+https://conda.anaconda.org/bioconda/linux-64/bioconductor-rsamtools-2.26.0-r45ha27e39d_0.conda
 https://conda.anaconda.org/conda-forge/noarch/r-babelgene-22.9-r45hc72bb7e_4.conda
 https://conda.anaconda.org/conda-forge/linux-64/r-forecast-9.0.2-r45hf1899b2_0.conda
 https://conda.anaconda.org/conda-forge/noarch/r-htmlwidgets-1.6.4-r45h785f33e_4.conda
@@ -439,6 +448,7 @@ https://conda.anaconda.org/bioconda/noarch/bioconductor-biocfilecache-3.0.0-r45h
 https://conda.anaconda.org/bioconda/linux-64/bioconductor-biocsingular-1.26.1-r45ha27e39d_0.conda
 https://conda.anaconda.org/bioconda/noarch/bioconductor-decoupler-2.16.0-r45hdfd78af_0.conda
 https://conda.anaconda.org/bioconda/linux-64/bioconductor-deseq2-1.50.2-r45ha27e39d_0.conda
+https://conda.anaconda.org/bioconda/linux-64/bioconductor-genomicalignments-1.46.0-r45h01b2380_0.conda
 https://conda.anaconda.org/bioconda/noarch/bioconductor-go.db-3.22.0-r45hdfd78af_0.conda
 https://conda.anaconda.org/bioconda/noarch/bioconductor-graphite-1.56.0-r45hdfd78af_0.conda
 https://conda.anaconda.org/bioconda/noarch/bioconductor-org.hs.eg.db-3.22.0-r45hdfd78af_0.conda
@@ -447,15 +457,19 @@ https://conda.anaconda.org/bioconda/noarch/bioconductor-singlecellexperiment-1.3
 https://conda.anaconda.org/conda-forge/linux-64/r-hmisc-5.2_6-r45heaba542_0.conda
 https://conda.anaconda.org/conda-forge/linux-64/r-mixtools-2.0.0.1-r45h54b55ab_1.conda
 https://conda.anaconda.org/conda-forge/noarch/r-modelr-0.1.11-r45hc72bb7e_3.conda
+https://conda.anaconda.org/bioconda/noarch/bioconductor-biomart-2.66.1-r45hdfd78af_0.conda
 https://conda.anaconda.org/bioconda/noarch/bioconductor-dorothea-1.22.0-r45hdfd78af_0.conda
 https://conda.anaconda.org/bioconda/linux-64/bioconductor-genefilter-1.92.0-r45h9e4a190_0.conda
 https://conda.anaconda.org/bioconda/noarch/bioconductor-gseabase-1.72.0-r45hdfd78af_0.conda
+https://conda.anaconda.org/bioconda/linux-64/bioconductor-rtracklayer-1.70.1-r45h01b2380_0.conda
 https://conda.anaconda.org/bioconda/noarch/bioconductor-spatialexperiment-1.20.0-r45hdfd78af_0.conda
 https://conda.anaconda.org/bioconda/noarch/bioconductor-viper-1.44.0-r45hdfd78af_0.conda
 https://conda.anaconda.org/conda-forge/noarch/r-doby-4.7.2-r45hc72bb7e_0.conda
 https://conda.anaconda.org/conda-forge/noarch/r-mediation-4.5.1-r45hc72bb7e_1.conda
 https://conda.anaconda.org/bioconda/linux-64/r-wgcna-1.74-r45h0df16ae_1.conda
+https://conda.anaconda.org/bioconda/noarch/bioconductor-genomicfeatures-1.62.0-r45hdfd78af_0.conda
 https://conda.anaconda.org/bioconda/linux-64/bioconductor-gsva-2.4.4-r45h01b2380_0.conda
 https://conda.anaconda.org/bioconda/linux-64/bioconductor-sva-3.58.0-r45h01b2380_0.conda
 https://conda.anaconda.org/conda-forge/noarch/r-pbkrtest-0.5.5-r45hc72bb7e_1.conda
+https://conda.anaconda.org/bioconda/noarch/bioconductor-txdbmaker-1.6.2-r45hdfd78af_0.conda
 https://conda.anaconda.org/bioconda/noarch/bioconductor-variancepartition-1.40.1-r45hdfd78af_0.conda

@@ -189,10 +189,19 @@ def main() -> None:
             project.figure_recipe,
             project.cell_state_signatures,
             project.regulon_edges,
+            # The binding-prior regulon (unsigned second regulator view) is a
+            # declared analysis input on exactly the same footing as regulon_edges:
+            # it must be checksummed so the manifest fully pins every file the run
+            # consumed. (It was previously omitted here.)
+            project.binding_prior_edges,
             project.deconvolution_signature,
         )
         if path is not None
     )
+    # Each generalized regulator view's edge table is a declared analysis input on
+    # the same footing as regulon_edges: pin every one so the manifest fully
+    # captures the files the run consumed.
+    input_paths.extend(Path(view["edges"]) for view in project.regulator_views)
     unique_inputs = list(dict.fromkeys(path.resolve() for path in input_paths))
     known_checksums = prepared_checksums(results)
     result_paths = sorted(
@@ -206,6 +215,7 @@ def main() -> None:
         "project": project.config["project"],
         "analysis_set": project.analysis_set,
         "profile": project.config["analysis"]["profile"],
+        "strict": project.strict,
         "modules": list(project.modules),
         "species": project.config["species"],
         "reference": project.config["reference"],
@@ -245,6 +255,22 @@ def main() -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     print(f"Wrote {output} with {len(result_paths)} result files")
+
+    # Strict (publication) mode terminal gate. Every stage funnels a degraded or
+    # fallback decision into its summary JSON's `warnings` array, which we have
+    # just collected. The manifest is written first (so the warnings are on disk
+    # for inspection), then the run fails: a publication build must not report
+    # success while any stage recorded a degradation. Lenient mode is unaffected.
+    warnings = manifest["warnings"]
+    if project.strict and warnings:
+        print(
+            f"strict mode (execution.strict): {len(warnings)} stage warning(s) "
+            "make this run non-publication-grade:",
+            file=sys.stderr,
+        )
+        for warning in warnings:
+            print(f"  [{warning['source']}] {warning['message']}", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":

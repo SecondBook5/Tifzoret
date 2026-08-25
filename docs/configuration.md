@@ -24,6 +24,50 @@ tifzoret migrate-config old.yaml --output project.yaml \
 - `reference.genome_build`, `annotation_release`, and optional
   `expected_contigs` describe the reference used upstream.
 
+### Gene-symbol resolution (optional)
+
+When a count-boundary study is built from a GTF, each gene's symbol comes from the
+GTF `gene_name` attribute; genes that Ensembl left unnamed keep their
+version-stripped accession as the symbol. `reference.symbol_resolution` turns on an
+optional, deterministic, provenance-tracked resolution chain for those unnamed
+genes. It is **off by default, and default-off output is byte-identical** to the
+legacy seven-column `annotation.tsv`.
+
+```yaml
+reference:
+  genome_build: GRCm39
+  annotation_release: 107
+  symbol_resolution:
+    enabled: true
+    # Pinned, offline id->symbol map (see below). Optional: with no map, GTF names
+    # still apply and every unnamed gene simply retains its accession.
+    secondary_map: resources/org_mm_eg_db_symbols.tsv
+    # Optional; omit to use the mouse-oriented defaults (Gm#####, LOC#####, ...Rik).
+    provisional_patterns: ["^Gm\\d+$", "^LOC\\d+$", "Rik\\d*$"]
+```
+
+The chain is: GTF `gene_name` → a non-placeholder name from the secondary map →
+the retained accession. A recovered name that matches a `provisional_pattern`
+(predicted/uncharacterised placeholders such as `Gm#####`) is **recorded but never
+promoted** to the displayed symbol — a stable accession beats an unstable
+placeholder. When enabled, three audit columns are appended to `annotation.tsv`:
+
+- `symbol_source` — `gtf`, `secondary`, or `ensembl_id` (accession retained).
+- `provisional_name` — the placeholder that was found but not adopted, if any.
+- `provisional` — `TRUE`/`FALSE`.
+
+The secondary map is a version-pinned, two-column TSV (`gene_id`, `symbol`; a
+leading `#` provenance line is allowed) that the materialize step reads offline —
+no runtime R or network. Build one from a locally installed annotation package
+with the author-run helper (the engine ships the generator but bundles no
+organism annotation data, and the resulting map is reference data that belongs in
+the study repo):
+
+```
+Rscript workflow/scripts/export_symbol_map.R \
+  --orgdb org.Mm.eg.db --output resources/org_mm_eg_db_symbols.tsv
+```
+
 ## Inputs
 
 Every input declares `samples` and may declare `analysis_set`.
@@ -65,7 +109,9 @@ Optional settings live under `analysis.settings.<module>` (for example
 namespaced by module:
 
 - composition: minimum matched genes;
-- regulators: confidence classes, minimum targets, and display count;
+- regulators: confidence classes, minimum targets, and display count; an optional
+  `views` list scores an arbitrary named set of regulon edge tables in one run
+  (see Resources);
 - networks: STRING score, display node cap, and layout seed;
 - de: `shrinkage` (`apeglm`, `ashr`, `normal`, or `none`) and, for the optional
   confirmatory fit, `confirm_method` (`edger`);
@@ -84,6 +130,25 @@ namespaced by module:
 
 Dependency errors are reported at validation time. Enabling a module never
 silently enables a missing resource or changes contrast direction.
+
+## Execution
+
+The optional top-level `execution` section controls run behavior independent of
+which modules run.
+
+```yaml
+execution:
+  strict: true
+```
+
+`execution.strict` is `false` by default (lenient). In lenient mode a stage that
+takes a degraded or fallback path — for example scoring regulator activity with
+the deterministic proxy when VIPER is absent — records a warning and continues,
+byte-identical to the historical engine. In strict mode any such degradation is a
+hard failure, and the run additionally fails at the terminal manifest step if any
+stage recorded a warning, so a publication run cannot silently emit a degraded
+result. This is orthogonal to `analysis.profile`, which only selects which
+modules run.
 
 ## Resources
 
@@ -115,6 +180,32 @@ obtained under the applicable upstream terms. Its checksum is part of the cache
 key and resource receipt. Because binding does not establish activation or
 repression, edges without `mor` are analyzed as unsigned target-program
 evidence.
+
+The regulator stage renders one signed primary view from `regulon_edges` (or the
+DoRothEA package) and, when `resources.binding_prior_edges` is set, a second
+unsigned binding-prior view in the same run. `analysis.settings.regulators.views`
+generalizes that pair to an arbitrary named list, each entry a
+`{name, edges, signed}` mapping (with an optional `provider_label`):
+
+```yaml
+analysis:
+  settings:
+    regulators:
+      views:
+        - {name: primary, edges: resources/regulon_edges.tsv, signed: true}
+        - {name: occupancy, edges: resources/binding_prior.tsv, signed: false, provider_label: gtrd}
+```
+
+The first view is the primary and keeps the canonical filenames
+(`regulon_edges.tsv`, `regulator_differential.tsv`, …) that the GRN, hypothesis,
+and figure stages read; every later view writes `<file>_<name>` variants.
+`signed: false` collapses target modes to +1 — occupancy, not direction — and
+scores that view as unsigned target-program evidence, and `provider_label` tags
+its method string (e.g. `VIPER` → `VIPER_unsigned_GTRD`). The `views` list is
+mutually exclusive with `resources.regulon_edges` and
+`resources.binding_prior_edges`; use one mechanism. All views are co-products of
+a single stage invocation, and every edge table is checksummed in the run
+manifest.
 
 ## Figures and publication files
 

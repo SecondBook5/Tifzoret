@@ -151,25 +151,67 @@ rule contrast_composition:
         "--vst {input.vst:q} --signatures {input.signatures:q} "
         "--outdir {RESULTS}/contrasts/{wildcards.contrast_id}/analyses/composition > {log:q} 2>&1"
 
+# Inputs (edge tables) and declared outputs for contrast_regulators. The single
+# rule runs regulators.R once, which renders every configured regulator view;
+# each view's outputs are co-products the rule must declare so Snakemake verifies
+# them. The output NAMING here mirrors regulator_out() in regulators.R exactly --
+# the two MUST agree or Snakemake reports a missing output. The FIRST view is the
+# primary (canonical filenames the GRN/hypothesis stages read); each later view
+# gets `<file>_<name>` variants. This covers both the legacy signed(+binding)
+# path and the generalized analysis.settings.regulators.views list.
+def _regulator_view_outputs(name, primary):
+    if primary:
+        return {
+            "edges": analysis("regulators", "tables/regulon_edges.tsv"),
+            "signed": analysis("regulators", "tables/dorothea_activity_scores.tsv"),
+            "unsigned": analysis("regulators", "tables/regulator_target_program_scores.tsv"),
+            "differential": analysis("regulators", "tables/regulator_differential.tsv"),
+            "displayed": analysis("regulators", "tables/regulator_activity_displayed.tsv"),
+            "pdf": analysis("regulators", "figures/regulator_activity.pdf"),
+            "png": analysis("regulators", "figures/regulator_activity.png"),
+            "summary": analysis("regulators", "regulators_summary.json"),
+        }
+    return {
+        f"{name}_edges": analysis("regulators", f"tables/regulon_edges_{name}.tsv"),
+        f"{name}_signed": analysis("regulators", f"tables/regulator_activity_scores_{name}.tsv"),
+        f"{name}_unsigned": analysis("regulators", f"tables/regulator_target_program_scores_{name}.tsv"),
+        f"{name}_differential": analysis("regulators", f"tables/regulator_differential_{name}.tsv"),
+        f"{name}_displayed": analysis("regulators", f"tables/regulator_activity_displayed_{name}.tsv"),
+        f"{name}_pdf": analysis("regulators", f"figures/regulator_activity_{name}.pdf"),
+        f"{name}_png": analysis("regulators", f"figures/regulator_activity_{name}.png"),
+        f"{name}_summary": analysis("regulators", f"regulators_{name}_summary.json"),
+    }
+
+
+if PROJECT.regulator_views:
+    _REGULATOR_INPUTS = {"views": [view["edges"] for view in PROJECT.regulator_views]}
+    _REGULATOR_OUTPUTS = {}
+    for _index, _view in enumerate(PROJECT.regulator_views):
+        _REGULATOR_OUTPUTS.update(_regulator_view_outputs(_view["name"], primary=(_index == 0)))
+else:
+    _REGULATOR_INPUTS = {
+        "regulon": str(PROJECT.regulon_edges) if PROJECT.regulon_edges else [],
+        # A configured binding prior adds an unsigned second view in the same run
+        # (regulators.R auto-detects resources.binding_prior_edges; no extra flag).
+        "binding": str(PROJECT.binding_prior_edges) if PROJECT.binding_prior_edges else [],
+    }
+    _REGULATOR_OUTPUTS = _regulator_view_outputs(None, primary=True)
+    if PROJECT.binding_prior_edges:
+        _REGULATOR_OUTPUTS.update(_regulator_view_outputs("binding", primary=False))
+
+
 rule contrast_regulators:
     input:
         vst=qc("objects/vst.rds"),
         samples=SAMPLES,
         annotation=ANNOTATION,
         contrasts=CONTRASTS,
-        regulon=str(PROJECT.regulon_edges) if PROJECT.regulon_edges else [],
+        **_REGULATOR_INPUTS,
         config=str(CONFIG_PATH),
         script=str(WORKFLOW_ROOT / "scripts" / "regulators.R"),
         utils=UTILS_R
     output:
-        edges=analysis("regulators", "tables/regulon_edges.tsv"),
-        signed=analysis("regulators", "tables/dorothea_activity_scores.tsv"),
-        unsigned=analysis("regulators", "tables/regulator_target_program_scores.tsv"),
-        differential=analysis("regulators", "tables/regulator_differential.tsv"),
-        displayed=analysis("regulators", "tables/regulator_activity_displayed.tsv"),
-        pdf=analysis("regulators", "figures/regulator_activity.pdf"),
-        png=analysis("regulators", "figures/regulator_activity.png"),
-        summary=analysis("regulators", "regulators_summary.json")
+        **_REGULATOR_OUTPUTS
     log:
         analysis("regulators", "logs/regulators.log")
     conda:

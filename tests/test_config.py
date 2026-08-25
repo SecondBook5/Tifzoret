@@ -31,6 +31,118 @@ def test_template_is_valid_and_multi_contrast():
     assert report["contrasts"] == ["treatment_a_vs_control", "treatment_b_vs_control"]
 
 
+def test_execution_strict_defaults_to_false_and_reads_when_set(tmp_path):
+    """execution.strict is optional (absent => lenient, byte-identical to the
+    historical engine) and surfaces on the resolved project and the validate
+    report when the author opts in."""
+    project = load_project(TEMPLATE / "project.yaml")
+    assert project.strict is False
+    assert validation_report(project)["strict"] is False
+
+    config = project_copy(tmp_path)
+    data = yaml.safe_load(config.read_text())
+    data["execution"] = {"strict": True}
+    config.write_text(yaml.safe_dump(data, sort_keys=False))
+    strict_project = load_project(config)
+    assert strict_project.strict is True
+    assert validation_report(strict_project)["strict"] is True
+
+
+def test_execution_strict_must_be_boolean(tmp_path):
+    config = project_copy(tmp_path)
+    data = yaml.safe_load(config.read_text())
+    data["execution"] = {"strict": "yes"}
+    config.write_text(yaml.safe_dump(data, sort_keys=False))
+    with pytest.raises(ProjectValidationError):
+        load_project(config)
+
+
+def test_execution_rejects_unknown_keys(tmp_path):
+    config = project_copy(tmp_path)
+    data = yaml.safe_load(config.read_text())
+    data["execution"] = {"stict": True}
+    config.write_text(yaml.safe_dump(data, sort_keys=False))
+    with pytest.raises(ProjectValidationError):
+        load_project(config)
+
+
+def _regulator_views_config(tmp_path: Path) -> tuple[Path, dict]:
+    """Minimal template with the regulators module on and two edge tables on disk,
+    ready for an analysis.settings.regulators.views list."""
+    config = project_copy(tmp_path)
+    (config.parent / "signed.tsv").write_text("source\ttarget\tmor\nTF1\tGene1\t1\n", encoding="utf-8")
+    (config.parent / "occupancy.tsv").write_text("source\ttarget\nTF1\tGene1\n", encoding="utf-8")
+    data = yaml.safe_load(config.read_text())
+    data["analysis"]["modules"] = {"regulators": True}
+    return config, data
+
+
+def test_regulator_views_populate_resolved_project(tmp_path):
+    """A named views list validates, resolves each edge path, and lands on the
+    resolved project with signed/provider_label preserved and the first entry
+    kept first (it becomes the primary / canonical-filename view)."""
+    config, data = _regulator_views_config(tmp_path)
+    data["analysis"]["settings"] = {
+        "regulators": {
+            "views": [
+                {"name": "signed", "edges": "signed.tsv", "signed": True},
+                {"name": "occupancy", "edges": "occupancy.tsv", "signed": False, "provider_label": "gtrd"},
+            ]
+        }
+    }
+    config.write_text(yaml.safe_dump(data, sort_keys=False))
+    project = load_project(config)
+    assert [view["name"] for view in project.regulator_views] == ["signed", "occupancy"]
+    assert project.regulator_views[0]["signed"] is True
+    assert project.regulator_views[0]["edges"] == str((config.parent / "signed.tsv").resolve())
+    assert project.regulator_views[1]["signed"] is False
+    assert project.regulator_views[1]["provider_label"] == "gtrd"
+    # Legacy single-view fields stay empty in views mode.
+    assert project.regulon_edges is None
+    assert project.binding_prior_edges is None
+
+
+def test_regulator_views_are_mutually_exclusive_with_legacy_keys(tmp_path):
+    config, data = _regulator_views_config(tmp_path)
+    data["analysis"]["settings"] = {"regulators": {"views": [{"name": "v1", "edges": "signed.tsv", "signed": True}]}}
+    data["resources"]["regulon_edges"] = "signed.tsv"
+    config.write_text(yaml.safe_dump(data, sort_keys=False))
+    with pytest.raises(ProjectValidationError, match="cannot be combined with"):
+        load_project(config)
+
+
+def test_regulator_views_reject_duplicate_names(tmp_path):
+    config, data = _regulator_views_config(tmp_path)
+    data["analysis"]["settings"] = {
+        "regulators": {
+            "views": [
+                {"name": "dup", "edges": "signed.tsv", "signed": True},
+                {"name": "dup", "edges": "occupancy.tsv", "signed": False},
+            ]
+        }
+    }
+    config.write_text(yaml.safe_dump(data, sort_keys=False))
+    with pytest.raises(ProjectValidationError, match="names must be unique"):
+        load_project(config)
+
+
+def test_regulator_view_missing_edge_file_is_reported(tmp_path):
+    config, data = _regulator_views_config(tmp_path)
+    data["analysis"]["settings"] = {"regulators": {"views": [{"name": "v1", "edges": "nope.tsv", "signed": True}]}}
+    config.write_text(yaml.safe_dump(data, sort_keys=False))
+    with pytest.raises(ProjectValidationError, match="edge file does not exist"):
+        load_project(config)
+
+
+def test_regulator_view_requires_source_and_target(tmp_path):
+    config, data = _regulator_views_config(tmp_path)
+    (config.parent / "bad.tsv").write_text("regulator\tgene\nTF1\tGene1\n", encoding="utf-8")
+    data["analysis"]["settings"] = {"regulators": {"views": [{"name": "v1", "edges": "bad.tsv", "signed": True}]}}
+    config.write_text(yaml.safe_dump(data, sort_keys=False))
+    with pytest.raises(ProjectValidationError, match="require source and target"):
+        load_project(config)
+
+
 def test_count_samples_must_match_metadata(tmp_path):
     config = project_copy(tmp_path)
     counts = config.parent / "counts.tsv"

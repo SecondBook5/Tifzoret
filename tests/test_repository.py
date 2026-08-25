@@ -19,6 +19,10 @@ _ROOT_FILES = (
     "environment.yaml",
     "CITATION.cff",
 )
+# Only text/code/config suffixes are scanned. Data suffixes (.tsv/.gmt/.csv/.txt)
+# are deliberately excluded: shipped reference matrices (e.g. the deconvolution
+# presets) legitimately contain gene symbols such as "Pten" that collide with a
+# forbidden study token, so scanning them would false-positive on real biology.
 _SCANNED_SUFFIXES = {".py", ".R", ".smk", ".yaml", ".yml", ".md", ".sh"}
 
 
@@ -56,6 +60,8 @@ def test_engine_contains_no_reference_project_names():
     # slip in via config or docs. Tokens are chosen to be fingerprint-specific:
     # "rela_ko" (not bare "rela", which would flag "related"/"relative") and
     # "nfkb"/"xizhao"/"pten"/"taxol" have no innocent-superstring collisions.
+    # "15567" is the IGO sample-submission id for the reference cohort -- a pure
+    # numeric token with no innocent collision in source.
     forbidden = (
         "cape",
         "thoracic",
@@ -66,6 +72,7 @@ def test_engine_contains_no_reference_project_names():
         "taxol",
         "nfkb",
         "rela_ko",
+        "15567",
     )
     patterns = [re.compile(rf"(?<![a-z]){re.escape(term)}") for term in forbidden]
     for path in _engine_source_files():
