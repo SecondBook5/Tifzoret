@@ -61,6 +61,17 @@ if (no_network) {
                "No connected STRING subnetwork for the directional seed set"),
     stem, width = 8.2, height = 6.2
   )
+  # Source Data for the community network is the set of drawn nodes; with no
+  # connected subnetwork none are drawn. Still emit the declared table (empty,
+  # with its schema) so the figure recipe's displayed_data always resolves.
+  readr::write_tsv(
+    tibble::tibble(
+      name = character(), x = double(), y = double(),
+      community_id = integer(), graph_degree = double(), community = character(),
+      string_id = character(), log2fc = double(), padj = double(), de_statistic = double()
+    ),
+    file.path(dirs$tables, sprintf("string_%s_network_displayed.tsv", direction)), na = "NA"
+  )
   message(sprintf("string_network[%s]: no connected subnetwork; wrote placeholder", direction))
   quit(save = "no", status = 0)
 }
@@ -169,6 +180,13 @@ disp_nodes <- tibble::tibble(
 ) %>%
   dplyr::left_join(community_key, by = "community_id") %>%
   dplyr::left_join(nodes, by = "name")
+
+# Source Data for the drawn panel: the displayed vertex set with the community
+# assignment and Fruchterman-Reingold coordinates AS PLOTTED (the community is
+# recomputed here on the displayed subgraph, so it can differ from the seed-set
+# `community` column in string_*_nodes.tsv; this table records what the figure
+# shows), plus each node's degree and DE statistics.
+readr::write_tsv(disp_nodes, file.path(dirs$tables, sprintf("string_%s_network_displayed.tsv", direction)), na = "NA")
 
 edge_plot <- igraph::as_data_frame(graph_disp, what = "edges") %>%
   dplyr::transmute(from, to, string_score) %>%

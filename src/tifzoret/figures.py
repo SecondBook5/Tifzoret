@@ -139,7 +139,7 @@ PANEL_REGISTRY: dict[str, PanelConstructor] = {
     ),
     "gsva_heatmap": PanelConstructor(
         "gsva_heatmap", "GSVA heatmap", "Configured pathway scores across samples.", True, "default",
-        {"default": _variant("contrasts/{contrast}/analyses/pathways/figures/gsva_heatmap", "pathways", "GSVA heatmap", "contrasts/{contrast}/analyses/pathways/tables/gsva_heatmap_displayed.tsv", "contrasts/{contrast}/analyses/pathways/tables/gsva_differential.tsv")},
+        {"default": _variant("contrasts/{contrast}/analyses/pathways/figures/gsva_heatmap", "pathways", "GSVA heatmap", "contrasts/{contrast}/analyses/pathways/tables/gsva_heatmap_displayed.tsv", "contrasts/{contrast}/analyses/pathways/tables/gsva_scores.tsv", "contrasts/{contrast}/analyses/pathways/tables/gsva_differential.tsv")},
     ),
     "gsea_multitrack": PanelConstructor(
         "gsea_multitrack", "Advanced GSEA curves", "Enrichment score, hits, ranked metric, NES, FDR, and leading edge.", True, "default",
@@ -147,7 +147,7 @@ PANEL_REGISTRY: dict[str, PanelConstructor] = {
     ),
     "program_heatmap_effects": PanelConstructor(
         "program_heatmap_effects", "Program heatmap and effects", "Consolidated expression heatmap and gene-level effect estimates.", True, "default",
-        {"default": _variant("contrasts/{contrast}/analyses/publication/figures/program_integrated", "publication", "Program heatmap + effects", "contrasts/{contrast}/analyses/publication/tables/program_integrated_displayed.tsv", "contrasts/{contrast}/analyses/publication/tables/program_definitions.tsv")},
+        {"default": _variant("contrasts/{contrast}/analyses/publication/figures/program_integrated", "publication", "Program heatmap + effects", "contrasts/{contrast}/analyses/publication/tables/program_integrated_displayed.tsv", "contrasts/{contrast}/analyses/publication/tables/program_effects_forest_displayed.tsv", "contrasts/{contrast}/analyses/publication/tables/program_definitions.tsv")},
     ),
     "program_violins": PanelConstructor(
         "program_violins", "Program gene distributions", "Consolidated program-shaded violins with adjusted significance brackets.", True, "default",
@@ -163,8 +163,8 @@ PANEL_REGISTRY: dict[str, PanelConstructor] = {
     "string_network": PanelConstructor(
         "string_network", "STRING network", "Direction-specific STRING association network with topology-derived community hulls; auditable full and displayed edges.", True, "upregulated",
         {
-            "upregulated": _variant("contrasts/{contrast}/analyses/networks/figures/string_up_network_community", "networks", "Upregulated STRING community network", "contrasts/{contrast}/analyses/networks/tables/string_up_nodes.tsv", "contrasts/{contrast}/analyses/networks/tables/string_up_edges.tsv", "contrasts/{contrast}/analyses/networks/tables/string_up_input_genes.tsv", "contrasts/{contrast}/analyses/networks/tables/string_up_unmapped_genes.tsv"),
-            "downregulated": _variant("contrasts/{contrast}/analyses/networks/figures/string_down_network_community", "networks", "Downregulated STRING community network", "contrasts/{contrast}/analyses/networks/tables/string_down_nodes.tsv", "contrasts/{contrast}/analyses/networks/tables/string_down_edges.tsv", "contrasts/{contrast}/analyses/networks/tables/string_down_input_genes.tsv", "contrasts/{contrast}/analyses/networks/tables/string_down_unmapped_genes.tsv"),
+            "upregulated": _variant("contrasts/{contrast}/analyses/networks/figures/string_up_network_community", "networks", "Upregulated STRING community network", "contrasts/{contrast}/analyses/networks/tables/string_up_network_displayed.tsv", "contrasts/{contrast}/analyses/networks/tables/string_up_nodes.tsv", "contrasts/{contrast}/analyses/networks/tables/string_up_edges.tsv", "contrasts/{contrast}/analyses/networks/tables/string_up_input_genes.tsv", "contrasts/{contrast}/analyses/networks/tables/string_up_unmapped_genes.tsv"),
+            "downregulated": _variant("contrasts/{contrast}/analyses/networks/figures/string_down_network_community", "networks", "Downregulated STRING community network", "contrasts/{contrast}/analyses/networks/tables/string_down_network_displayed.tsv", "contrasts/{contrast}/analyses/networks/tables/string_down_nodes.tsv", "contrasts/{contrast}/analyses/networks/tables/string_down_edges.tsv", "contrasts/{contrast}/analyses/networks/tables/string_down_input_genes.tsv", "contrasts/{contrast}/analyses/networks/tables/string_down_unmapped_genes.tsv"),
             "upregulated_legacy": _variant("contrasts/{contrast}/analyses/networks/figures/string_up_network", "networks", "Upregulated STRING network (matplotlib)", "contrasts/{contrast}/analyses/networks/tables/string_up_nodes_displayed.tsv", "contrasts/{contrast}/analyses/networks/tables/string_up_edges_displayed.tsv", "contrasts/{contrast}/analyses/networks/tables/string_up_input_genes.tsv", "contrasts/{contrast}/analyses/networks/tables/string_up_unmapped_genes.tsv"),
             "downregulated_legacy": _variant("contrasts/{contrast}/analyses/networks/figures/string_down_network", "networks", "Downregulated STRING network (matplotlib)", "contrasts/{contrast}/analyses/networks/tables/string_down_nodes_displayed.tsv", "contrasts/{contrast}/analyses/networks/tables/string_down_edges_displayed.tsv", "contrasts/{contrast}/analyses/networks/tables/string_down_input_genes.tsv", "contrasts/{contrast}/analyses/networks/tables/string_down_unmapped_genes.tsv"),
         },

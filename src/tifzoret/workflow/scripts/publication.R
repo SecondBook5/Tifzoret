@@ -324,6 +324,11 @@ program_h_forest <- program_h_def %>%
   )
 forest_fill <- c(numerator = unname(h_fill[numerator]), denominator = unname(h_fill[denominator]), ns = "white")
 
+# Persist the exact per-gene effect-size values drawn in the forest (Source Data
+# for the right half of the panel): shrunken log2FC, its SE, the 95% CI drawn as
+# the segment, the FDR value, and the FDR-class that colours the point.
+readr::write_tsv(program_h_forest, file.path(dirs$tables, "program_effects_forest_displayed.tsv"), na = "NA")
+
 # Condition bar over the heatmap columns.
 h_condition_bar <- data.frame(
   sample_id = factor(h_sample_order, levels = h_sample_order),
