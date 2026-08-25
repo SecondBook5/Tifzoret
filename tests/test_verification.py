@@ -20,6 +20,23 @@ def test_verification_detects_and_reports_table_differences(tmp_path: Path):
     assert result.report["failed_tables"] == ["counts.tsv"]
 
 
+def test_verification_fails_on_candidate_only_table(tmp_path: Path):
+    # A faithful reproduction must not emit tables the reference never produced.
+    # verify_runs records such tables under candidate_only_tables AND must fail on
+    # them: a candidate whose every shared cell agrees but which adds an extra
+    # table is not a match. (Regression: `passed` once omitted `not extra`.)
+    reference = tmp_path / "reference"; candidate = tmp_path / "candidate"
+    reference.mkdir(); candidate.mkdir()
+    (reference / "counts.tsv").write_text("gene_id\ts1\ng1\t10\n")
+    (candidate / "counts.tsv").write_text("gene_id\ts1\ng1\t10\n")
+    (candidate / "unexpected.tsv").write_text("gene_id\ts1\ng1\t10\n")
+    result = verify_runs(reference, candidate)
+    assert not result.passed
+    assert result.report["candidate_only_tables"] == ["unexpected.tsv"]
+    assert result.report["missing_tables"] == []
+    assert result.report["failed_tables"] == []
+
+
 def test_legacy_verification_compares_counts_de_decisions_and_figures(tmp_path: Path):
     study = tmp_path / "study"
     shutil.copytree(TEMPLATE, study)

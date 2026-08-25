@@ -148,7 +148,7 @@ def verify_runs(reference: str | Path, candidate: str | Path, *, atol: float = 1
     failed = [name for name, comparison in comparisons.items() if not comparison["passed"]]
     report = {
         "schema_version": 1,
-        "passed": not missing and not failed,
+        "passed": not missing and not extra and not failed,
         "reference": str(reference_root),
         "candidate": str(candidate_root),
         "tolerances": {"absolute": atol, "relative": rtol},
