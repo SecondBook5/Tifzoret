@@ -170,8 +170,15 @@ PANEL_REGISTRY: dict[str, PanelConstructor] = {
         },
     ),
     "regulator_activity": PanelConstructor(
-        "regulator_activity", "Regulator activity", "Signed regulator-activity heatmap.", True, "default",
-        {"default": _variant("contrasts/{contrast}/analyses/regulators/figures/regulator_activity", "regulators", "Regulator activity", "contrasts/{contrast}/analyses/regulators/tables/regulator_activity_displayed.tsv", "contrasts/{contrast}/analyses/regulators/tables/regulon_edges.tsv")},
+        "regulator_activity", "Regulator activity",
+        "Regulator-activity heatmap. The `default` variant plots the primary "
+        "(first-declared) regulator view — signed DoRothEA under the legacy dual-view "
+        "path; the `binding` variant plots the unsuffixed second view produced by a "
+        "configured binding prior (unsigned GTRD occupancy).", True, "default",
+        {
+            "default": _variant("contrasts/{contrast}/analyses/regulators/figures/regulator_activity", "regulators", "Regulator activity", "contrasts/{contrast}/analyses/regulators/tables/regulator_activity_displayed.tsv", "contrasts/{contrast}/analyses/regulators/tables/regulon_edges.tsv"),
+            "binding": _variant("contrasts/{contrast}/analyses/regulators/figures/regulator_activity_binding", "regulators", "Regulator activity (binding prior)", "contrasts/{contrast}/analyses/regulators/tables/regulator_activity_displayed_binding.tsv", "contrasts/{contrast}/analyses/regulators/tables/regulon_edges_binding.tsv"),
+        },
     ),
     "dorothea_grn": PanelConstructor(
         "dorothea_grn", "DoRothEA gene-regulatory network", "Program-aware GRN view backed by complete regulon-edge audit data.", True, "radial",
