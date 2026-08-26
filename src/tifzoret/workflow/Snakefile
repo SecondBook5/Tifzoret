@@ -399,6 +399,12 @@ STRING_FIGURE_PATTERNS = [
     analysis("networks", "figures/string_up_network_community.png"),
     analysis("networks", "figures/string_down_network_community.pdf"),
     analysis("networks", "figures/string_down_network_community.png"),
+    # Per-node community-membership tables backing the two community figures
+    # (Source Data / displayed_data). Written by string_network.R alongside the
+    # figures, so they belong to contrast_string_figures — declared here so they
+    # are tracked outputs, not untracked side-effects.
+    analysis("networks", "tables/string_up_network_displayed.tsv"),
+    analysis("networks", "tables/string_down_network_displayed.tsv"),
 ]
 
 HYPOTHESIS_PATTERNS = [
@@ -415,6 +421,11 @@ PUBLICATION_PATTERNS = [
     analysis("publication", "tables/de_heatmap_program_grouped_displayed.tsv"),
     analysis("publication", "tables/de_heatmap_compact_displayed.tsv"),
     analysis("publication", "tables/program_integrated_displayed.tsv"),
+    # Per-gene differential-effect forest values drawn in the program_integrated
+    # panel (Source Data / displayed_data). Written by publication.R alongside
+    # program_integrated_displayed.tsv, so it belongs to contrast_publication —
+    # declared here so it is a tracked output, not an untracked side-effect.
+    analysis("publication", "tables/program_effects_forest_displayed.tsv"),
     analysis("publication", "tables/program_violins_displayed.tsv"),
     analysis("publication", "tables/program_violins_tests.tsv"),
     *[

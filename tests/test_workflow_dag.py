@@ -24,6 +24,8 @@ from pathlib import Path
 
 import yaml
 
+from tifzoret.figures import PANEL_REGISTRY
+
 
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = ROOT / "src" / "tifzoret" / "templates" / "minimal"
@@ -67,6 +69,20 @@ def _planned_rules(output: str) -> set[str]:
         if stripped.startswith("rule ") and stripped.endswith(":"):
             rules.add(stripped[len("rule "):-1])
     return rules
+
+
+def _result_tail(rel: str) -> str:
+    """A result-relative panel path, stripped of its ``contrasts/<id>/`` prefix.
+
+    Panel paths in the figure catalog carry a ``{contrast}`` wildcard; a planned
+    DAG names concrete contrasts. Dropping the ``contrasts/{contrast}/`` prefix
+    yields a contrast-agnostic tail (e.g. ``analyses/publication/tables/x.tsv``)
+    that is a substring of every concrete absolute path Snakemake prints for it,
+    so a simple ``tail in dry_run_stdout`` membership test works regardless of
+    which contrast produced it. QC panel paths carry no prefix and pass through.
+    """
+    prefix = "contrasts/{contrast}/"
+    return rel[len(prefix):] if rel.startswith(prefix) else rel
 
 
 def _publication_project(tmp_path: Path) -> Path:
@@ -185,3 +201,58 @@ def test_publication_profile_dag_resolves(tmp_path):
     planned = _planned_rules(proc.stdout)
     missing = PUBLICATION_RULES - planned
     assert not missing, f"publication rules absent from DAG: {sorted(missing)}"
+
+
+def test_displayed_data_are_declared_outputs(tmp_path):
+    """Every displayed-data table a *built* panel exposes must be a declared
+    engine output, not an untracked side-effect.
+
+    ``figures.py`` advertises, per panel variant, the ``displayed_data`` tables
+    that back its figure (the Source Data a reviewer audits). A rule's script may
+    *write* such a table, but unless the table is also named in that rule's
+    ``output:`` list, Snakemake does not own it: it is an untracked side-effect,
+    and deleting it while its declared siblings stay current would NOT reschedule
+    the producing rule -- so the table silently never comes back. That
+    reschedule-on-delete guarantee is exactly Snakemake's declared-output
+    property, so asserting "the table is a planned output" is the offline,
+    R-free, network-free way to assert "deleting it regenerates it" (a true
+    delete-and-rerun test would need a built result tree).
+
+    The contract is gated on the figure actually being built: for each variant
+    whose source figure is a planned output of this publication run, every one of
+    its ``displayed_data`` tables must also be planned. Variants whose figure this
+    run does not build (opt-in modules, on-demand DE/pathway diagnostics no recipe
+    surfaces) are skipped -- their tables are legitimately absent here. This is
+    the regression guard for the ``program_effects_forest_displayed`` and
+    ``string_{up,down}_network_displayed`` gaps, and a general guard for any
+    future panel that writes an audit table without declaring it.
+    """
+    config_path = _publication_project(tmp_path)
+    proc = _dry_run(config_path)
+    assert proc.returncode == 0, proc.stderr or proc.stdout
+    plan = proc.stdout
+
+    def _figure_built(source_stem: str) -> bool:
+        tail = _result_tail(source_stem)
+        return (tail + ".pdf") in plan or (tail + ".png") in plan
+
+    checked = 0
+    undeclared: list[str] = []
+    for constructor in PANEL_REGISTRY.values():
+        for variant_name, variant in constructor.variants.items():
+            if not variant.displayed_data or not _figure_built(variant.source):
+                continue
+            for rel in variant.displayed_data:
+                checked += 1
+                if _result_tail(rel) not in plan:
+                    undeclared.append(f"{constructor.id}/{variant_name}: {rel}")
+
+    # The fixture builds enough panels that the guard exercises real tables; a
+    # zero count would mean the gate silently matched nothing (e.g. output-format
+    # drift) rather than that the contract holds.
+    assert checked, "no built-panel displayed tables were checked -- gate is inert"
+    assert not undeclared, (
+        "displayed-data tables exposed by a built panel but NOT declared as engine "
+        "outputs (untracked side-effects -- deleting them would not reschedule "
+        f"their rule):\n  " + "\n  ".join(sorted(undeclared))
+    )
