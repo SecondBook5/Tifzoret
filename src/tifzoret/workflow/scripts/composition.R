@@ -105,7 +105,10 @@ plot <- ggplot(differential, aes(logFC, label)) +
   labs(
     title = "Differential cell-state signatures",
     subtitle = sprintf("Positive scores are higher in %s; negative scores are higher in %s", numerator, denominator),
-    x = "Signature score log2 fold-change", y = NULL,
+    # The limma coefficient on ssGSEA scores is a difference of scores, not a
+    # log2 fold change (limma merely names its coefficient column `logFC`). Label
+    # it for what it is so the figure does not overstate the statistic.
+    x = sprintf("Difference in ssGSEA score (%s − %s)", numerator, denominator), y = NULL,
     fill = "Higher in", colour = "Higher in", size = "Matched genes"
   ) +
   theme_publication(8.5) +
