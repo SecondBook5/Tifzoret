@@ -23,9 +23,9 @@ The input boundary: materializing canonical tables from heterogeneous upstream s
 
 | Stage | What | Why | Rule | Env |
 |-------|------|-----|------|-----|
-| [01_inputs/materialize_inputs.py](../src/tifzoret/workflow/scripts/materialize_inputs.py) | Materialize external sources into canonical input tables | Transforms heterogeneous upstream data (featureCounts, Salmon, nf-core, archive) into four uniform TSVs (counts, samples, contrasts, annotation); downstream is blind to source | `materialize_inputs` (core.smk) | core.yaml |
+| [01_inputs/materialize_inputs.py](../src/tifzoret/workflow/scripts/materialize_inputs.py) | Materialize external sources into canonical input tables | Transforms heterogeneous upstream data (featureCounts, Salmon, nf-core, GEO, archive) into four uniform TSVs (counts, samples, contrasts, annotation); downstream is blind to source | `materialize_inputs` (core.smk) | core.yaml |
 | [01_inputs/resources.R](../src/tifzoret/workflow/scripts/resources.R) | Fetch and cache gene sets from external knowledge bases | Provides pathway/ontology/regulon annotations for enrichment tests; pinned versions prevent drift | `resolve_resources` (providers.smk) | r.yaml |
-| [01_inputs/export_symbol_map.R](../src/tifzoret/workflow/scripts/export_symbol_map.R) | Generate a frozen gene ID → symbol TSV from annotation contract | Provides a consistent symbol lookup for materialize_inputs.py when GTF gene_name coverage is incomplete | manual helper (not a Snakemake rule) | r.yaml |
+| [01_inputs/export_symbol_map.R](../src/tifzoret/workflow/scripts/export_symbol_map.R) | Generate a frozen gene ID → symbol TSV from annotation contract | Provides a consistent symbol lookup for materialize_inputs.py when annotation.tsv is unavailable at ingestion time | manual helper (not a Snakemake rule) | r.yaml |
 
 ### Phase 02: QC
 
