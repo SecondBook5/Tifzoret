@@ -13,6 +13,7 @@ SCRIPT = (
     / "tifzoret"
     / "workflow"
     / "scripts"
+    / "07_networks"
     / "multilayer.py"
 )
 

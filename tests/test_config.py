@@ -14,7 +14,7 @@ from tifzoret.config import ProjectValidationError, load_project, validation_rep
 
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = ROOT / "src" / "tifzoret" / "templates" / "minimal"
-MATERIALIZE = ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "materialize_inputs.py"
+MATERIALIZE = ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "01_inputs" / "materialize_inputs.py"
 
 
 def project_copy(tmp_path: Path) -> Path:

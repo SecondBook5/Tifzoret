@@ -64,7 +64,7 @@ organism annotation data, and the resulting map is reference data that belongs i
 the study repo):
 
 ```
-Rscript workflow/scripts/export_symbol_map.R \
+Rscript workflow/scripts/01_inputs/export_symbol_map.R \
   --orgdb org.Mm.eg.db --output resources/org_mm_eg_db_symbols.tsv
 ```
 

@@ -11,7 +11,7 @@ rule materialize_inputs:
         samples=SOURCE_SAMPLES,
         contrasts=SOURCE_CONTRASTS,
         config=str(CONFIG_PATH),
-        script=str(WORKFLOW_ROOT / "scripts" / "materialize_inputs.py")
+        script=str(WORKFLOW_ROOT / "scripts" / "01_inputs" / "materialize_inputs.py")
     output:
         counts=COUNTS,
         samples=SAMPLES,
@@ -41,7 +41,7 @@ rule study_qc:
         samples=SAMPLES,
         annotation=ANNOTATION,
         config=str(CONFIG_PATH),
-        script=str(WORKFLOW_ROOT / "scripts" / "qc.R"),
+        script=str(WORKFLOW_ROOT / "scripts" / "02_qc" / "qc.R"),
         utils=UTILS_R
     output:
         vst=qc("objects/vst.rds"),
@@ -91,7 +91,7 @@ rule study_batch:
         vst=qc("objects/vst.rds"),
         samples=SAMPLES,
         config=str(CONFIG_PATH),
-        script=str(WORKFLOW_ROOT / "scripts" / "batch.R"),
+        script=str(WORKFLOW_ROOT / "scripts" / "02_qc" / "batch.R"),
         utils=UTILS_R
     output:
         corrected=batch("tables/batch_corrected_expression.tsv"),
@@ -118,7 +118,7 @@ rule study_deconvolution:
         annotation=ANNOTATION,
         signature=str(PROJECT.deconvolution_signature) if PROJECT.deconvolution_signature else [],
         config=str(CONFIG_PATH),
-        script=str(WORKFLOW_ROOT / "scripts" / "deconvolution.R"),
+        script=str(WORKFLOW_ROOT / "scripts" / "05_composition" / "deconvolution.R"),
         utils=UTILS_R
     output:
         fractions=deconvolution("tables/cell_fractions.tsv"),
@@ -138,7 +138,7 @@ rule study_consensus:
     input:
         de=expand(analysis("de", "tables/de_results.tsv"), contrast_id=PAIRWISE_CONTRAST_IDS),
         config=str(CONFIG_PATH),
-        script=str(WORKFLOW_ROOT / "scripts" / "consensus.py")
+        script=str(WORKFLOW_ROOT / "scripts" / "09_synthesis" / "consensus.py")
     output:
         membership=comparison("tables/consensus_membership.tsv"),
         genes=comparison("tables/consensus_genes.tsv"),
@@ -162,7 +162,7 @@ rule study_variance_partition:
         vst=qc("objects/vst.rds"),
         samples=SAMPLES,
         config=str(CONFIG_PATH),
-        script=str(WORKFLOW_ROOT / "scripts" / "variancepartition.R"),
+        script=str(WORKFLOW_ROOT / "scripts" / "02_qc" / "variancepartition.R"),
         utils=UTILS_R
     output:
         fractions=variance_partition("tables/variance_fractions.tsv"),
@@ -186,7 +186,7 @@ rule study_factorial:
         de_x=analysis("de", "tables/de_results.tsv").format(contrast_id=FACTORIAL_EFFECT_X),
         de_y=analysis("de", "tables/de_results.tsv").format(contrast_id=FACTORIAL_EFFECT_Y),
         config=str(CONFIG_PATH),
-        script=str(WORKFLOW_ROOT / "scripts" / "factorial.R"),
+        script=str(WORKFLOW_ROOT / "scripts" / "03_differential" / "factorial.R"),
         utils=UTILS_R
     output:
         effect=factorial("tables/effect_vs_effect_displayed.tsv"),
@@ -216,7 +216,7 @@ rule contrast_de:
         annotation=ANNOTATION,
         contrasts=CONTRASTS,
         config=str(CONFIG_PATH),
-        script=str(WORKFLOW_ROOT / "scripts" / "de.R"),
+        script=str(WORKFLOW_ROOT / "scripts" / "03_differential" / "de.R"),
         utils=UTILS_R
     output:
         dds=analysis("de", "objects/deseq2.rds"),
@@ -261,7 +261,7 @@ rule contrast_omnibus:
         annotation=ANNOTATION,
         contrasts=CONTRASTS,
         config=str(CONFIG_PATH),
-        script=str(WORKFLOW_ROOT / "scripts" / "omnibus.R"),
+        script=str(WORKFLOW_ROOT / "scripts" / "03_differential" / "omnibus.R"),
         utils=UTILS_R
     output:
         dds=analysis("omnibus", "objects/deseq2_lrt.rds"),

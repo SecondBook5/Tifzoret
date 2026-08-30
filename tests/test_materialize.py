@@ -13,7 +13,7 @@ import yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "materialize_inputs.py"
+SCRIPT = ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "01_inputs" / "materialize_inputs.py"
 FIXTURES = ROOT / "tests" / "fixtures"
 MINIMAL = ROOT / "src" / "tifzoret" / "templates" / "minimal"
 

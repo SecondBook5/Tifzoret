@@ -12,7 +12,7 @@ import yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "manifest.py"
+SCRIPT = ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "10_figures" / "manifest.py"
 TEMPLATE = ROOT / "src" / "tifzoret" / "templates" / "minimal"
 
 

@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "consensus.py"
+SCRIPT = ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "09_synthesis" / "consensus.py"
 PROJECT = ROOT / "src" / "tifzoret" / "templates" / "minimal" / "project.yaml"
 
 

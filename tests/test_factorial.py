@@ -33,7 +33,7 @@ from tifzoret.figures import PANEL_REGISTRY
 
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = ROOT / "src" / "tifzoret" / "templates" / "minimal"
-FACTORIAL_R = ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "factorial.R"
+FACTORIAL_R = ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "03_differential" / "factorial.R"
 SNAKEFILE = ROOT / "src" / "tifzoret" / "workflow" / "Snakefile"
 
 

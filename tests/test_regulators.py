@@ -33,7 +33,7 @@ from tifzoret.config import ProjectValidationError, load_project
 
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = ROOT / "src" / "tifzoret" / "templates" / "minimal"
-REGULATORS_R = ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "regulators.R"
+REGULATORS_R = ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "06_regulators" / "regulators.R"
 
 
 # --------------------------------------------------------------------------- #

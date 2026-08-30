@@ -6,7 +6,7 @@ rule contrast_de_confirm:
         contrasts=CONTRASTS,
         de=analysis("de", "tables/de_results.tsv"),
         config=str(CONFIG_PATH),
-        script=str(WORKFLOW_ROOT / "scripts" / "de_confirm.R"),
+        script=str(WORKFLOW_ROOT / "scripts" / "03_differential" / "de_confirm.R"),
         utils=UTILS_R
     output:
         edger=analysis("de_confirm", "tables/edger_results.tsv"),
@@ -28,7 +28,7 @@ rule contrast_spia:
     input:
         de=analysis("de", "tables/de_results.tsv"),
         config=str(CONFIG_PATH),
-        script=str(WORKFLOW_ROOT / "scripts" / "spia.R"),
+        script=str(WORKFLOW_ROOT / "scripts" / "04_enrichment" / "spia.R"),
         utils=UTILS_R
     output:
         SPIA_PATTERNS
@@ -52,7 +52,7 @@ rule contrast_pathways:
         panels=str(PROJECT.hypothesis_panels) if PROJECT.hypothesis_panels else [],
         config=str(CONFIG_PATH),
         contrasts=CONTRASTS,
-        script=str(WORKFLOW_ROOT / "scripts" / "pathways.R"),
+        script=str(WORKFLOW_ROOT / "scripts" / "04_enrichment" / "pathways.R"),
         utils=UTILS_R
     output:
         fgsea=analysis("pathways", "tables/fgsea.tsv"),
@@ -87,7 +87,7 @@ rule contrast_ontology:
         ora=analysis("pathways", "tables/ora.tsv"),
         resources=RESOURCE_TABLE,
         config=str(CONFIG_PATH),
-        script=str(WORKFLOW_ROOT / "scripts" / "ontology.R"),
+        script=str(WORKFLOW_ROOT / "scripts" / "04_enrichment" / "ontology.R"),
         utils=UTILS_R
     output:
         table=analysis("ontology", "tables/ontology.tsv"),
@@ -112,7 +112,7 @@ rule contrast_enrichment_map:
         fgsea=analysis("pathways", "tables/fgsea.tsv"),
         ora=analysis("pathways", "tables/ora.tsv"),
         config=str(CONFIG_PATH),
-        script=str(WORKFLOW_ROOT / "scripts" / "enrichment_map.py")
+        script=str(WORKFLOW_ROOT / "scripts" / "04_enrichment" / "enrichment_map.py")
     output:
         ENRICHMENT_MAP_PATTERNS
     log:
@@ -132,7 +132,7 @@ rule contrast_composition:
         contrasts=CONTRASTS,
         signatures=str(PROJECT.cell_state_signatures) if PROJECT.cell_state_signatures else [],
         config=str(CONFIG_PATH),
-        script=str(WORKFLOW_ROOT / "scripts" / "composition.R"),
+        script=str(WORKFLOW_ROOT / "scripts" / "05_composition" / "composition.R"),
         utils=UTILS_R
     output:
         scores=analysis("composition", "tables/cell_state_scores.tsv"),
@@ -208,7 +208,7 @@ rule contrast_regulators:
         contrasts=CONTRASTS,
         **_REGULATOR_INPUTS,
         config=str(CONFIG_PATH),
-        script=str(WORKFLOW_ROOT / "scripts" / "regulators.R"),
+        script=str(WORKFLOW_ROOT / "scripts" / "06_regulators" / "regulators.R"),
         utils=UTILS_R
     output:
         **_REGULATOR_OUTPUTS
@@ -226,7 +226,7 @@ rule contrast_networks:
         de=analysis("de", "tables/de_results.tsv"),
         fgsea=analysis("pathways", "tables/fgsea.tsv"),
         config=str(CONFIG_PATH),
-        script=str(WORKFLOW_ROOT / "scripts" / "networks.py")
+        script=str(WORKFLOW_ROOT / "scripts" / "07_networks" / "networks.py")
     output:
         NETWORK_PATTERNS
     log:
@@ -250,8 +250,8 @@ rule contrast_string_figures:
         down_edges=analysis("networks", "tables/string_down_edges.tsv"),
         contrasts=CONTRASTS,
         config=str(CONFIG_PATH),
-        script=str(WORKFLOW_ROOT / "scripts" / "string_figures.R"),
-        network_script=str(WORKFLOW_ROOT / "scripts" / "string_network.R"),
+        script=str(WORKFLOW_ROOT / "scripts" / "07_networks" / "string_figures.R"),
+        network_script=str(WORKFLOW_ROOT / "scripts" / "07_networks" / "string_network.R"),
         utils=UTILS_R
     output:
         STRING_FIGURE_PATTERNS
@@ -280,7 +280,7 @@ rule contrast_grn:
         de=analysis("de", "tables/de_results.tsv"),
         panels=str(PROJECT.hypothesis_panels) if PROJECT.hypothesis_panels else [],
         config=str(CONFIG_PATH),
-        script=str(WORKFLOW_ROOT / "scripts" / "grn.py")
+        script=str(WORKFLOW_ROOT / "scripts" / "06_regulators" / "grn.py")
     output:
         nodes=analysis("regulators", "tables/grn_nodes_displayed.tsv"),
         edges=analysis("regulators", "tables/grn_edges_displayed.tsv"),
@@ -311,7 +311,7 @@ rule contrast_grn_radial:
         separation=analysis("regulators", "tables/grn_program_separation_test.tsv"),
         contrasts=CONTRASTS,
         config=str(CONFIG_PATH),
-        script=str(WORKFLOW_ROOT / "scripts" / "grn_radial.R"),
+        script=str(WORKFLOW_ROOT / "scripts" / "06_regulators" / "grn_radial.R"),
         utils=UTILS_R
     output:
         radial_pdf=analysis("regulators", "figures/grn_radial.pdf"),
@@ -335,7 +335,7 @@ rule contrast_hypotheses:
         claims=str(PROJECT.hypotheses),
         panels=str(PROJECT.hypothesis_panels),
         config=str(CONFIG_PATH),
-        script=str(WORKFLOW_ROOT / "scripts" / "hypotheses.py")
+        script=str(WORKFLOW_ROOT / "scripts" / "09_synthesis" / "hypotheses.py")
     output:
         evidence=analysis("hypotheses", "tables/hypothesis_evidence.tsv"),
         summary_table=analysis("hypotheses", "tables/hypothesis_summary.tsv"),
