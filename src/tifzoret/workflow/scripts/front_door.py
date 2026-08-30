@@ -1,4 +1,15 @@
 #!/usr/bin/env python3
+# ┌─ TIFZORET STAGE ────────────────────────────────────────────────
+# │ STAGE:     10_figures / front_door.py
+# │ WHAT:      Review-facing artifact promotion (front_door/ populated)
+# │ WHY:       Copies reviewer-critical outputs to a flat, documented front_door/
+# │            directory; stable names + checksums make peer review easier
+# │ HOW:       Copies configured front_door artifacts; computes dimensions + checksums
+# │ INPUTS:    config (front_door.artifacts), source PDFs/PNGs from workflow
+# │ PRODUCES:  front_door/{flat_name}.{pdf,png} + front_door_manifest.json
+# │ CALLED BY: rule front_door_artifacts (workflow/rules/publication.smk)
+# │ ENV:       workflow/envs/core.yaml
+# └─────────────────────────────────────────────────────────────────
 """Promote review-facing artifacts and describe them with stable metadata."""
 
 from __future__ import annotations

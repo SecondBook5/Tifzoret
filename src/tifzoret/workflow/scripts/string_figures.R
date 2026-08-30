@@ -1,4 +1,15 @@
 #!/usr/bin/env Rscript
+# ┌─ TIFZORET STAGE ────────────────────────────────────────────────
+# │ STAGE:     07_networks / string_figures.R
+# │ WHAT:      STRING functional-enrichment bubble visualization
+# │ WHY:       Three-facet GO enrichment bubble (up / down / GSEA leading-edge);
+# │            shows which biological processes are enriched in the STRING subnetworks
+# │ HOW:       ggplot2 bubble chart on STRING GO enrichment tables; nonredundant term selection
+# │ INPUTS:    modules/networks/string/{up,down,leading_edge}_enrichment.tsv, contrasts.tsv
+# │ PRODUCES:  modules/string_enrichment/figures/string_enrichment_bubble.{pdf,png}
+# │ CALLED BY: rule contrast_string_figures (workflow/rules/modules.smk)
+# │ ENV:       workflow/envs/r.yaml
+# └─────────────────────────────────────────────────────────────────
 
 # Publication-grade STRING figures for the functional/regulatory network figure.
 # Consumes the directional STRING enrichment tables emitted by networks.py and

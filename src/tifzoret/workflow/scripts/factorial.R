@@ -1,4 +1,15 @@
 #!/usr/bin/env Rscript
+# ┌─ TIFZORET STAGE ────────────────────────────────────────────────
+# │ STAGE:     03_differential / factorial.R
+# │ WHAT:      Factorial interaction exploratory figures (2×2 designs)
+# │ WHY:       Makes interaction (difference-of-differences) legible: genes whose
+# │            response to one factor depends on the level of the other
+# │ HOW:       Three views: LFC_x vs LFC_y scatter, group-mean profiles, per-sample expression
+# │ INPUTS:    qc/vst_expression.tsv, samples.tsv, de/{effect_x, effect_y}_results.tsv, config
+# │ PRODUCES:  factorial/figures/{effect_vs_effect, interaction_profile, group_expression}.png
+# │ CALLED BY: rule study_factorial (workflow/rules/core.smk)
+# │ ENV:       workflow/envs/r.yaml
+# └─────────────────────────────────────────────────────────────────
 
 # factorial: three project-agnostic views that make a crossed factorial design's
 # INTERACTION legible, rather than reading it off a single pairwise contrast.

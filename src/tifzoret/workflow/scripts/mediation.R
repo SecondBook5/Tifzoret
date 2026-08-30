@@ -1,4 +1,15 @@
 #!/usr/bin/env Rscript
+# ┌─ TIFZORET STAGE ────────────────────────────────────────────────
+# │ STAGE:     08_causal / mediation.R
+# │ WHAT:      Causal mediation analysis (pathway scores as mediators)
+# │ WHY:       Tests whether a mediator pathway accounts for treatment effect on
+# │            outcome pathways; estimates ACME (indirect) and ADE (direct) effects
+# │ HOW:       mediation::mediate on treatment → mediator → outcome linear models
+# │ INPUTS:    modules/pathways/tables/gsva.tsv, samples.tsv, contrasts.tsv, config (mediator/outcome pathways)
+# │ PRODUCES:  advanced/mediation/tables/{mediation_inputs, mediation_results}.tsv + summary JSON
+# │ CALLED BY: rule contrast_mediation (workflow/rules/advanced.smk)
+# │ ENV:       workflow/envs/r.yaml
+# └─────────────────────────────────────────────────────────────────
 
 script_arg <- grep("^--file=", commandArgs(FALSE), value = TRUE)[1]
 script_path <- normalizePath(sub("^--file=", "", script_arg), mustWork = TRUE)

@@ -1,4 +1,15 @@
 #!/usr/bin/env Rscript
+# ┌─ TIFZORET STAGE ────────────────────────────────────────────────
+# │ STAGE:     10_figures / publication.R
+# │ WHAT:      Publication-grade figure panels (heatmaps, volcano, boxplots)
+# │ WHY:       Renders manuscript-ready figures with study-specific gene panels,
+# │            program annotations, and expected-direction validation
+# │ HOW:       Reads hypothesis_panels.yaml; generates annotated heatmaps + volcano + program boxplots
+# │ INPUTS:    qc/vst.rds, samples.tsv, annotation.tsv, contrasts.tsv, de/de_results.tsv, hypothesis_panels.yaml
+# │ PRODUCES:  publication/contrast_id/{panel_id}_{heatmap,volcano,boxplots}.{pdf,png}
+# │ CALLED BY: rule contrast_publication (workflow/rules/publication.smk)
+# │ ENV:       workflow/envs/r.yaml
+# └─────────────────────────────────────────────────────────────────
 
 script_arg <- grep("^--file=", commandArgs(FALSE), value = TRUE)[1]
 script_path <- normalizePath(sub("^--file=", "", script_arg), mustWork = TRUE)

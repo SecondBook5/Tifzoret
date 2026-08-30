@@ -1,4 +1,15 @@
 #!/usr/bin/env python3
+# ┌─ TIFZORET STAGE ────────────────────────────────────────────────
+# │ STAGE:     10_figures / assemble.py
+# │ WHAT:      Multi-panel figure assembly (PDF + PNG raster preview)
+# │ WHY:       Combines recipe-selected panel PDFs into publication figures with
+# │            grid layout, labels, and SHA-256 provenance
+# │ HOW:       pypdf grid assembly from figure_recipes.yaml; PIL raster preview
+# │ INPUTS:    config (figure_recipes.yaml), panel PDFs from publication/modules
+# │ PRODUCES:  figures/{recipe_id}.{pdf,png} + assembly_summary.json
+# │ CALLED BY: rule assemble_figure (workflow/rules/publication.smk)
+# │ ENV:       workflow/envs/core.yaml
+# └─────────────────────────────────────────────────────────────────
 """Assemble recipe-selected vector panels and a raster review image."""
 
 from __future__ import annotations

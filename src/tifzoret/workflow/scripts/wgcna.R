@@ -1,4 +1,15 @@
 #!/usr/bin/env Rscript
+# ┌─ TIFZORET STAGE ────────────────────────────────────────────────
+# │ STAGE:     07_networks / wgcna.R
+# │ WHAT:      Weighted gene co-expression network analysis
+# │ WHY:       Discovers co-expression modules (genes with correlated expression);
+# │            reveals functional organization and module-trait relationships
+# │ HOW:       WGCNA signed network (soft-threshold power) + blockwise modularity + trait correlation
+# │ INPUTS:    qc/vst.rds, samples.tsv, annotation.tsv, contrasts.tsv, config
+# │ PRODUCES:  advanced/wgcna/tables/{module_trait, membership, hubs, coexpression_edges+nodes}.tsv + figures
+# │ CALLED BY: rule contrast_wgcna (workflow/rules/advanced.smk)
+# │ ENV:       workflow/envs/r.yaml
+# └─────────────────────────────────────────────────────────────────
 
 script_arg <- grep("^--file=", commandArgs(FALSE), value = TRUE)[1]
 script_path <- normalizePath(sub("^--file=", "", script_arg), mustWork = TRUE)

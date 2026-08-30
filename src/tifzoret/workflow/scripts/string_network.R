@@ -1,4 +1,15 @@
 #!/usr/bin/env Rscript
+# ┌─ TIFZORET STAGE ────────────────────────────────────────────────
+# │ STAGE:     07_networks / string_network.R
+# │ WHAT:      STRING community network visualization (publication panel)
+# │ WHY:       Shows how top DE genes cluster into functional communities; igraph
+# │            Louvain communities reveal which genes work together as modules
+# │ HOW:       igraph Louvain (seeded) + Fruchterman-Reingold layout + ggforce hulls
+# │ INPUTS:    modules/networks/string/{nodes, edges}.tsv, contrasts.tsv, config (community curation)
+# │ PRODUCES:  modules/string_community/{up,down}/figures/string_network.{pdf,png}
+# │ CALLED BY: rule contrast_string_figures (workflow/rules/modules.smk)
+# │ ENV:       workflow/envs/r.yaml
+# └─────────────────────────────────────────────────────────────────
 
 # Publication-grade STRING community network (Figure 2, Panels B/C).
 #

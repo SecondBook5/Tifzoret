@@ -1,4 +1,15 @@
 #!/usr/bin/env python3
+# ┌─ TIFZORET STAGE ────────────────────────────────────────────────
+# │ STAGE:     10_figures / report.py
+# │ WHAT:      Self-contained offline HTML report builder
+# │ WHY:       Produces a single shareable REPORT.html with all figures/tables
+# │            embedded (base64 PNG + JSON); opens anywhere, no server needed
+# │ HOW:       Discovers analyses by directory convention; inlines CSS/JS/fonts; embeds data
+# │ INPUTS:    config, all result directories (auto-discovered), report_assets/
+# │ PRODUCES:  REPORT.html (fully offline, all assets inlined)
+# │ CALLED BY: rule report_html (workflow/rules/report.smk)
+# │ ENV:       workflow/envs/core.yaml
+# └─────────────────────────────────────────────────────────────────
 """Build the self-contained, offline HTML report for a run.
 
 The report is a single ``REPORT.html`` file with no network dependencies: the CSS

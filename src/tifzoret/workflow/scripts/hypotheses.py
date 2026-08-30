@@ -1,4 +1,15 @@
 #!/usr/bin/env python3
+# ┌─ TIFZORET STAGE ────────────────────────────────────────────────
+# │ STAGE:     09_synthesis / hypotheses.py
+# │ WHAT:      Hypothesis evaluation engine (claim → evidence → verdict)
+# │ WHY:       Tests configured biological claims (gene/pathway direction) against
+# │            workflow results; produces auditable pass/fail verdicts
+# │ HOW:       Reads hypotheses.yaml claims; queries DE/pathway tables; assigns support/refute/insufficient
+# │ INPUTS:    config (hypotheses.yaml), de/de_results.tsv, modules/pathways/{ora,gsea}.tsv
+# │ PRODUCES:  hypotheses/tables/{hypotheses_evaluated, claims_by_panel}.tsv + HTML report
+# │ CALLED BY: rule contrast_hypotheses (workflow/rules/modules.smk)
+# │ ENV:       workflow/envs/core.yaml
+# └─────────────────────────────────────────────────────────────────
 """Evaluate configured biological claims against auditable workflow evidence."""
 
 from __future__ import annotations

@@ -1,4 +1,15 @@
 #!/usr/bin/env Rscript
+# ┌─ TIFZORET STAGE ────────────────────────────────────────────────
+# │ STAGE:     02_qc / qc.R
+# │ WHAT:      Study-wide quality control and exploratory analysis
+# │ WHY:       Reveals batch effects, outliers, and baseline variance structure;
+# │            VST expression and PCA are inputs to downstream QC stages
+# │ HOW:       DESeq2 VST (blind), PCA, library metrics, correlation heatmap, figures
+# │ INPUTS:    inputs/{counts.tsv, samples.tsv, annotation.tsv}, config
+# │ PRODUCES:  qc/{objects/vst.rds, tables/vst_expression+pca+library_metrics.tsv, figures/}
+# │ CALLED BY: rule study_qc (workflow/rules/core.smk)
+# │ ENV:       workflow/envs/r.yaml
+# └─────────────────────────────────────────────────────────────────
 
 script_arg <- grep("^--file=", commandArgs(FALSE), value = TRUE)[1]
 script_path <- normalizePath(sub("^--file=", "", script_arg), mustWork = TRUE)

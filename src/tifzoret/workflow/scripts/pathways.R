@@ -1,4 +1,15 @@
 #!/usr/bin/env Rscript
+# ┌─ TIFZORET STAGE ────────────────────────────────────────────────
+# │ STAGE:     04_enrichment / pathways.R
+# │ WHAT:      Multi-method pathway enrichment (ORA, GSEA, GSVA, ssGSEA)
+# │ WHY:       Identifies which biological pathways/gene-sets are enriched in the
+# │            contrast; multi-method consensus increases robustness
+# │ HOW:       ORA (hypergeometric on DE genes), fgsea (ranked prerank), GSVA/ssGSEA (sample-level scores)
+# │ INPUTS:    de/tables/de_results.tsv, resources/gene_sets.gmt, VST expression, config
+# │ PRODUCES:  modules/pathways/tables/{ora, gsea, gsva, ssgsea}.tsv + bespoke figures
+# │ CALLED BY: rule contrast_pathways (workflow/rules/modules.smk)
+# │ ENV:       workflow/envs/r.yaml
+# └─────────────────────────────────────────────────────────────────
 
 script_arg <- grep("^--file=", commandArgs(FALSE), value = TRUE)[1]
 script_path <- normalizePath(sub("^--file=", "", script_arg), mustWork = TRUE)

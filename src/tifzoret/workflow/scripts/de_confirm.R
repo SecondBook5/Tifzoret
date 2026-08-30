@@ -1,4 +1,15 @@
 #!/usr/bin/env Rscript
+# ┌─ TIFZORET STAGE ────────────────────────────────────────────────
+# │ STAGE:     03_differential / de_confirm.R
+# │ WHAT:      Confirmatory differential expression (edgeR quasi-likelihood)
+# │ WHY:       Two independent NB engines (DESeq2 + edgeR) that agree on direction
+# │            and top hits increase confidence results are not method artefacts
+# │ HOW:       edgeR glmQLFit + glmQLFTest on same counts/design; concordance scatter
+# │ INPUTS:    inputs/{counts.tsv, samples.tsv, annotation.tsv}, contrasts.tsv, de/de_results.tsv
+# │ PRODUCES:  modules/de_confirm/{tables/edger_results+concordance.tsv, figures/concordance.png}
+# │ CALLED BY: rule contrast_de_confirm (workflow/rules/modules.smk)
+# │ ENV:       workflow/envs/r.yaml
+# └─────────────────────────────────────────────────────────────────
 
 # Confirmatory second differential-expression engine: edgeR quasi-likelihood
 # (glmQLFit + glmQLFTest) run on the SAME counts, design, and contrast that

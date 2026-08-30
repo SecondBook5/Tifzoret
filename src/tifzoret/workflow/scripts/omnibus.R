@@ -1,4 +1,15 @@
 #!/usr/bin/env Rscript
+# ┌─ TIFZORET STAGE ────────────────────────────────────────────────
+# │ STAGE:     03_differential / omnibus.R
+# │ WHAT:      Omnibus differential expression (multi-level factor LRT)
+# │ WHY:       Asks whether a gene differs across ANY level of a factor (>2 levels);
+# │            no pairwise direction, but identifies genes the factor affects overall
+# │ HOW:       DESeq2 likelihood-ratio test (full design vs reduced that drops the factor)
+# │ INPUTS:    inputs/{counts.tsv, samples.tsv, annotation.tsv, contrasts.tsv}, config
+# │ PRODUCES:  de/tables/omnibus_results.tsv (LRT statistic, p-value, no LFC)
+# │ CALLED BY: rule contrast_omnibus (workflow/rules/core.smk)
+# │ ENV:       workflow/envs/r.yaml
+# └─────────────────────────────────────────────────────────────────
 
 # Omnibus (analysis-of-deviance) differential expression for a factor with >2
 # levels. Unlike the signed pairwise/coefficient DE in de.R, an omnibus contrast

@@ -1,4 +1,15 @@
 #!/usr/bin/env Rscript
+# ┌─ TIFZORET STAGE ────────────────────────────────────────────────
+# │ STAGE:     02_qc / batch.R
+# │ WHAT:      Batch-corrected ordination and sample-distance views
+# │ WHY:       Reveals whether nominal batch drives clustering; diagnostic for
+# │            DE design decisions (corrected matrix is display-only, not fed to DE)
+# │ HOW:       limma::removeBatchEffect (retaining biological group design), PCA before/after
+# │ INPUTS:    qc/objects/vst.rds, samples.tsv, config (analysis.batch, figures.group)
+# │ PRODUCES:  batch/{figures/pca+heatmap, tables/batch_corrected_expression.tsv}
+# │ CALLED BY: rule study_batch (workflow/rules/core.smk)
+# │ ENV:       workflow/envs/r.yaml
+# └─────────────────────────────────────────────────────────────────
 
 # Batch-corrected ordination views. QC (qc.R) draws the PCA and sample-distance
 # heatmap on the raw variance-stabilized expression; when a study carries a known

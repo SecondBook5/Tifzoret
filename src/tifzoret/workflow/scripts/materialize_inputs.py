@@ -1,4 +1,16 @@
 #!/usr/bin/env python3
+# ┌─ TIFZORET STAGE ────────────────────────────────────────────────
+# │ STAGE:     01_inputs / materialize_inputs.py
+# │ WHAT:      Materialize external sources into canonical input tables
+# │ WHY:       Transforms heterogeneous upstream data (featureCounts, Salmon, nf-core,
+# │            GEO, archives) into a uniform contract the pipeline can consume
+# │ HOW:       Source detection, normalization, abundance-to-counts conversion (tximport),
+# │            BAM archive extraction, optional companion-config inlining
+# │ INPUTS:    study sources (counts/quant/BAMs), samples.yaml, contrasts.yaml, config
+# │ PRODUCES:  inputs/{counts.tsv, samples.tsv, annotation.tsv, contrasts.tsv, manifest.json}
+# │ CALLED BY: rule materialize_inputs (workflow/rules/core.smk)
+# │ ENV:       workflow/envs/core.yaml
+# └─────────────────────────────────────────────────────────────────
 """Materialize supported sources into Tifzoret's canonical input contract."""
 
 from __future__ import annotations

@@ -1,4 +1,15 @@
 #!/usr/bin/env python3
+# ┌─ TIFZORET STAGE ────────────────────────────────────────────────
+# │ STAGE:     04_enrichment / enrichment_map.py
+# │ WHAT:      Enrichment-similarity network (redundancy reduction)
+# │ WHY:       Clusters enriched terms by shared leading-edge genes; reveals which
+# │            dozens of significant terms represent the same biological program
+# │ HOW:       Network of enriched terms (nodes) + Jaccard edges (≥min_similarity); greedy modularity communities
+# │ INPUTS:    modules/pathways/tables/{gsea, ora}.tsv, config (figures.de.fdr)
+# │ PRODUCES:  modules/enrichment_map/tables/{nodes, edges, clusters}.tsv + network figure
+# │ CALLED BY: rule contrast_enrichment_map (workflow/rules/modules.smk)
+# │ ENV:       workflow/envs/network.yaml
+# └─────────────────────────────────────────────────────────────────
 """Enrichment-similarity map: cluster enriched terms by the genes they share.
 
 A per-contrast pathway analysis emits dozens of significant terms, many of which

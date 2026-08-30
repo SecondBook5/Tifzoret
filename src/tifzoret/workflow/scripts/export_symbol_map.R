@@ -1,4 +1,15 @@
 #!/usr/bin/env Rscript
+# ┌─ TIFZORET STAGE ────────────────────────────────────────────────
+# │ STAGE:     01_inputs / export_symbol_map.R
+# │ WHAT:      Generate a frozen gene ID → symbol TSV from annotation contract
+# │ WHY:       Provides a consistent symbol lookup for materialize_inputs.py when
+# │            annotation.tsv is unavailable at ingestion time
+# │ HOW:       Reads annotation.tsv, drops NA/blank symbols, writes gene_id → gene_symbol
+# │ INPUTS:    annotation.tsv (from prior run or external source)
+# │ PRODUCES:  symbol_map.tsv (gene_id, gene_symbol)
+# │ CALLED BY: manual helper — not a Snakemake rule (see materialize_inputs.py::_load_symbol_map)
+# │ ENV:       workflow/envs/r.yaml
+# └─────────────────────────────────────────────────────────────────
 
 # Offline, author-run helper -- NOT a pipeline stage.
 #

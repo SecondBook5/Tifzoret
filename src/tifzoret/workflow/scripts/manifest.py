@@ -1,4 +1,15 @@
 #!/usr/bin/env python3
+# ┌─ TIFZORET STAGE ────────────────────────────────────────────────
+# │ STAGE:     10_figures / manifest.py
+# │ WHAT:      Release manifest with SHA-256 checksums
+# │ WHY:       Provides auditable provenance for all workflow outputs; checksums
+# │            verify integrity, metadata documents environment and inputs
+# │ HOW:       Walks result directory tree; computes SHA-256 per file; records platform/git/env
+# │ INPUTS:    config, all workflow outputs (auto-discovered), input manifest
+# │ PRODUCES:  manifest.json (checksummed file tree + provenance metadata)
+# │ CALLED BY: rule release_manifest (workflow/rules/report.smk)
+# │ ENV:       workflow/envs/core.yaml
+# └─────────────────────────────────────────────────────────────────
 """Write a checksummed, auditable release manifest for one completed run."""
 
 from __future__ import annotations

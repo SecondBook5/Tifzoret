@@ -1,4 +1,16 @@
 #!/usr/bin/env Rscript
+# ┌─ TIFZORET STAGE ────────────────────────────────────────────────
+# │ STAGE:     03_differential / de.R
+# │ WHAT:      Primary differential expression per contrast (DESeq2 ~condition)
+# │ WHY:       Identifies genes whose expression differs between conditions;
+# │            the signed log2 fold change and FDR are the study's core result
+# │ HOW:       DESeq2 negative-binomial GLM + Wald test; optional LFC shrinkage
+# │            (ashr/normal/none); direction resolved via shared resolve_contrast()
+# │ INPUTS:    inputs/{counts.tsv, samples.tsv, contrasts.tsv, annotation.tsv}
+# │ PRODUCES:  de/tables/de_results.tsv, de/objects/deseq2.rds, volcano/MA figures
+# │ CALLED BY: rule contrast_de (workflow/rules/core.smk)
+# │ ENV:       workflow/envs/r.yaml
+# └─────────────────────────────────────────────────────────────────
 
 script_arg <- grep("^--file=", commandArgs(FALSE), value = TRUE)[1]
 script_path <- normalizePath(sub("^--file=", "", script_arg), mustWork = TRUE)

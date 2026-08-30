@@ -1,4 +1,16 @@
 #!/usr/bin/env python3
+# ┌─ TIFZORET STAGE ────────────────────────────────────────────────
+# │ STAGE:     07_networks / curvature.py
+# │ WHAT:      Ollivier-Ricci curvature of the WGCNA co-expression graph
+# │ WHY:       +curvature marks redundant, robust neighbourhoods; −curvature
+# │            marks bottleneck "bridge" edges joining otherwise separate regions
+# │ HOW:       kappa(x,y)=1-W1(m_x,m_y)/d(x,y); exact earth-mover LP over
+# │            lazy-random-walk measures on the signed co-expression adjacency
+# │ INPUTS:    advanced/wgcna/{coexpression_edges.tsv, coexpression_nodes.tsv}
+# │ PRODUCES:  advanced/curvature/edge_curvature.tsv (+ gene/module tables, figure)
+# │ CALLED BY: rule contrast_curvature (workflow/rules/advanced.smk)
+# │ ENV:       workflow/envs/network.yaml
+# └─────────────────────────────────────────────────────────────────
 """Ollivier-Ricci curvature of the WGCNA co-expression graph (opt-in, exploratory).
 
 For every edge (x, y) of the sparsified co-expression graph that wgcna.R exports,

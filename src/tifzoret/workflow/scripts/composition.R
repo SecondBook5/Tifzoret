@@ -1,4 +1,15 @@
 #!/usr/bin/env Rscript
+# ┌─ TIFZORET STAGE ────────────────────────────────────────────────
+# │ STAGE:     05_composition / composition.R
+# │ WHAT:      Cell-state signature enrichment (ssGSEA) per sample
+# │ WHY:       Quantifies cell-state/marker enrichment as sample-level scores; tests
+# │            whether signatures differ between conditions (differential composition)
+# │ HOW:       GSVA::ssgsea on user-defined gene lists; limma contrast test on scores
+# │ INPUTS:    qc/vst.rds, samples.tsv, annotation.tsv, contrasts.tsv, signatures.yaml
+# │ PRODUCES:  modules/composition/tables/{scores, differential}.tsv + signature heatmap
+# │ CALLED BY: rule contrast_composition (workflow/rules/modules.smk)
+# │ ENV:       workflow/envs/r.yaml
+# └─────────────────────────────────────────────────────────────────
 
 script_arg <- grep("^--file=", commandArgs(FALSE), value = TRUE)[1]
 script_path <- normalizePath(sub("^--file=", "", script_arg), mustWork = TRUE)

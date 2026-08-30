@@ -1,4 +1,15 @@
 #!/usr/bin/env Rscript
+# ┌─ TIFZORET STAGE ────────────────────────────────────────────────
+# │ STAGE:     06_regulators / regulators.R
+# │ WHAT:      Transcription-factor activity inference (VIPER / decoupleR)
+# │ WHY:       Infers TF activity from target-gene expression and signed prior networks;
+# │            identifies which regulators drive the observed transcriptional changes
+# │ HOW:       viper::viper (aREA scale method) on VST expression + regulon priors; limma contrast test on activities
+# │ INPUTS:    qc/vst.rds, samples.tsv, annotation.tsv, contrasts.tsv, regulon priors (resources)
+# │ PRODUCES:  modules/regulators/tables/{scores, differential}.tsv + regulator figures
+# │ CALLED BY: rule contrast_regulators (workflow/rules/modules.smk)
+# │ ENV:       workflow/envs/r.yaml
+# └─────────────────────────────────────────────────────────────────
 
 script_arg <- grep("^--file=", commandArgs(FALSE), value = TRUE)[1]
 script_path <- normalizePath(sub("^--file=", "", script_arg), mustWork = TRUE)

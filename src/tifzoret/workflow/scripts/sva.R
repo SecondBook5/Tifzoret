@@ -1,4 +1,15 @@
 #!/usr/bin/env Rscript
+# ┌─ TIFZORET STAGE ────────────────────────────────────────────────
+# │ STAGE:     02_qc / sva.R
+# │ WHAT:      Surrogate variable analysis (latent technical confounders)
+# │ WHY:       Estimates hidden batch effects; compares DE with/without SVA adjustment
+# │            to quantify sensitivity (exploratory, per-contrast, opt-in)
+# │ HOW:       sva::sva on VST expression; refit DESeq2 design augmented with SVs
+# │ INPUTS:    de/objects/deseq2.rds, qc/objects/vst.rds, contrasts.tsv, config
+# │ PRODUCES:  advanced/sva/{surrogate_variables.tsv, sva_de_sensitivity.tsv}
+# │ CALLED BY: rule contrast_sva (workflow/rules/advanced.smk)
+# │ ENV:       workflow/envs/r.yaml
+# └─────────────────────────────────────────────────────────────────
 
 script_arg <- grep("^--file=", commandArgs(FALSE), value = TRUE)[1]
 script_path <- normalizePath(sub("^--file=", "", script_arg), mustWork = TRUE)

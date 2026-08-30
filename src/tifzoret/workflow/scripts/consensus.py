@@ -1,4 +1,15 @@
 #!/usr/bin/env python3
+# ┌─ TIFZORET STAGE ────────────────────────────────────────────────
+# │ STAGE:     09_synthesis / consensus.py
+# │ WHAT:      Cross-contrast consensus (reproducibly regulated genes)
+# │ WHY:       Identifies genes regulated the same way across multiple contrasts;
+# │            reveals which biological programs are reproducible vs context-specific
+# │ HOW:       Reads all pairwise DE tables; counts per-gene significant contrasts + sign agreement
+# │ INPUTS:    de/tables/de_results.tsv (all pairwise contrasts), config
+# │ PRODUCES:  comparison/tables/{consensus_membership, consensus_genes, contrast_overlap}.tsv + UpSet figure
+# │ CALLED BY: rule study_consensus (workflow/rules/core.smk)
+# │ ENV:       workflow/envs/network.yaml
+# └─────────────────────────────────────────────────────────────────
 """Cross-contrast consensus: which genes move the same way across contrasts.
 
 A study with two or more pairwise contrasts (e.g. drug-vs-vehicle in several

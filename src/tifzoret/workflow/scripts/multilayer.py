@@ -1,4 +1,15 @@
 #!/usr/bin/env python3
+# ┌─ TIFZORET STAGE ────────────────────────────────────────────────
+# │ STAGE:     07_networks / multilayer.py
+# │ WHAT:      Multi-layer network triangulation (GRN + WGCNA + STRING)
+# │ WHY:       Identifies genes supported by multiple independent evidence types;
+# │            triangulation across regulatory/co-expression/PPI increases confidence
+# │ HOW:       Intersects nodes/edges across layers; reports 2-layer and 3-layer overlap
+# │ INPUTS:    modules/{grn, networks}/tables/{nodes,edges}.tsv, advanced/wgcna/coexpression_{nodes,edges}.tsv
+# │ PRODUCES:  advanced/multilayer/tables/{multilayer_nodes, multilayer_edges, layer_summary}.tsv + Venn
+# │ CALLED BY: rule contrast_multilayer (workflow/rules/advanced.smk)
+# │ ENV:       workflow/envs/network.yaml
+# └─────────────────────────────────────────────────────────────────
 """Triangulate regulatory, co-expression, and STRING association layers."""
 
 from __future__ import annotations

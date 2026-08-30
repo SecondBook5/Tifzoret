@@ -1,4 +1,15 @@
 #!/usr/bin/env python3
+# ┌─ TIFZORET STAGE ────────────────────────────────────────────────
+# │ STAGE:     06_regulators / grn.py
+# │ WHAT:      Gene regulatory network data layer (program-aware regulon subgraph)
+# │ WHY:       Selects top differential TFs + their top DE targets; assigns nodes to
+# │            transcriptional programs via anchored diffusion for sectored radial view
+# │ HOW:       Personalized PageRank from program anchors over likelihood-weighted GRN; overlap test
+# │ INPUTS:    modules/regulators/differential.tsv, de/de_results.tsv, regulon edges, config
+# │ PRODUCES:  modules/grn/tables/{nodes, edges, sectors, separation}.tsv + auditable matplotlib figure
+# │ CALLED BY: rule contrast_grn (workflow/rules/modules.smk)
+# │ ENV:       workflow/envs/network.yaml
+# └─────────────────────────────────────────────────────────────────
 """Create auditable program-aware regulon views (DoRothEA GRN, Figure 2 Panel E).
 
 DATA layer of the GRN render-seam. This selects the displayed regulator-target

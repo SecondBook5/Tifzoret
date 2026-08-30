@@ -1,4 +1,15 @@
 #!/usr/bin/env python3
+# ┌─ TIFZORET STAGE ────────────────────────────────────────────────
+# │ STAGE:     08_causal / power.py
+# │ WHAT:      Mediation power analysis (sample-size requirements)
+# │ WHY:       Estimates per-group N needed for 80% power on mediator and outcome
+# │            components from observed standardized effects
+# │ HOW:       Normal-approximation planning estimate (Z_α/2 + Z_β)² / effect²
+# │ INPUTS:    advanced/mediation/tables/mediation_inputs.tsv
+# │ PRODUCES:  advanced/mediation_power/tables/mediation_power.tsv + summary JSON
+# │ CALLED BY: rule contrast_mediation_power (workflow/rules/advanced.smk)
+# │ ENV:       workflow/envs/core.yaml
+# └─────────────────────────────────────────────────────────────────
 """Approximate mediation-component power requirements from observed scores."""
 from __future__ import annotations
 import argparse,csv,json,math

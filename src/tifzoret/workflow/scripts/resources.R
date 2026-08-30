@@ -1,4 +1,16 @@
 #!/usr/bin/env Rscript
+# ┌─ TIFZORET STAGE ────────────────────────────────────────────────
+# │ STAGE:     01_inputs / resources.R
+# │ WHAT:      Fetch and cache gene sets from external knowledge bases
+# │ WHY:       Provides pathway/ontology/regulon annotations for enrichment tests;
+# │            cached to avoid redundant API calls and ensure reproducibility
+# │ HOW:       Queries GO (AnnotationDbi), KEGG, MSigDB, CollecTRI, PROGENy, GTRD
+# │            per config; merges with custom GMT; writes GMT + TSV + receipt
+# │ INPUTS:    config (species, providers, custom.gmt)
+# │ PRODUCES:  resources/{gene_sets.gmt, gene_sets.tsv, receipt.json}
+# │ CALLED BY: rule resolve_resources (workflow/rules/providers.smk)
+# │ ENV:       workflow/envs/r.yaml
+# └─────────────────────────────────────────────────────────────────
 
 script_arg <- grep("^--file=", commandArgs(FALSE), value = TRUE)[1]
 script_path <- normalizePath(sub("^--file=", "", script_arg), mustWork = TRUE)

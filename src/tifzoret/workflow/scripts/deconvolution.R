@@ -1,4 +1,15 @@
 #!/usr/bin/env Rscript
+# ┌─ TIFZORET STAGE ────────────────────────────────────────────────
+# │ STAGE:     05_composition / deconvolution.R
+# │ WHAT:      Signature-matrix cell-fraction deconvolution (NNLS)
+# │ WHY:       Estimates each bulk sample's cell-type composition from a reference
+# │            signature matrix; reveals shifts in cellular makeup
+# │ HOW:       Non-negative least-squares (NNLS) on CPM expression vs signature matrix
+# │ INPUTS:    inputs/{counts.tsv, samples.tsv, annotation.tsv}, signature matrix TSV
+# │ PRODUCES:  deconvolution/tables/{fractions, reconstruction}.tsv + composition figures
+# │ CALLED BY: rule study_deconvolution (workflow/rules/core.smk)
+# │ ENV:       workflow/envs/r.yaml
+# └─────────────────────────────────────────────────────────────────
 
 # Signature-matrix cell-fraction deconvolution. Given a user-supplied signature
 # matrix (genes x reference cell types, resources.deconvolution_signature),

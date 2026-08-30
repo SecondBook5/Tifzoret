@@ -1,4 +1,15 @@
 #!/usr/bin/env Rscript
+# ┌─ TIFZORET STAGE ────────────────────────────────────────────────
+# │ STAGE:     04_enrichment / spia.R
+# │ WHAT:      Topology-aware pathway perturbation (SPIA)
+# │ WHY:       Beyond enrichment: propagates DE fold-changes through KEGG reaction
+# │            graphs to infer whether pathways are activated/inhibited
+# │ HOW:       SPIA combines over-representation (pNDE) + topology perturbation (pPERT) → global pG
+# │ INPUTS:    de/tables/de_results.tsv, config (requires KEGG provider), contrast_id
+# │ PRODUCES:  modules/spia/tables/spia_pathways.tsv + pathway-perturbation figure
+# │ CALLED BY: rule contrast_spia (workflow/rules/modules.smk)
+# │ ENV:       workflow/envs/r.yaml
+# └─────────────────────────────────────────────────────────────────
 
 # SPIA: Signaling Pathway Impact Analysis. Over-representation (fgsea/ORA) asks
 # "are the DE genes enriched in this pathway's member list?"; SPIA additionally

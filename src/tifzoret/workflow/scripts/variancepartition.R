@@ -1,4 +1,15 @@
 #!/usr/bin/env Rscript
+# ┌─ TIFZORET STAGE ────────────────────────────────────────────────
+# │ STAGE:     02_qc / variancepartition.R
+# │ WHAT:      Variance decomposition across design covariates
+# │ WHY:       Quantifies how much of each gene's expression variance is explained
+# │            by condition, batch, sex, etc. vs. residual; guides design choices
+# │ HOW:       variancePartition on VST expression (categorical → random effects, continuous → fixed)
+# │ INPUTS:    qc/objects/vst.rds, samples.tsv, config (analysis.settings.variance_partition)
+# │ PRODUCES:  qc/{tables/variance_fractions.tsv, figures/variance_partition.png}
+# │ CALLED BY: rule study_variance_partition (workflow/rules/core.smk)
+# │ ENV:       workflow/envs/r.yaml
+# └─────────────────────────────────────────────────────────────────
 
 # variancePartition: how much of each gene's expression variance is attributable
 # to each design covariate. QC (qc.R) shows how samples cluster; this module

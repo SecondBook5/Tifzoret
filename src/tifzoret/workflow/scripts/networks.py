@@ -1,4 +1,15 @@
 #!/usr/bin/env python3
+# ┌─ TIFZORET STAGE ────────────────────────────────────────────────
+# │ STAGE:     07_networks / networks.py
+# │ WHAT:      STRING protein-protein interaction network fetch + audit
+# │ WHY:       Provides physical/functional interaction context for DE genes;
+# │            reproducible API queries with SHA-256 provenance and cache
+# │ HOW:       STRING API batch queries on DE genes; cache by species+genes+score hash
+# │ INPUTS:    de/tables/de_results.tsv, config (species, STRING score threshold)
+# │ PRODUCES:  modules/networks/string/{edges, nodes, receipt}.tsv + network figure
+# │ CALLED BY: rule contrast_networks (workflow/rules/modules.smk)
+# │ ENV:       workflow/envs/network.yaml
+# └─────────────────────────────────────────────────────────────────
 """Fetch, audit, analyze, and render contrast-specific STRING networks."""
 
 from __future__ import annotations

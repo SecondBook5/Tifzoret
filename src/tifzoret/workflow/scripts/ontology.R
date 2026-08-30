@@ -1,4 +1,15 @@
 #!/usr/bin/env Rscript
+# ┌─ TIFZORET STAGE ────────────────────────────────────────────────
+# │ STAGE:     04_enrichment / ontology.R
+# │ WHAT:      Ontology-specific views (GO, KEGG, Reactome ORA results)
+# │ WHY:       Structured term interpretation with a bespoke GO-BP lollipop figure;
+# │            separates ontology classes for domain-specific enrichment review
+# │ HOW:       Filters ORA table by provider, adds domain labels, renders GO-BP top hits
+# │ INPUTS:    modules/pathways/tables/ora.tsv, resources/gene_sets.tsv, config
+# │ PRODUCES:  modules/ontology/tables/ontology.tsv + GO-BP lollipop figure
+# │ CALLED BY: rule contrast_ontology (workflow/rules/modules.smk)
+# │ ENV:       workflow/envs/r.yaml
+# └─────────────────────────────────────────────────────────────────
 
 script_arg <- grep("^--file=", commandArgs(FALSE), value = TRUE)[1]
 script_path <- normalizePath(sub("^--file=", "", script_arg), mustWork = TRUE)
