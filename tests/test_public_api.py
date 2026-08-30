@@ -38,3 +38,12 @@ def test_submodule_import_forms_still_resolve():
     from tifzoret import figures as figs
     assert cfg.load_project is not None
     assert figs.resolve_panel is not None
+
+
+def test_top_level_namespace():
+    import tifzoret as tfz
+    for name in (
+        "load_project", "ProjectValidationError", "validation_report", "ResolvedProject",
+        "resolve_panel", "PANEL_REGISTRY", "build_gallery", "normalized_gene_panels",
+    ):
+        assert hasattr(tfz, name), f"tifzoret.{name} missing from top-level namespace"
