@@ -2,7 +2,7 @@ rule resolve_resources:
     input:
         custom_gmt=CUSTOM_GMT,
         config=str(CONFIG_PATH),
-        script=str(WORKFLOW_ROOT / "scripts" / "resources.R"),
+        script=str(WORKFLOW_ROOT / "scripts" / "01_inputs" / "resources.R"),
         utils=UTILS_R
     output:
         gmt=GMT,

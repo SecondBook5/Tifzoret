@@ -114,7 +114,7 @@ def test_gallery_and_assembly_stage_auditable_panel_artifacts(tmp_path):
     assembled = project.result_root / "publication" / "primary"
     command = [
         sys.executable,
-        str(ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "assemble.py"),
+        str(ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "10_figures" / "assemble.py"),
         "--project-config", str(project_path),
         "--results", str(project.result_root),
         "--figure-set", "primary",

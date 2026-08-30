@@ -2,7 +2,7 @@ rule report_html:
     input:
         artifacts=REPORT_INPUTS,
         config=str(CONFIG_PATH),
-        script=str(WORKFLOW_ROOT / "scripts" / "report.py")
+        script=str(WORKFLOW_ROOT / "scripts" / "10_figures" / "report.py")
     output:
         REPORT
     log:
@@ -17,7 +17,7 @@ rule release_manifest:
     input:
         artifacts=FINAL_OUTPUTS,
         config=str(CONFIG_PATH),
-        script=str(WORKFLOW_ROOT / "scripts" / "manifest.py")
+        script=str(WORKFLOW_ROOT / "scripts" / "10_figures" / "manifest.py")
     output:
         str(RESULTS / "manifest.json")
     log:

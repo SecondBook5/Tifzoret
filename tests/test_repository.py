@@ -100,5 +100,7 @@ def test_r_scripts_parse():
     # Full execution is covered by the synthetic acceptance workflow. This test
     # ensures every shipped R entry point remains present for that check.
     scripts = ROOT / "src" / "tifzoret" / "workflow" / "scripts"
-    for name in ("utils.R", "qc.R", "de.R", "pathways.R"):
-        assert (scripts / name).is_file()
+    assert (scripts / "utils.R").is_file()
+    assert (scripts / "02_qc" / "qc.R").is_file()
+    assert (scripts / "03_differential" / "de.R").is_file()
+    assert (scripts / "04_enrichment" / "pathways.R").is_file()

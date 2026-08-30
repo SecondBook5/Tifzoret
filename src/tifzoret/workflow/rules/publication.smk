@@ -7,7 +7,7 @@ rule contrast_publication:
         contrasts=CONTRASTS,
         panels=str(PROJECT.hypothesis_panels),
         config=str(CONFIG_PATH),
-        script=str(WORKFLOW_ROOT / "scripts" / "publication.R"),
+        script=str(WORKFLOW_ROOT / "scripts" / "10_figures" / "publication.R"),
         utils=UTILS_R
     output:
         PUBLICATION_PATTERNS
@@ -36,7 +36,7 @@ rule assemble_figure:
     conda:
         CORE_ENV
     shell:
-        "python {WORKFLOW_ROOT}/scripts/assemble.py --project-config {input.config:q} "
+        "python {WORKFLOW_ROOT}/scripts/10_figures/assemble.py --project-config {input.config:q} "
         "--results {RESULTS:q} --figure-set {wildcards.figure_set:q} "
         "--pdf {output.pdf:q} --png {output.png:q} --metadata {output.metadata:q} "
         "--panel-index {output.panel_index:q} > {log:q} 2>&1"
@@ -49,7 +49,7 @@ rule front_door_artifacts:
     input:
         artifacts=ANALYSIS_OUTPUTS,
         config=str(CONFIG_PATH),
-        script=str(WORKFLOW_ROOT / "scripts" / "front_door.py")
+        script=str(WORKFLOW_ROOT / "scripts" / "10_figures" / "front_door.py")
     output:
         figures=str(RESULTS / "figures" / "index.json"),
         tables=str(RESULTS / "tables" / "index.json")

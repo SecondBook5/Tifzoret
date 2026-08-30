@@ -39,8 +39,8 @@ tifzoret = [
   "workflow/rules/*.smk",
   "workflow/envs/*.yaml",
   "workflow/envs/locks/*",
-  "workflow/scripts/*.R",
-  "workflow/scripts/*.py",
+  "workflow/scripts/**/*.R",
+  "workflow/scripts/**/*.py",
 ]
 
 [tool.pytest.ini_options]

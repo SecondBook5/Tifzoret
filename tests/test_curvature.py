@@ -16,7 +16,7 @@ pytest.importorskip("scipy")
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "curvature.py"
+SCRIPT = ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "07_networks" / "curvature.py"
 PROJECT = ROOT / "src" / "tifzoret" / "templates" / "minimal" / "project.yaml"
 
 

@@ -17,7 +17,7 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "report.py"
+SCRIPT = ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "10_figures" / "report.py"
 
 
 def _load_module():
