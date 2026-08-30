@@ -2,9 +2,9 @@
 # ┌─ TIFZORET STAGE ────────────────────────────────────────────────
 # │ STAGE:     04_enrichment / ontology.R
 # │ WHAT:      Ontology-specific views (GO, KEGG, Reactome ORA results)
-# │ WHY:       Structured term interpretation with a bespoke GO-BP lollipop figure;
-# │            separates ontology classes for domain-specific enrichment review
-# │ HOW:       Filters ORA table by provider, adds domain labels, renders GO-BP top hits
+# │ WHY:       Reveals which biological processes, pathways, and cellular components
+# │            are over-represented among the regulated genes (GO, KEGG, Reactome)
+# │ HOW:       Filters ORA table by provider, adds domain labels (BP/CC/MF), renders GO-BP top hits
 # │ INPUTS:    modules/pathways/tables/ora.tsv, resources/gene_sets.tsv, config
 # │ PRODUCES:  modules/ontology/tables/ontology.tsv + GO-BP lollipop figure
 # │ CALLED BY: rule contrast_ontology (workflow/rules/modules.smk)

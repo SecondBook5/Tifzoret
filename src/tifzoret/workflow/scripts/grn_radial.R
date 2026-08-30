@@ -2,9 +2,9 @@
 # ┌─ TIFZORET STAGE ────────────────────────────────────────────────
 # │ STAGE:     06_regulators / grn_radial.R
 # │ WHAT:      Gene regulatory network figure layer (publication radial panel)
-# │ WHY:       Renders the polished publication regulon map: outer ring targets,
-# │            inner ring regulators, program sectors, signed bezier edges
-# │ HOW:       ggforce bezier edges + ggrepel labels on grn.py node/edge tables
+# │ WHY:       Shows which regulators drive the contrast's expression programs and
+# │            whether each regulator→target relationship is activating or repressing
+# │ HOW:       ggforce bezier edges (signed by mode of regulation) + ggrepel labels; outer ring targets, inner ring regulators, program sectors
 # │ INPUTS:    modules/grn/tables/{nodes, edges, sectors, separation}.tsv, contrasts.tsv, config
 # │ PRODUCES:  modules/grn_radial/figures/grn_radial.{pdf,png}
 # │ CALLED BY: rule contrast_grn_radial (workflow/rules/modules.smk)

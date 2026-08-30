@@ -2,9 +2,9 @@
 # ┌─ TIFZORET STAGE ────────────────────────────────────────────────
 # │ STAGE:     07_networks / string_figures.R
 # │ WHAT:      STRING functional-enrichment bubble visualization
-# │ WHY:       Three-facet GO enrichment bubble (up / down / GSEA leading-edge);
-# │            shows which biological processes are enriched in the STRING subnetworks
-# │ HOW:       ggplot2 bubble chart on STRING GO enrichment tables; nonredundant term selection
+# │ WHY:       Shows which biological processes are enriched in the STRING subnetworks
+# │            (up-regulated, down-regulated, and GSEA leading-edge gene sets)
+# │ HOW:       Three-facet ggplot2 bubble chart on STRING GO enrichment tables; nonredundant term selection
 # │ INPUTS:    modules/networks/string/{up,down,leading_edge}_enrichment.tsv, contrasts.tsv
 # │ PRODUCES:  modules/string_enrichment/figures/string_enrichment_bubble.{pdf,png}
 # │ CALLED BY: rule contrast_string_figures (workflow/rules/modules.smk)
