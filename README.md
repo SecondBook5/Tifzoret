@@ -130,8 +130,8 @@ For developers extending the engine:
 tifzoret/
 ├── src/tifzoret/            # Python package
 │   ├── cli.py               # `tifzoret` command entrypoint
-│   ├── config.py            # project.yaml load + schema validation
-│   ├── figures.py           # figure-constructor registry and catalog
+│   ├── config/              # project.yaml load + schema validation (package)
+│   ├── figures/             # figure-constructor registry and catalog (package)
 │   ├── collection.py        # cross-project collection / meta-analysis
 │   ├── verification.py      # `tifzoret verify` golden-reference comparison
 │   ├── schemas/             # JSON/YAML schemas for project.yaml + companions
