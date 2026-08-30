@@ -66,7 +66,8 @@ exploratory advanced modules. ⬜ input, resource, and provenance rules run in
 every profile. Dashed/conditional rules (`study_batch`, `contrast_de_confirm`,
 `contrast_omnibus`, `contrast_spia`, deconvolution) activate only when their
 trigger data or flags are present. Full stage-by-stage detail is in
-[architecture.md](docs/architecture.md).
+[architecture.md](docs/architecture.md); the ordered stage index with scientific
+motivation for each of the 35 scripts is in [engine-map.md](docs/engine-map.md).
 
 ## Install and start
 

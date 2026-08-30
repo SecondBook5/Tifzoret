@@ -11,6 +11,9 @@ needed.
 | Document | Read it for |
 |----------|-------------|
 | [authoring-a-study.md](authoring-a-study.md) | **Start here** — how to write the config that defines a study and spin up a new paper repo. |
+| [engine-map.md](engine-map.md) | The ordered stage index — entry point through all 35 stages, organized by phase. |
+| [walkthrough.md](walkthrough.md) | A single narrated trace of one run from `tifzoret run` to `manifest.json`. |
+| [using-the-engine.md](using-the-engine.md) | Operator answers: how to configure inputs, skip/choose stages, resume runs, and find outputs. |
 | [cli.md](cli.md) | Complete `tifzoret` command and flag reference — the usage "API". |
 | [configuration.md](configuration.md) | Every configuration key, input boundary, profile, and the direction convention. |
 | [architecture.md](architecture.md) | How the CLI, Snakemake workflow, and rendering stages fit together. |
