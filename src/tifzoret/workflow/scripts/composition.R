@@ -91,6 +91,15 @@ condition_ink <- vapply(condition_fill, function(hex) {
 }, character(1))
 differential <- differential %>%
   mutate(label = factor(label, levels = unique(label)), category_display = clean_term(category))
+# Size-legend breaks are derived from the observed matched-gene range rather
+# than hard-coded, so the largest signatures are always represented in the
+# legend (whatever a study's signatures happen to contain) and the engine
+# carries no study-specific assumption about signature size. Integer breaks,
+# de-duplicated, at most four.
+matched_span <- range(differential$matched_genes)
+size_breaks <- sort(unique(as.integer(round(
+  seq(matched_span[1L], matched_span[2L], length.out = 4L)
+))))
 plot <- ggplot(differential, aes(logFC, label)) +
   geom_vline(xintercept = 0, linewidth = 0.48, colour = "#87939D") +
   geom_segment(aes(x = 0, xend = logFC, yend = label, colour = higher_in), linewidth = 0.8, lineend = "round") +
@@ -100,7 +109,7 @@ plot <- ggplot(differential, aes(logFC, label)) +
   facet_grid(category_display ~ ., scales = "free_y", space = "free_y", switch = "y", drop = TRUE) +
   scale_colour_manual(values = condition_ink, breaks = c(denominator, numerator), drop = FALSE) +
   scale_fill_manual(values = condition_fill, breaks = c(denominator, numerator), drop = FALSE) +
-  scale_size_continuous(range = c(2.5, 5.2), breaks = c(9, 10, 11)) +
+  scale_size_continuous(range = c(2.5, 5.2), breaks = size_breaks) +
   scale_x_continuous(expand = expansion(mult = c(0.12, 0.12))) +
   labs(
     title = "Differential cell-state signatures",
