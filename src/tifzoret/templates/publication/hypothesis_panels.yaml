@@ -1,61 +1,61 @@
 programs:
-  lymphatic_markers:
-    label: Lymphatic endothelial markers
-    description: Core lymphatic vessel identity genes
+  program_a_markers:
+    label: Program A markers
+    description: Core transcription factor program genes
     color: "#6495ED"
     genes:
-      - Prox1
-      - Lyve1
-      - Flt4
-      - Foxc2
-      - Gata2
+      - Gene04
+      - Gene05
+      - Gene06
+      - Gene03
+      - Gene01
     expected_direction: increased
     contrast: treated_vs_control
-  matrix_markers:
-    label: Matrix remodeling markers
-    description: Extracellular matrix and fibrotic response genes
+  program_d_markers:
+    label: Program D markers
+    description: Structural remodeling response genes
     color: "#F4A261"
     genes:
-      - Col1a1
-      - Col3a1
-      - Fn1
-      - Ctgf
-      - Tgfb1
+      - Gene16
+      - Gene17
+      - Gene18
+      - Gene19
+      - Gene20
     expected_direction: increased
     contrast: treated_vs_control
 
 gene_panels:
-  lymphatic_panel:
-    description: Lymphatic vessel markers
+  program_a_panel:
+    description: Program A gene panel
     groups:
-      Identity:
-        - Prox1
-        - Lyve1
-        - Flt4
-      Transcription:
-        - Foxc2
-        - Gata2
-        - Sox18
-  matrix_panel:
-    description: Extracellular matrix panel
+      Core:
+        - Gene04
+        - Gene05
+        - Gene06
+      Regulators:
+        - Gene03
+        - Gene01
+        - Gene02
+  program_d_panel:
+    description: Structural program panel
     groups:
-      Collagens:
-        - Col1a1
-        - Col3a1
-      Matricellular:
-        - Fn1
-        - Ctgf
+      Structural:
+        - Gene16
+        - Gene17
+      Signaling:
+        - Gene18
+        - Gene19
 
 pathway_panels:
-  lymphatic_program:
-    description: Lymphatic vessel program
+  program_a_pathway:
+    description: Program A pathway
     pathways:
       - collection: custom
-        pathway: LYMPHATIC_PROGRAM
-        label: Lymphatic program
-  matrix_program:
-    description: Matrix remodeling program
+        pathway: PROGRAM_A
+        label: Program A
+  program_d_pathway:
+    description: Program D pathway
     pathways:
       - collection: custom
-        pathway: MATRIX_PROGRAM
-        label: Matrix program
+        pathway: PROGRAM_D
+        label: Program D

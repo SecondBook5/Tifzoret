@@ -175,14 +175,14 @@ defining marker gene sets for cell-type or cell-state scoring:
 
 ```yaml
 signatures:
-  - id: lymphatic_signature
-    label: Lymphatic endothelial
+  - id: signature_a
+    label: Transcription program A
     category: cell_state
-    description: Core lymphatic endothelial cell signature
+    description: Core transcription factor signature
     genes:
-      - Prox1
-      - Lyve1
-      - Flt4
+      - Gene04
+      - Gene05
+      - Gene06
 ```
 
 Each signature requires `id`, `label`, `category`, and at least 2 `genes` (symbols
@@ -196,10 +196,10 @@ transcription-factor regulatory relationships:
 
 ```
 source	target	mor
-Gata2	Prox1	1
-Gata2	Lyve1	1
-Sox18	Foxc2	1
-Prox1	Vegfa	-1
+Gene01	Gene04	1
+Gene01	Gene05	1
+Gene02	Gene03	1
+Gene04	Gene13	-1
 ```
 
 - `source` — transcription factor (gene symbol)

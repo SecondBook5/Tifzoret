@@ -1,30 +1,30 @@
 signatures:
-  - id: lymphatic_signature
-    label: Lymphatic endothelial
+  - id: signature_a
+    label: Transcription program A
     category: cell_state
-    description: Core lymphatic endothelial cell signature
+    description: Core transcription factor signature
     genes:
-      - Prox1
-      - Lyve1
-      - Flt4
-      - Foxc2
-      - Gata2
-  - id: vascular_signature
-    label: Vascular endothelial
+      - Gene04
+      - Gene05
+      - Gene06
+      - Gene03
+      - Gene01
+  - id: signature_b
+    label: Cell adhesion program
     category: cell_state
-    description: Pan-vascular endothelial markers
+    description: Cell adhesion and signaling markers
     genes:
-      - Cdh5
-      - Pecam1
-      - Kdr
-      - Vegfa
-  - id: fibrotic_signature
-    label: Fibrotic response
+      - Gene11
+      - Gene12
+      - Gene15
+      - Gene13
+  - id: signature_c
+    label: Structural response
     category: response
-    description: Extracellular matrix and fibrosis markers
+    description: Structural protein and remodeling markers
     genes:
-      - Col1a1
-      - Col3a1
-      - Fn1
-      - Ctgf
-      - Tgfb1
+      - Gene16
+      - Gene17
+      - Gene18
+      - Gene19
+      - Gene20

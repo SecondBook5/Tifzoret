@@ -1,21 +1,21 @@
 gene_id	gene_symbol	gene_name
-g001	Gata2	GATA binding protein 2
-g002	Sox18	SRY-box transcription factor 18
-g003	Foxc2	forkhead box C2
-g004	Prox1	prospero homeobox 1
-g005	Lyve1	lymphatic vessel endothelial hyaluronan receptor 1
-g006	Flt4	FMS-like tyrosine kinase 4
-g007	Nfatc1	nuclear factor of activated T cells 1
-g008	Efnb2	ephrin B2
-g009	Acta2	actin alpha 2 smooth muscle
-g010	Pdgfrb	platelet derived growth factor receptor beta
-g011	Cdh5	cadherin 5
-g012	Pecam1	platelet endothelial cell adhesion molecule 1
-g013	Vegfa	vascular endothelial growth factor A
-g014	Angpt2	angiopoietin 2
-g015	Kdr	kinase insert domain protein receptor
-g016	Col1a1	collagen type I alpha 1 chain
-g017	Col3a1	collagen type III alpha 1 chain
-g018	Fn1	fibronectin 1
-g019	Ctgf	connective tissue growth factor
-g020	Tgfb1	transforming growth factor beta 1
+g001	Gene01	transcription factor 1
+g002	Gene02	transcription factor 2
+g003	Gene03	transcription factor 3
+g004	Gene04	transcription factor 4
+g005	Gene05	cell adhesion protein 1
+g006	Gene06	receptor tyrosine kinase 1
+g007	Gene07	transcription factor 5
+g008	Gene08	signaling protein 1
+g009	Gene09	structural protein 1
+g010	Gene10	receptor tyrosine kinase 2
+g011	Gene11	cell adhesion protein 2
+g012	Gene12	cell adhesion protein 3
+g013	Gene13	growth factor 1
+g014	Gene14	growth factor 2
+g015	Gene15	receptor tyrosine kinase 3
+g016	Gene16	structural protein 2
+g017	Gene17	structural protein 3
+g018	Gene18	structural protein 4
+g019	Gene19	growth factor 3
+g020	Gene20	growth factor 4

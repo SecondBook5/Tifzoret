@@ -1,18 +1,18 @@
 study: Publication profile demonstration
 hypotheses:
-  - id: h1_lymphatic_expansion
-    statement: Treatment expands lymphatic vessel markers
+  - id: h1_program_a_response
+    statement: Treatment modulates program A markers
     contrast: treated_vs_control
     expected_direction: up
     gene_panels:
-      - lymphatic_markers
+      - program_a_markers
     pathway_panels:
-      - lymphatic_program
-  - id: h2_matrix_remodeling
-    statement: Treatment induces matrix remodeling
+      - program_a_pathway
+  - id: h2_program_d_response
+    statement: Treatment induces program D remodeling
     contrast: treated_vs_control
     expected_direction: up
     gene_panels:
-      - matrix_markers
+      - program_d_markers
     pathway_panels:
-      - matrix_program
+      - program_d_pathway

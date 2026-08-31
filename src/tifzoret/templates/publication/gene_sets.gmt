@@ -1,4 +1,4 @@
-LYMPHATIC_PROGRAM	Lymphatic vessel markers	Gata2	Sox18	Foxc2	Prox1	Lyve1	Flt4	Nfatc1
-VASCULAR_PROGRAM	General vascular markers	Cdh5	Pecam1	Vegfa	Angpt2	Kdr	Efnb2
-CONTRACTILE_PROGRAM	Smooth muscle contractile	Acta2	Pdgfrb
-MATRIX_PROGRAM	Extracellular matrix	Col1a1	Col3a1	Fn1	Ctgf	Tgfb1
+PROGRAM_A	Transcription factor program	Gene01	Gene02	Gene03	Gene04	Gene05	Gene06	Gene07
+PROGRAM_B	Cell adhesion program	Gene11	Gene12	Gene13	Gene14	Gene15	Gene08
+PROGRAM_C	Structural response	Gene09	Gene10
+PROGRAM_D	Remodeling program	Gene16	Gene17	Gene18	Gene19	Gene20
