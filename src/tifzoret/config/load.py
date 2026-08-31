@@ -332,6 +332,15 @@ def load_project(config_path: str | Path) -> ResolvedProject:
             for level in (numerator, denominator):
                 if level not in levels:
                     errors.append(f"contrast {contrast_id}: level {level!r} is absent from {factor}")
+            # Check that each tested level has at least 2 replicates (DESeq2 requirement).
+            for level in (numerator, denominator):
+                if level in levels:
+                    replicate_count = sum(1 for s in samples if s.get(factor, "") == level)
+                    if replicate_count < 2:
+                        errors.append(
+                            f"contrast {contrast_id}: level {level!r} has fewer than 2 replicates "
+                            f"in {factor} (DESeq2 requires at least 2)"
+                        )
             if not re.search(rf"\b{re.escape(factor)}\b", design_default):
                 errors.append(f"contrast {contrast_id}: factor {factor!r} is absent from design formula")
         elif contrast_type == "coefficient":

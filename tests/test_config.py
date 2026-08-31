@@ -844,3 +844,38 @@ def test_deconvolution_preset_resolves_and_is_exclusive(tmp_path):
     config.write_text(yaml.safe_dump(data, sort_keys=False))
     with pytest.raises(ProjectValidationError, match="available presets"):
         load_project(config)
+
+
+def test_pairwise_contrast_requires_at_least_two_replicates(tmp_path):
+    """A pairwise contrast level with fewer than 2 replicates is rejected with a
+    clear validation error (DESeq2 requires at least 2 replicates per level)."""
+    config = project_copy(tmp_path)
+    samples = config.parent / "samples.tsv"
+    # Modify samples to have only 1 replicate of treatment_a.
+    rows = list(csv.DictReader(samples.open(), delimiter="\t"))
+    # Keep only 1 treatment_a sample (remove the other 2).
+    kept = [row for row in rows if row["condition"] != "treatment_a" or row["sample_id"] == "treatment_a_1"]
+    with samples.open("w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=rows[0], delimiter="\t", lineterminator="\n")
+        writer.writeheader()
+        writer.writerows(kept)
+
+    # Adjust counts to match the reduced sample set.
+    counts = config.parent / "counts.tsv"
+    with counts.open() as handle:
+        reader = csv.DictReader(handle, delimiter="\t")
+        count_rows = list(reader)
+        kept_sample_ids = {row["sample_id"] for row in kept}
+        # Filter columns to keep only gene_id and the kept samples.
+        for count_row in count_rows:
+            for key in list(count_row.keys()):
+                if key != "gene_id" and key not in kept_sample_ids:
+                    del count_row[key]
+        fieldnames = ["gene_id"] + [row["sample_id"] for row in kept]
+    with counts.open("w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames, delimiter="\t", lineterminator="\n")
+        writer.writeheader()
+        writer.writerows(count_rows)
+
+    with pytest.raises(ProjectValidationError, match=r"treatment_a.*fewer than 2 replicates"):
+        load_project(config)

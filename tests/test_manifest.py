@@ -51,8 +51,11 @@ def test_analysis_r_version_falls_back_when_unrecorded(tmp_path, monkeypatch):
 
 def test_manifest_expands_environment_variables_in_input_paths(tmp_path):
     (tmp_path / "samples.tsv").write_text(
-        "sample_id\tbam\tcondition\ncontrol_1\tcontrol.bam\tcontrol\n"
-        "treated_1\ttreated.bam\ttreated\n",
+        "sample_id\tbam\tcondition\n"
+        "control_1\tcontrol_1.bam\tcontrol\n"
+        "control_2\tcontrol_2.bam\tcontrol\n"
+        "treated_1\ttreated_1.bam\ttreated\n"
+        "treated_2\ttreated_2.bam\ttreated\n",
         encoding="utf-8",
     )
     (tmp_path / "contrasts.tsv").write_text(
@@ -65,8 +68,10 @@ def test_manifest_expands_environment_variables_in_input_paths(tmp_path):
         'chr1\ttest\texon\t1\t10\t.\t+\t.\tgene_id "gene1"; gene_name "Gene1";\n',
         encoding="utf-8",
     )
-    (tmp_path / "control.bam").touch()
-    (tmp_path / "treated.bam").touch()
+    (tmp_path / "control_1.bam").touch()
+    (tmp_path / "control_2.bam").touch()
+    (tmp_path / "treated_1.bam").touch()
+    (tmp_path / "treated_2.bam").touch()
 
     config = {
         "version": 2,

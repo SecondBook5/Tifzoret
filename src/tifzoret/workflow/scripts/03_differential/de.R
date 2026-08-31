@@ -456,41 +456,45 @@ de_pca_plot <- ggplot(de_pca_table, aes(PC1, PC2, colour = .data[[display_group_
   labs(title = "Contrast PCA", subtitle = display_subtitle, x = sprintf("PC1 (%.1f%%)", de_pca_variance[[1]]), y = sprintf("PC2 (%.1f%%)", de_pca_variance[[2]]), colour = NULL) +
   theme_publication(8.8) + theme(legend.position = "top")
 save_plot_pair(de_pca_plot, file.path(dirs$figures, "de_pca"), 6.1, 5.0)
-expression <- expression[selected_genes$gene_id, display_samples, drop = FALSE]
-rownames(expression) <- selected_genes$gene_symbol[match(rownames(expression), selected_genes$gene_id)]
-z <- row_zscore(expression, cfg$figures$de$z_limit)
-row_order <- rownames(z)[stats::hclust(stats::dist(z), method = "complete")$order]
-column_distance <- stats::as.dist(1 - stats::cor(z, method = "pearson"))
-column_order <- colnames(z)[stats::hclust(column_distance, method = "average")$order]
-heatmap <- tile_heatmap(z, row_order, column_order, legend_title = "Row z-score", base_size = 7.7)
-heatmap_table <- heatmap$table %>%
-  mutate(
-    condition = as.character(metadata[as.character(sample_id), factor_name]),
-    contrast_id = args[["contrast-id"]]
-  )
-readr::write_tsv(heatmap_table, file.path(dirs$tables, "de_heatmap_displayed.tsv"))
+if (nrow(selected_genes) >= 2L) {
+  expression <- expression[selected_genes$gene_id, display_samples, drop = FALSE]
+  rownames(expression) <- selected_genes$gene_symbol[match(rownames(expression), selected_genes$gene_id)]
+  z <- row_zscore(expression, cfg$figures$de$z_limit)
+  row_order <- rownames(z)[stats::hclust(stats::dist(z), method = "complete")$order]
+  column_distance <- stats::as.dist(1 - stats::cor(z, method = "pearson"))
+  column_order <- colnames(z)[stats::hclust(column_distance, method = "average")$order]
+  heatmap <- tile_heatmap(z, row_order, column_order, legend_title = "Row z-score", base_size = 7.7)
+  heatmap_table <- heatmap$table %>%
+    mutate(
+      condition = as.character(metadata[as.character(sample_id), factor_name]),
+      contrast_id = args[["contrast-id"]]
+    )
+  readr::write_tsv(heatmap_table, file.path(dirs$tables, "de_heatmap_displayed.tsv"))
 
-annotation_plot <- data.frame(
-  sample_id = factor(column_order, levels = column_order),
-  condition = metadata[column_order, display_group_col]
-) %>%
-  ggplot(aes(sample_id, 1, fill = condition)) +
-  geom_tile() +
-  scale_fill_manual(values = display_palette, drop = FALSE) +
-  theme_void() +
-  theme(legend.position = "top", plot.margin = margin(0, 55, 0, 35))
-heatmap_subtitle <- if (identical(resolved$type, "pairwise")) {
-  paste0("Displayed samples are limited to ", denominator, " and ", numerator, "; row z-scores clipped at ±", cfg$figures$de$z_limit)
+  annotation_plot <- data.frame(
+    sample_id = factor(column_order, levels = column_order),
+    condition = metadata[column_order, display_group_col]
+  ) %>%
+    ggplot(aes(sample_id, 1, fill = condition)) +
+    geom_tile() +
+    scale_fill_manual(values = display_palette, drop = FALSE) +
+    theme_void() +
+    theme(legend.position = "top", plot.margin = margin(0, 55, 0, 35))
+  heatmap_subtitle <- if (identical(resolved$type, "pairwise")) {
+    paste0("Displayed samples are limited to ", denominator, " and ", numerator, "; row z-scores clipped at ±", cfg$figures$de$z_limit)
+  } else {
+    paste0("All design groups shown; row z-scores clipped at ±", cfg$figures$de$z_limit)
+  }
+  heatmap$plot <- heatmap$plot +
+    labs(
+      title = "Top DE genes with global hierarchical clustering",
+      subtitle = heatmap_subtitle
+    )
+  combined_heatmap <- annotation_plot / heatmap$plot + patchwork::plot_layout(heights = c(0.07, 1))
+  save_plot_pair(combined_heatmap, file.path(dirs$figures, "de_heatmap"), 7.3, max(6.0, 0.18 * nrow(z) + 2.2))
 } else {
-  paste0("All design groups shown; row z-scores clipped at ±", cfg$figures$de$z_limit)
+  message("DE heatmap skipped: fewer than 2 selected genes for hierarchical clustering")
 }
-heatmap$plot <- heatmap$plot +
-  labs(
-    title = "Top DE genes with global hierarchical clustering",
-    subtitle = heatmap_subtitle
-  )
-combined_heatmap <- annotation_plot / heatmap$plot + patchwork::plot_layout(heights = c(0.07, 1))
-save_plot_pair(combined_heatmap, file.path(dirs$figures, "de_heatmap"), 7.3, max(6.0, 0.18 * nrow(z) + 2.2))
 
 de_overview <- (volcano_plot | ma_plot) / (pvalue_plot | lfc_plot) +
   patchwork::plot_annotation(title = paste0("Differential-expression overview: ", numerator, " versus ", denominator))

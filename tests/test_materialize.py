@@ -65,7 +65,7 @@ def test_count_adapter_materializes_the_canonical_contract(tmp_path):
 def test_bam_adapters_run_featurecounts(tmp_path, kind):
     bam_root = tmp_path / "upstream"
     bam_root.mkdir()
-    for sample_id in ("control_1", "treated_1"):
+    for sample_id in ("control_1", "control_2", "treated_1", "treated_2"):
         subprocess.run(
             [
                 "samtools",
@@ -90,7 +90,9 @@ def test_bam_adapters_run_featurecounts(tmp_path, kind):
         writer.writerows(
             [
                 {"sample_id": "control_1", "bam": "control_1.sorted.bam", "condition": "control"},
+                {"sample_id": "control_2", "bam": "control_2.sorted.bam", "condition": "control"},
                 {"sample_id": "treated_1", "bam": "treated_1.sorted.bam", "condition": "treated"},
+                {"sample_id": "treated_2", "bam": "treated_2.sorted.bam", "condition": "treated"},
             ]
         )
     (tmp_path / "contrasts.tsv").write_text(
@@ -111,7 +113,7 @@ def test_bam_adapters_run_featurecounts(tmp_path, kind):
     else:
         archive_path = tmp_path / "upstream.zip"
         with zipfile.ZipFile(archive_path, "w") as archive:
-            for sample_id in ("control_1", "treated_1"):
+            for sample_id in ("control_1", "control_2", "treated_1", "treated_2"):
                 archive.write(
                     bam_root / f"{sample_id}.sorted.bam",
                     arcname=f"pipeline/{sample_id}.sorted.bam",
@@ -182,7 +184,7 @@ def test_bam_adapters_run_featurecounts(tmp_path, kind):
     )
     counts = list(csv.DictReader((output / "counts.tsv").open(), delimiter="\t"))
     manifest = json.loads((output / "input_manifest.json").read_text())
-    assert counts == [{"gene_id": "gene1", "control_1": "1", "treated_1": "1"}]
+    assert counts == [{"gene_id": "gene1", "control_1": "1", "control_2": "1", "treated_1": "1", "treated_2": "1"}]
     assert manifest["source"]["kind"] == kind
     assert manifest["source"]["counting"]["resolved_strand_mode"] in {0, 1, 2}
     assert manifest["source"]["bams"][0]["quickcheck"] is True

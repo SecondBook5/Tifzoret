@@ -278,6 +278,10 @@ read_counts_contract <- function(path) {
   mat <- as.matrix(tab[, setdiff(names(tab), "gene_id"), drop = FALSE])
   if (all(is.na(mat))) stop("count matrix contains no non-NA values", call. = FALSE)
   if (max(mat, na.rm = TRUE) > 2147483647) stop("count matrix exceeds 32-bit integer range; refusing silent NA coercion", call. = FALSE)
+  if (any(mat != round(mat), na.rm = TRUE)) {
+    warning("non-integer counts detected; rounding to nearest integer (matches DESeqDataSetFromTximport)", call. = FALSE)
+    mat <- round(mat)
+  }
   storage.mode(mat) <- "integer"
   rownames(mat) <- ids
   mat
