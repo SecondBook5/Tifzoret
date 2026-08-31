@@ -55,3 +55,15 @@ jobs:
           test -s "$study_dir/results/synthetic_demo/all/REPORT.html"
           test -s "$study_dir/results/synthetic_demo/all/manifest.json"
           test -s "$study_dir/results/synthetic_demo/all/figures/index.json"
+      - name: Run publication-profile acceptance workflow
+        shell: bash -el {0}
+        run: |
+          pub_dir="$(mktemp -d)"
+          tifzoret init "$pub_dir" --input publication
+          tifzoret validate "$pub_dir/project.yaml"
+          tifzoret run "$pub_dir/project.yaml" --cores 2 --no-conda
+          test -s "$pub_dir/results/publication_demo/all/REPORT.html"
+          test -s "$pub_dir/results/publication_demo/all/manifest.json"
+          test -s "$pub_dir/results/publication_demo/all/contrasts/treated_vs_control/analyses/composition/tables/cell_state_scores.tsv"
+          test -s "$pub_dir/results/publication_demo/all/contrasts/treated_vs_control/analyses/regulators/regulators_summary.json"
+          test -s "$pub_dir/results/publication_demo/all/contrasts/treated_vs_control/analyses/publication/tables/program_definitions.tsv"
