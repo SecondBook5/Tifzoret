@@ -491,10 +491,16 @@ if (nrow(selected_genes) >= 2L) {
       subtitle = heatmap_subtitle
     )
   combined_heatmap <- annotation_plot / heatmap$plot + patchwork::plot_layout(heights = c(0.07, 1))
-  save_plot_pair(combined_heatmap, file.path(dirs$figures, "de_heatmap"), 7.3, max(6.0, 0.18 * nrow(z) + 2.2))
 } else {
-  message("DE heatmap skipped: fewer than 2 selected genes for hierarchical clustering")
+  # Fewer than two selected genes -> no informative heatmap; keep the output
+  # contract (both files present) with an explicit placeholder + empty table.
+  readr::write_tsv(
+    data.frame(feature = character(0), sample_id = character(0), value = numeric(0), condition = character(0), contrast_id = character(0)),
+    file.path(dirs$tables, "de_heatmap_displayed.tsv")
+  )
+  combined_heatmap <- empty_plot("Top DE genes with global hierarchical clustering", "No genes passed the display threshold")
 }
+save_plot_pair(combined_heatmap, file.path(dirs$figures, "de_heatmap"), 7.3, max(6.0, 0.18 * nrow(selected_genes) + 2.2))
 
 de_overview <- (volcano_plot | ma_plot) / (pvalue_plot | lfc_plot) +
   patchwork::plot_annotation(title = paste0("Differential-expression overview: ", numerator, " versus ", denominator))
