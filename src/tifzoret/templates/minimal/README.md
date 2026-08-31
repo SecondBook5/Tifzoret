@@ -1,0 +1,3 @@
+# Minimal synthetic demo
+
+This template contains a runnable synthetic dataset demonstrating the engine's core workflow. The study compares two conditions (control vs. treatment) across four samples, with pre-validated integer counts, annotation, contrasts, and a minimal gene-set GMT. Run `tifzoret run project.yaml --cores 2` to execute the full standard-profile analysis, producing canonical inputs, QC figures, differential-expression results, pathway enrichment, and an HTML report under `results/minimal_demo/default/`. This is a proof-of-execution scaffold — real studies require domain-appropriate inputs, design formulas, and hypothesis-driven configurations.

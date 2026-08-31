@@ -128,9 +128,9 @@ Output: `results/<project>/<analysis_set>/<contrast>/ontology/*.pdf`.
 **Rule: `contrast_composition`** ([`modules.smk`](../src/tifzoret/workflow/rules/modules.smk))  
 **Script: [`composition.R`](../src/tifzoret/workflow/scripts/05_composition/composition.R)**
 
-Computes per-sample cell-state signature scores using ssGSEA. If you provided a `composition.signatures` mapping in `project.yaml`, this stage tests whether signature enrichment differs between conditions.
+Computes per-sample cell-state signature scores using ssGSEA. If you provided a `resources.cell_state_signatures` path in `project.yaml`, this stage tests whether signature enrichment differs between conditions.
 
-Output: `results/<project>/<analysis_set>/<contrast>/composition/signature_scores.tsv` and boxplots.
+Output: `results/<project>/<analysis_set>/<contrast>/composition/tables/cell_state_scores.tsv` and boxplots.
 
 ## Phase 6: Regulators (per contrast)
 
@@ -146,14 +146,14 @@ Output: `results/<project>/<analysis_set>/<contrast>/regulators/tf_activity.tsv`
 
 Builds a gene regulatory network (GRN) by selecting top differential TFs and their top DE targets. Assigns nodes to expression programs (up-regulated, down-regulated).
 
-Output: `results/<project>/<analysis_set>/<contrast>/grn/grn_edges.tsv` and `grn_nodes.tsv`.
+Output: `results/<project>/<analysis_set>/<contrast>/regulators/tables/regulon_edges.tsv` and program assignment tables.
 
 **Rule: `contrast_grn_radial`** ([`modules.smk`](../src/tifzoret/workflow/rules/modules.smk))  
 **Script: [`grn_radial.R`](../src/tifzoret/workflow/scripts/06_regulators/grn_radial.R)**
 
 Renders a publication-grade radial GRN figure: TFs in the center, targets on the periphery, colored by program.
 
-Output: `results/<project>/<analysis_set>/<contrast>/grn/grn_radial.pdf`.
+Output: `results/<project>/<analysis_set>/<contrast>/regulators/figures/regulator_activity.pdf`.
 
 ## Phase 7: Networks (per contrast)
 
@@ -251,7 +251,7 @@ After the run completes, you have:
   - `qc/` — study-wide quality-control figures
   - `<contrast>/` — per-contrast results
     - `de/` — differential expression results and volcano/MA plots
-    - `pathways/`, `ontology/`, `composition/`, `regulators/`, `grn/`, `networks/` — enrichment and network outputs
+    - `pathways/`, `ontology/`, `composition/`, `regulators/`, `networks/` — enrichment and network outputs
     - `hypotheses/` — hypothesis evaluation verdicts
   - `publication/` — assembled multi-panel figures (if configured)
   - `REPORT.html` — navigable HTML report with all results

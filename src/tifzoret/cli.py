@@ -377,7 +377,8 @@ def build_parser() -> argparse.ArgumentParser:
     collection_run.set_defaults(handler=command_collection_run)
 
     for name, dry_run in (("dry-run", True), ("run", False)):
-        run_parser = commands.add_parser(name)
+        help_text = "Print the dependency graph and planned commands without executing" if dry_run else "Execute the full analysis workflow"
+        run_parser = commands.add_parser(name, help=help_text)
         run_parser.add_argument("project")
         run_parser.add_argument("--cores", type=int, default=1)
         run_parser.add_argument("--snakemake", default="snakemake")

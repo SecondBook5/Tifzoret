@@ -44,13 +44,13 @@ Tifzoret defines **one canonical boundary**: four validated TSV files (counts, s
 
 ## How do I change the input?
 
-**Option 1: Edit the `input` block in `project.yaml`.**
+**Option 1: Edit the `inputs` block in `project.yaml`.**
 
-Only the `input.boundary` key and its associated paths change. The rest of the configuration (design, contrasts, profiles, modules) remains identical. For example, switching from `counts` to `bam`:
+Only the `inputs.kind` key and its associated paths change. The rest of the configuration (design, contrasts, profiles, modules) remains identical. For example, switching from `counts` to `bam`:
 
 ```yaml
-input:
-  boundary: bam
+inputs:
+  kind: bam
   bam_root: data/bams
   gtf: resources/genome.gtf
   samples: metadata/samples.tsv
@@ -58,7 +58,7 @@ input:
 counting:
   threads: 4
   feature_type: exon
-  gtf_attribute: gene_id
+  attribute: gene_id
   paired_end: true
   strandedness: infer
   # ... rest of counting config
@@ -98,27 +98,22 @@ analysis:
 analysis:
   profile: publication
   modules:
-    # Disable GRN radial figure in the publication profile
-    grn_radial: false
+    # Disable regulators in the publication profile
+    regulators: false
     # Enable WGCNA even though we're not on full profile
     wgcna: true
 ```
 
 Available module flags (see [`configuration.md`](configuration.md) for the full list):
-- `de_confirm`, `sva`, `batch`, `variance_partition` — QC and confirmatory DE
-- `pathways`, `ontology`, `spia`, `enrichment_map` — enrichment layers
-- `composition`, `deconvolution` — cell-state scoring
-- `regulators`, `grn`, `grn_radial` — TF activity and GRN
-- `networks`, `wgcna`, `curvature`, `multilayer` — network layers
-- `mediation`, `power` — causal analysis
-- `consensus`, `hypotheses` — synthesis
+- Profile modules: `qc`, `de`, `pathways`, `ontology`, `composition`, `regulators`, `networks`, `hypotheses`, `publication`, `report`, `sva`, `wgcna`, `mediation`, `multilayer`
+- Opt-in extensions: `batch`, `de_confirm`, `deconvolution`, `curvature`, `consensus`, `spia`, `variance_partition`, `enrichment_map`, `factorial`
 
 **Conditional stages:** Some stages activate automatically when their trigger data is present:
-- `study_batch` — runs only if `samples.tsv` has a `batch` column
+- `study_batch` — runs only if `analysis.batch` is set and `samples.tsv` has that column
 - `contrast_de_confirm` — runs only if `analysis.modules.de_confirm: true`
 - `contrast_omnibus` — runs only for contrasts with `type: omnibus` in `contrasts.tsv`
 - `contrast_spia` — runs only if `analysis.modules.spia: true` and KEGG is available
-- `study_deconvolution` — runs only if `composition.signature_matrix` is provided
+- `study_deconvolution` — runs only if `resources.deconvolution_signature` or `resources.deconvolution_preset` is provided
 
 If the trigger isn't present, Snakemake skips the stage without error.
 
@@ -194,7 +189,11 @@ results/<project_id>/<analysis_set>/
 │   ├── ontology/
 │   ├── composition/
 │   ├── regulators/
-│   ├── grn/
+│   │   ├── tables/
+│   │   │   ├── regulon_edges.tsv
+│   │   │   └── regulator_differential.tsv
+│   │   └── figures/
+│   │       └── regulator_activity.pdf
 │   ├── networks/
 │   └── hypotheses/
 ├── consensus/  (study-wide)
@@ -213,7 +212,7 @@ results/<project_id>/<analysis_set>/
 - **Study-wide QC:** `results/<project>/<analysis_set>/qc/*.pdf`
 - **Per-contrast DE results:** `results/<project>/<analysis_set>/<contrast>/de/de_results.tsv`
 - **Pathway enrichment:** `results/<project>/<analysis_set>/<contrast>/pathways/*.tsv`
-- **GRN radial figure:** `results/<project>/<analysis_set>/<contrast>/grn/grn_radial.pdf`
+- **Regulator activity and GRN:** `results/<project>/<analysis_set>/<contrast>/regulators/tables/*.tsv`, `regulators/figures/*.pdf`
 - **Assembled publication figures:** `results/<project>/<analysis_set>/publication/<figure_set>/*.pdf`
 - **HTML report:** `results/<project>/<analysis_set>/REPORT.html`
 - **Release manifest:** `results/<project>/<analysis_set>/manifest.json` (checksummed provenance)
@@ -229,9 +228,9 @@ output:
 
 Then results land in `/scratch/analysis_results/<project_id>/<analysis_set>/`.
 
-**Optional front-door layout:**
+**Front-door layout:**
 
-If you configure `publication.front_door: true`, the workflow copies reviewer-critical outputs to a flat `front_door/` directory:
+The workflow automatically copies reviewer-critical outputs to a flat `front_door/` directory whenever publication figures are assembled:
 
 ```
 results/<project>/<analysis_set>/front_door/
@@ -242,7 +241,7 @@ results/<project>/<analysis_set>/front_door/
 └── ...
 ```
 
-This simplifies external access — reviewers don't need to navigate the full result tree.
+This simplifies external access — reviewers don't need to navigate the full result tree. The `front_door_artifacts` rule (at `workflow/rules/publication.smk`) triggers automatically when the publication recipe builds figures.
 
 ## How do I verify results match a reference?
 

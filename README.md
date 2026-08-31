@@ -212,6 +212,8 @@ Every rendered constructor declares PDF, PNG, and displayed-data artifacts. The 
 | Document | Read it for |
 |----------|-------------|
 | [authoring-a-study.md](docs/authoring-a-study.md) | **Start here (no code required)** — describe a study in one file and get a report back. |
+| [walkthrough.md](docs/walkthrough.md) | Narrated trace of one complete run, showing how the DAG executes from entry to completion. |
+| [using-the-engine.md](docs/using-the-engine.md) | Practical operator guide — configuring inputs, choosing modules, resuming runs, output locations. |
 | [cli.md](docs/cli.md) | Complete `tifzoret` command and flag reference — the usage "API". |
 | [configuration.md](docs/configuration.md) | Every configuration key, input boundary, profile, and the direction convention. |
 | [figures.md](docs/figures.md) | The hypothesis-driven figure system: panel constructors, variants, recipes. |
