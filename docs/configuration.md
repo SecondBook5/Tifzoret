@@ -168,6 +168,48 @@ with the package; the two are mutually exclusive. Presets are curated binary
 marker panels (see the deconvolution data directory's provenance note), so their
 fractions are a relative screen rather than calibrated abundances.
 
+### Cell-state signatures
+
+Publication composition requires `resources.cell_state_signatures`, a YAML file
+defining marker gene sets for cell-type or cell-state scoring:
+
+```yaml
+signatures:
+  - id: lymphatic_signature
+    label: Lymphatic endothelial
+    category: cell_state
+    description: Core lymphatic endothelial cell signature
+    genes:
+      - Prox1
+      - Lyve1
+      - Flt4
+```
+
+Each signature requires `id`, `label`, `category`, and at least 2 `genes` (symbols
+matching `annotation.tsv`). `description` is optional. The composition module
+scores these via ssGSEA and reports per-sample enrichment.
+
+### Regulatory networks
+
+Custom regulator analysis requires `resources.regulon_edges`, a TSV defining
+transcription-factor regulatory relationships:
+
+```
+source	target	mor
+Gata2	Prox1	1
+Gata2	Lyve1	1
+Sox18	Foxc2	1
+Prox1	Vegfa	-1
+```
+
+- `source` — transcription factor (gene symbol)
+- `target` — regulated gene (gene symbol)
+- `mor` — mode of regulation: `1` for activation, `-1` for repression
+
+All symbols must exist in `annotation.tsv`. The regulators module infers
+transcription-factor activity via VIPER. When `resources.providers.dorothea: true`,
+the curated DoRothEA network is used instead and no `regulon_edges` file is required.
+
 Provider resources use explicit species metadata. Mouse is taxonomy 10090;
 human is 9606. Cached resource receipts include provider, organism, release,
 retrieval time, parameters, upstream license notice, and checksum.

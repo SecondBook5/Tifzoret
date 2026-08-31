@@ -216,9 +216,14 @@ tifzoret report   my-study/project.yaml      # build the browsable HTML report
 For the publication profile, also:
 
 ```bash
+tifzoret figures init    my-study/project.yaml      # scaffold companion files (hypotheses, panels, recipe)
 tifzoret figures build   my-study/project.yaml --cores 4   # render the panels
 tifzoret figures gallery my-study/project.yaml             # side-by-side variant comparison
 ```
+
+A complete publication-profile scaffold is available via `tifzoret init <dir> --input publication`,
+which includes example `cell_state_signatures` and `regulon_edges` files alongside the standard
+inputs and publication companions. See the scaffold's README for file format details.
 
 `validate` is your friend — it catches typos, a colour missing from the palette, a
 contrast level that isn't in the samples, or a gene panel referenced but never

@@ -1,0 +1,61 @@
+programs:
+  lymphatic_markers:
+    label: Lymphatic endothelial markers
+    description: Core lymphatic vessel identity genes
+    color: "#6495ED"
+    genes:
+      - Prox1
+      - Lyve1
+      - Flt4
+      - Foxc2
+      - Gata2
+    expected_direction: increased
+    contrast: treated_vs_control
+  matrix_markers:
+    label: Matrix remodeling markers
+    description: Extracellular matrix and fibrotic response genes
+    color: "#F4A261"
+    genes:
+      - Col1a1
+      - Col3a1
+      - Fn1
+      - Ctgf
+      - Tgfb1
+    expected_direction: increased
+    contrast: treated_vs_control
+
+gene_panels:
+  lymphatic_panel:
+    description: Lymphatic vessel markers
+    groups:
+      Identity:
+        - Prox1
+        - Lyve1
+        - Flt4
+      Transcription:
+        - Foxc2
+        - Gata2
+        - Sox18
+  matrix_panel:
+    description: Extracellular matrix panel
+    groups:
+      Collagens:
+        - Col1a1
+        - Col3a1
+      Matricellular:
+        - Fn1
+        - Ctgf
+
+pathway_panels:
+  lymphatic_program:
+    description: Lymphatic vessel program
+    pathways:
+      - collection: custom
+        pathway: LYMPHATIC_PROGRAM
+        label: Lymphatic program
+  matrix_program:
+    description: Matrix remodeling program
+    pathways:
+      - collection: custom
+        pathway: MATRIX_PROGRAM
+        label: Matrix program

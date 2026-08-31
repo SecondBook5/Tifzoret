@@ -1,0 +1,61 @@
+version: 2
+project:
+  id: publication_demo
+  title: Publication-profile demonstration
+species:
+  provider: custom
+  scientific_name: synthetic
+  taxonomy_id: null
+reference:
+  genome_build: synthetic
+  annotation_release: null
+inputs:
+  kind: counts
+  counts: counts.tsv
+  samples: samples.tsv
+  annotation: annotation.tsv
+analysis:
+  design: "~ condition"
+  contrasts: contrasts.tsv
+  profile: publication
+  modules:
+    # Networks module disabled: requires providers.string: true,
+    # species.taxonomy_id, and network connectivity to fetch STRING data.
+    # To enable: set species.taxonomy_id, add providers.string: true to
+    # resources section, and remove this networks: false override.
+    networks: false
+resources:
+  cache: ~/.cache/tifzoret/resources
+  offline: false
+  refresh: false
+  gene_sets:
+    gmt: gene_sets.gmt
+    min_size: 3
+    max_size: 50
+  cell_state_signatures: cell_state_signatures.yaml
+  regulon_edges: regulon_edges.tsv
+hypotheses:
+  claims: hypotheses.yaml
+  panels: hypothesis_panels.yaml
+publication:
+  recipe: figure_recipe.yaml
+figures:
+  group: condition
+  palette:
+    control: "#A6CEE3"
+    treated: "#F4A6A6"
+  pca:
+    ellipse_level: 0.80
+  de:
+    fdr: 0.05
+    abs_log2fc: 1.0
+    top_labels: 10
+    top_heatmap_genes: 20
+    z_limit: 1.5
+  pathways:
+    top_ora_terms: 6
+    top_gsva_terms: 8
+    gsea_curves_per_direction: 2
+    seed: 1
+output:
+  root: results

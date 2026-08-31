@@ -39,8 +39,9 @@ def _copy_tree(source, destination: Path) -> None:
 def command_init(args: argparse.Namespace) -> int:
     """Scaffold a new project directory from an input-boundary template.
 
-    ``--input`` chooses the template (``counts``, ``bam``, ``nfcore-rnaseq``, or
-    ``archive``). The destination must not already contain files. Returns 0.
+    ``--input`` chooses the template (``counts``, ``bam``, ``nfcore-rnaseq``,
+    ``archive``, or ``publication``). The destination must not already contain
+    files. Returns 0.
     """
     destination = Path(args.directory).expanduser().resolve()
     if destination.exists() and any(destination.iterdir()):
@@ -50,6 +51,7 @@ def command_init(args: argparse.Namespace) -> int:
         "bam": "bam",
         "nfcore-rnaseq": "nfcore_rnaseq",
         "archive": "archive",
+        "publication": "publication",
     }[args.input]
     template = resources.files("tifzoret").joinpath(f"templates/{template_name}")
     _copy_tree(template, destination)
@@ -278,7 +280,7 @@ def build_parser() -> argparse.ArgumentParser:
     init_parser.add_argument("directory")
     init_parser.add_argument(
         "--input",
-        choices=("counts", "bam", "nfcore-rnaseq", "archive"),
+        choices=("counts", "bam", "nfcore-rnaseq", "archive", "publication"),
         default="counts",
         help="source boundary for the scaffold (default: counts)",
     )

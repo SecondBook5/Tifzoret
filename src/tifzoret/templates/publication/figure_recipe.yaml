@@ -1,0 +1,28 @@
+figure_sets:
+  main_figure:
+    title: Main results figure
+    width: 8.5
+    height: 11
+    units: in
+    columns: 2
+    panels:
+      - id: A
+        constructor: pca
+        title: Sample clustering
+        caption: Principal component analysis of normalized expression
+      - id: B
+        constructor: volcano
+        contrast: treated_vs_control
+        title: Differential expression
+        caption: Volcano plot showing log2 fold-change vs. adjusted p-value
+      - id: C
+        constructor: ma
+        contrast: treated_vs_control
+        title: Expression vs. fold-change
+        caption: MA plot showing mean expression vs. log2 fold-change
+      - id: D
+        constructor: de_heatmap
+        contrast: treated_vs_control
+        variant: global_clustered
+        title: Differential expression heatmap
+        caption: Top differentially expressed genes clustered with program annotations
