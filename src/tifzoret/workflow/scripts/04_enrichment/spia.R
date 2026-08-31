@@ -146,7 +146,7 @@ if (nrow(plot_table) == 0L) {
 } else {
   spia_plot <- ggplot(plot_table, aes(neg_log10_pNDE, neg_log10_pPERT)) +
     geom_point(aes(colour = status_display, fill = status_display, shape = significant, size = pSize), stroke = 0.7, alpha = 0.9) +
-    ggrepel::geom_text_repel(data = labelled, aes(label = Name), size = 2.2, colour = NAVY, max.overlaps = Inf, min.segment.length = 0) +
+    ggrepel::geom_text_repel(data = labelled, aes(label = Name), size = 2.2, colour = NAVY, max.overlaps = Inf, min.segment.length = 0, seed = 42) +
     scale_colour_manual(values = status_colours, name = "Perturbation") +
     scale_fill_manual(values = status_colours, guide = "none") +
     scale_shape_manual(values = c("Significant" = 21, "Not significant" = 1), name = sprintf("pG FDR < %.2g", fdr)) +

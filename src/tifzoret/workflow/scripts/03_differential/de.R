@@ -356,7 +356,7 @@ if (identical(volcano_style, "clipped")) {
     ggrepel::geom_label_repel(
       data = dplyr::filter(volcano_table, !is.na(label)),
       aes(label = label), size = 2.35, label.size = 0.15, fill = scales::alpha("white", 0.90),
-      box.padding = 0.26, point.padding = 0.18, max.overlaps = Inf, show.legend = FALSE
+      box.padding = 0.26, point.padding = 0.18, max.overlaps = Inf, show.legend = FALSE, seed = 42
     ) +
     scale_colour_manual(
       values = SIGNIFICANCE_PALETTE,
@@ -451,7 +451,7 @@ readr::write_tsv(de_pca_ellipses, file.path(dirs$tables, "de_pca_ellipses.tsv"))
 de_pca_plot <- ggplot(de_pca_table, aes(PC1, PC2, colour = .data[[display_group_col]])) +
   {if (nrow(de_pca_ellipses)) geom_path(data = de_pca_ellipses, aes(PC1, PC2, colour = ellipse_group, group = ellipse_group), inherit.aes = FALSE, linewidth = 0.8)} +
   geom_point(size = 3.1) +
-  ggrepel::geom_text_repel(aes(label = sample_id), size = 2.5, show.legend = FALSE, max.overlaps = Inf) +
+  ggrepel::geom_text_repel(aes(label = sample_id), size = 2.5, show.legend = FALSE, max.overlaps = Inf, seed = 42) +
   scale_colour_manual(values = display_palette, drop = FALSE) +
   labs(title = "Contrast PCA", subtitle = display_subtitle, x = sprintf("PC1 (%.1f%%)", de_pca_variance[[1]]), y = sprintf("PC2 (%.1f%%)", de_pca_variance[[2]]), colour = NULL) +
   theme_publication(8.8) + theme(legend.position = "top")

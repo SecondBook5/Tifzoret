@@ -110,7 +110,7 @@ readr::write_tsv(pca_table, file.path(dirs$tables, "batch_pca_coordinates.tsv"))
 
 pca_plot <- ggplot(pca_table, aes(PC1, PC2)) +
   geom_point(aes(fill = .data[[group_col]], shape = .data[[batch_variable]]), size = 3.2, stroke = 0.7, colour = "#3A4750") +
-  ggrepel::geom_text_repel(aes(label = sample_id), size = 2.3, colour = NAVY, max.overlaps = Inf, show.legend = FALSE) +
+  ggrepel::geom_text_repel(aes(label = sample_id), size = 2.3, colour = NAVY, max.overlaps = Inf, show.legend = FALSE, seed = 42) +
   facet_wrap(~ state, nrow = 1, scales = "free") +
   scale_fill_manual(values = palette, drop = FALSE, labels = cond_display) +
   scale_shape_manual(values = batch_shapes) +

@@ -144,7 +144,8 @@ pca_plot <- ggplot(pca_table, aes(PC1, PC2)) +
     min.segment.length = 0,
     segment.colour = "#AAB3BA",
     max.overlaps = Inf,
-    show.legend = FALSE
+    show.legend = FALSE,
+    seed = 42
   ) +
   scale_fill_manual(values = palette, drop = FALSE, labels = cond_display) +
   scale_colour_manual(values = ink_palette, drop = FALSE) +

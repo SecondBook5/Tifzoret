@@ -172,7 +172,18 @@ if (enabled("kegg")) {
   link_table$description <- unname(names_table[link_table$pathway])
   link_table <- link_table[!is.na(link_table$gene_symbol), , drop = FALSE]
   sets <- bind_rows(sets, data.frame(term = paste0("KEGG_", link_table$pathway), description = link_table$description, gene_symbol = link_table$gene_symbol, provider = "kegg"))
-  provider_versions$kegg <- list(package = as.character(utils::packageVersion("KEGGREST")), organism = organism, retrieval = "live KEGG REST")
+  # Fetch KEGG release identifier for provenance
+  kegg_info <- retry_network_fetch(KEGGREST::keggInfo("kegg"), "KEGG REST API")
+  kegg_release <- tryCatch({
+    release_line <- grep("Release", kegg_info, value = TRUE, ignore.case = TRUE)
+    if (length(release_line) == 0L) {
+      NA_character_
+    } else {
+      match_result <- regmatches(release_line[[1L]], regexec("Release\\s+([^,\\s]+)", release_line[[1L]], ignore.case = TRUE))[[1L]]
+      if (length(match_result) >= 2L) match_result[[2L]] else NA_character_
+    }
+  }, error = function(e) NA_character_)
+  provider_versions$kegg <- list(package = as.character(utils::packageVersion("KEGGREST")), organism = organism, retrieval = "live KEGG REST", release = kegg_release)
 }
 
 # Reactome curated pathways, sourced from MSigDB's C2:CP:REACTOME subcollection
