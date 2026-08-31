@@ -24,7 +24,14 @@ jobs:
       - uses: actions/checkout@v4
       - uses: r-lib/actions/setup-r@v2
       - run: |
-          for script in src/tifzoret/workflow/scripts/*.R; do
+          mapfile -t scripts < <(find src/tifzoret/workflow/scripts -name '*.R' | sort)
+          echo "Found ${#scripts[@]} R scripts"
+          if [ "${#scripts[@]}" -lt 23 ]; then
+            echo "::error::expected >=23 R scripts, found ${#scripts[@]} — the R-syntax gate glob has gone stale (see plan Task 1)"
+            exit 1
+          fi
+          for script in "${scripts[@]}"; do
+            echo "parsing $script"
             Rscript -e "parse(file='$script')"
           done
 
