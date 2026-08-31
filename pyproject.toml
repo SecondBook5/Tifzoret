@@ -9,6 +9,25 @@ description = "Configuration-driven bulk RNA-seq analysis and publication figure
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
+# TODO(release): set author email + bump version — held for maintainer
+authors = [{name = "SecondBook5", email = "placeholder@example.com"}]
+keywords = [
+  "bioinformatics",
+  "RNA-seq",
+  "differential-expression",
+  "bulk-RNA",
+  "snakemake",
+  "workflow",
+  "transcriptomics",
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Intended Audience :: Science/Research",
+  "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
 dependencies = [
   "PyYAML>=6.0",
   "jsonschema>=4.20",
@@ -19,8 +38,14 @@ dependencies = [
   "matplotlib>=3.9",
 ]
 
+[project.urls]
+Homepage = "https://github.com/SecondBook5/Tifzoret"
+Repository = "https://github.com/SecondBook5/Tifzoret"
+Documentation = "https://github.com/SecondBook5/Tifzoret"
+Issues = "https://github.com/SecondBook5/Tifzoret/issues"
+
 [project.optional-dependencies]
-workflow = ["snakemake>=8,<10"]
+workflow = ["snakemake>=8,<10", "scipy", "numpy"]
 test = ["pytest>=8", "build>=1.2"]
 
 [project.scripts]
@@ -41,6 +66,10 @@ tifzoret = [
   "workflow/envs/locks/*",
   "workflow/scripts/**/*.R",
   "workflow/scripts/**/*.py",
+  "workflow/scripts/**/report_assets/*.html",
+  "workflow/scripts/**/report_assets/*.css",
+  "workflow/scripts/**/report_assets/*.js",
+  "workflow/scripts/**/report_assets/fonts/*.woff2",
 ]
 
 [tool.pytest.ini_options]

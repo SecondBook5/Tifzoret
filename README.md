@@ -74,9 +74,12 @@ motivation for each of the 35 scripts is in [engine-map.md](docs/engine-map.md).
 **Requirements.** Python 3.11+ and [conda or mamba](https://github.com/conda-forge/miniforge).
 The Python package itself is small; the scientific stack it runs — R/Bioconductor
 (DESeq2, fgsea, GSVA, …), `subread`/`featureCounts`, and the rest — is provisioned
-automatically through per-rule conda environments (byte-exact pinned locks). Pass
+automatically through per-rule conda environments. The default `--use-conda` path
+re-solves the pinned env YAMLs (deterministic to the pin, not byte-exact); the
+`envs/locks/*.lock.txt` files are the manual byte-exact reproduction record. Pass
 `--no-conda` only if you have already provisioned an equivalent environment
-yourself (see [`environment.yaml`](environment.yaml)).
+yourself (see [`environment.yaml`](environment.yaml)). The pip-installed package
+and `--no-conda` mode are cross-platform; the conda locks and container are linux-64.
 
 ```bash
 git clone https://github.com/SecondBook5/Tifzoret.git

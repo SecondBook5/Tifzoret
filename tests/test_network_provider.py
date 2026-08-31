@@ -73,7 +73,7 @@ def test_large_network_requests_cover_all_chunk_pairs_without_pruning(tmp_path, 
     assert rows
 
 
-@pytest.mark.skipif(os.environ.get("BULK_RNAFRAME_LIVE") != "1", reason="scheduled live-provider test")
+@pytest.mark.skipif(os.environ.get("TIFZORET_LIVE") != "1", reason="scheduled live-provider test")
 def test_live_string_mouse_mapping(tmp_path):
     response = NETWORKS.cached_post(
         "get_string_ids",
