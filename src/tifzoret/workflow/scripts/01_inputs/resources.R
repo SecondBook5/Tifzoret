@@ -73,6 +73,45 @@ if (isTRUE(cfg$resources$offline) && any(vapply(names(providers), enabled, logic
   stop("Offline mode requested, but the required resource cache entry is absent: ", cache_dir, call. = FALSE)
 }
 
+# Bounded retry helper for live network fetches (KEGG REST API). Attempts the
+# expression up to max_attempts times with exponential backoff; on final failure
+# raises a provider-named, actionable error. Does NOT alter the success return path.
+retry_network_fetch <- function(expr, provider, max_attempts = 3L) {
+  attempt <- 1L
+  while (attempt <= max_attempts) {
+    result <- tryCatch(
+      expr,
+      error = function(e) e
+    )
+    if (!inherits(result, "error")) return(result)
+    if (attempt == max_attempts) {
+      stop(
+        "Failed to fetch from ", provider, " after ", max_attempts, " attempts (live network call). ",
+        "Running with offline mode and a warmed cache avoids this. Last error: ", result$message,
+        call. = FALSE
+      )
+    }
+    Sys.sleep(2^(attempt - 1L))
+    attempt <- attempt + 1L
+  }
+}
+
+# Light error wrapper for local data package calls (msigdbr). These are NOT network
+# fetches but bundled R data; failure typically means a missing package installation.
+# Wraps the call to provide a provider-named, actionable error on failure.
+safe_msigdbr_call <- function(provider_name, expr) {
+  tryCatch(
+    expr,
+    error = function(e) {
+      stop(
+        "Failed to load data from ", provider_name, " (via msigdbr local data package). ",
+        "Ensure the msigdbr package is installed and up to date. Error: ", e$message,
+        call. = FALSE
+      )
+    }
+  )
+}
+
 read_gmt_long <- function(path, provider = "custom") {
   lines <- readLines(path, warn = FALSE)
   rows <- lapply(lines[nzchar(lines)], function(line) {
@@ -89,7 +128,7 @@ provider_versions <- list(custom = list(source = normalizePath(args[["custom-gmt
 if (enabled("msigdb")) {
   if (!requireNamespace("msigdbr", quietly = TRUE)) stop("MSigDB provider requires the msigdbr package", call. = FALSE)
   database_species <- if (cfg$species$provider == "mouse") "MM" else "HS"
-  msig <- msigdbr::msigdbr(db_species = database_species, species = cfg$species$scientific_name)
+  msig <- safe_msigdbr_call("MSigDB", msigdbr::msigdbr(db_species = database_species, species = cfg$species$scientific_name))
   collection_key <- ifelse(is.na(msig$gs_subcollection) | msig$gs_subcollection == "", msig$gs_collection, paste(msig$gs_collection, msig$gs_subcollection, sep = ":"))
   requested <- unlist(cfg$resources$gene_sets$collections)
   if (cfg$species$provider == "mouse") {
@@ -124,10 +163,10 @@ if (enabled("go")) {
 if (enabled("kegg")) {
   if (is.null(orgdb)) stop("KEGG provider requires the species-matched org.*.eg.db package", call. = FALSE)
   organism <- if (cfg$species$provider == "mouse") "mmu" else if (cfg$species$provider == "human") "hsa" else stop("KEGG provider supports mouse or human", call. = FALSE)
-  links <- KEGGREST::keggLink("pathway", organism)
+  links <- retry_network_fetch(KEGGREST::keggLink("pathway", organism), "KEGG REST API")
   link_table <- data.frame(entrez = sub(paste0("^", organism, ":"), "", names(links)), pathway = sub("^path:", "", unname(links)))
   symbols <- AnnotationDbi::mapIds(orgdb, keys = unique(link_table$entrez), column = "SYMBOL", keytype = "ENTREZID", multiVals = "first")
-  names_table <- KEGGREST::keggList("pathway", organism)
+  names_table <- retry_network_fetch(KEGGREST::keggList("pathway", organism), "KEGG REST API")
   names(names_table) <- sub("^path:", "", names(names_table))
   link_table$gene_symbol <- unname(symbols[link_table$entrez])
   link_table$description <- unname(names_table[link_table$pathway])
@@ -143,7 +182,7 @@ if (enabled("reactome")) {
   if (!requireNamespace("msigdbr", quietly = TRUE)) stop("Reactome provider requires the msigdbr package", call. = FALSE)
   database_species <- if (cfg$species$provider == "mouse") "MM" else "HS"
   reactome_key <- if (cfg$species$provider == "mouse") "M2:CP:REACTOME" else "C2:CP:REACTOME"
-  react <- msigdbr::msigdbr(db_species = database_species, species = cfg$species$scientific_name)
+  react <- safe_msigdbr_call("Reactome", msigdbr::msigdbr(db_species = database_species, species = cfg$species$scientific_name))
   react_collection_key <- ifelse(is.na(react$gs_subcollection) | react$gs_subcollection == "", react$gs_collection, paste(react$gs_collection, react$gs_subcollection, sep = ":"))
   react <- react[react_collection_key %in% reactome_key, , drop = FALSE]
   if (nrow(react)) sets <- bind_rows(sets, data.frame(term = react$gs_name, description = react$gs_description, gene_symbol = react$gene_symbol, provider = "reactome"))
