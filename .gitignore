@@ -8,6 +8,7 @@ build/
 dist/
 .venv/
 results/
+Rplots.pdf
 
 # Brainstorming/design specs are never part of the public tree (see 3ecc445).
 docs/superpowers/

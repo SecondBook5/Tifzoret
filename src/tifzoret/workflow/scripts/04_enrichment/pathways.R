@@ -140,7 +140,7 @@ build_curve <- function(curve_table, pathway_row, numerator = "numerator", denom
     ggrepel::geom_text_repel(
       data = gene_labs, aes(label = gene_symbol), y = 0.48, size = 1.9,
       direction = "x", angle = 45, hjust = 0, vjust = 0, min.segment.length = 0,
-      segment.colour = "#AAB3BA", max.overlaps = Inf
+      segment.colour = "#AAB3BA", max.overlaps = Inf, seed = 42
     ) +
     scale_colour_manual(values = c(`FALSE` = "#111111", `TRUE` = line_col)) +
     scale_x_continuous(limits = c(1, n_genes), expand = c(0, 0)) +

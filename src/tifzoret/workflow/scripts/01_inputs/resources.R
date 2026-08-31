@@ -173,8 +173,8 @@ if (enabled("kegg")) {
   link_table <- link_table[!is.na(link_table$gene_symbol), , drop = FALSE]
   sets <- bind_rows(sets, data.frame(term = paste0("KEGG_", link_table$pathway), description = link_table$description, gene_symbol = link_table$gene_symbol, provider = "kegg"))
   # Fetch KEGG release identifier for provenance
-  kegg_info <- retry_network_fetch(KEGGREST::keggInfo("kegg"), "KEGG REST API")
   kegg_release <- tryCatch({
+    kegg_info <- retry_network_fetch(KEGGREST::keggInfo("kegg"), "KEGG REST API")
     release_line <- grep("Release", kegg_info, value = TRUE, ignore.case = TRUE)
     if (length(release_line) == 0L) {
       NA_character_

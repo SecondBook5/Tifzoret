@@ -22,6 +22,7 @@ import json
 import math
 import re
 import sys
+import time
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
@@ -85,7 +86,6 @@ def cached_post(
     )
     # Bounded retry for transient network failures (3 attempts with exponential backoff)
     max_attempts = 3
-    last_error = None
     for attempt in range(1, max_attempts + 1):
         try:
             with urllib.request.urlopen(request, timeout=180) as response:
@@ -93,13 +93,11 @@ def cached_post(
                 release = response.headers.get("X-STRING-Version") or response.headers.get("Last-Modified")
             break
         except (urllib.error.URLError, OSError) as e:
-            last_error = e
             if attempt == max_attempts:
                 raise RuntimeError(
                     f"Failed to fetch from STRING after {max_attempts} attempts (live network call). "
                     f"Running with offline mode and a warmed cache avoids this. Last error: {e}"
                 ) from e
-            import time
             time.sleep(2 ** (attempt - 1))
     cache_dir.mkdir(parents=True, exist_ok=True)
     response_path.write_bytes(payload)

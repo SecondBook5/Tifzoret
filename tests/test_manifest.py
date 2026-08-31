@@ -82,7 +82,7 @@ def test_manifest_expands_environment_variables_in_input_paths(tmp_path):
             "kind": "bam",
             "bam_root": ".",
             "samples": "samples.tsv",
-            "gtf": "${BULK_RNA_FRAME_TEST_GTF}",
+            "gtf": "${TIFZORET_TEST_GTF}",
         },
         "counting": {
             "threads": 1, "feature_type": "exon", "attribute": "gene_id",
@@ -130,7 +130,7 @@ def test_manifest_expands_environment_variables_in_input_paths(tmp_path):
     output = results / "manifest.json"
 
     environment = os.environ.copy()
-    environment["BULK_RNA_FRAME_TEST_GTF"] = str(tmp_path / "genes.gtf")
+    environment["TIFZORET_TEST_GTF"] = str(tmp_path / "genes.gtf")
     subprocess.run(
         [
             sys.executable,
