@@ -159,3 +159,34 @@ def test_term_test_df_grows_with_a_three_level_factor():
     assert tests["factor_a_factor_b_interaction"].df == 2
     assert tests["factor_b_any"].df == 4
     assert tests["any_effect"].df == 5
+
+
+def test_coefficient_only_family_does_not_produce_spurious_confounding_error():
+    """Coefficient-only families (cells=()) have one degenerate cell containing
+    all samples, so confounding checks are vacuous and must be skipped."""
+    base = _family()
+    # Build a coefficient-only family by clearing cells.
+    coef_family = dataclasses.replace(base, cells=())
+    rows = _balanced(batch="b1")
+    # Add a nuisance covariate that would trigger confounding if checked.
+    for index, row in enumerate(rows):
+        row["batch"] = "b1" if index < 6 else "b2"
+    errors = validate_family_design(coef_family, rows)
+    # Should NOT produce confounding error.
+    assert not any("confounded" in error for error in errors)
+
+
+def test_coefficient_only_family_still_enforces_replicate_unit_constraint():
+    """Coefficient-only families must still reject repeated replicate_unit values
+    because the engine has no mixed-model path."""
+    base = _family()
+    coef_family = dataclasses.replace(base, cells=(), replicate_unit="unit_id")
+    rows = _balanced()
+    # Repeat unit_id "u1" twice (in the degenerate cell).
+    rows[0]["unit_id"] = "u1"
+    rows[1]["unit_id"] = "u1"
+    for index, row in enumerate(rows[2:], start=2):
+        row["unit_id"] = f"u{index}"
+    errors = validate_family_design(coef_family, rows)
+    # Should produce the mixed-model hard fail.
+    assert any("u1" in error and "mixed-model" in error for error in errors)

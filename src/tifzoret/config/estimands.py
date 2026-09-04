@@ -507,44 +507,45 @@ def validate_family_design(family: Family, sample_rows: Sequence[dict[str, str]]
                 f"family {family.id}: cell-mean design is rank-deficient "
                 f"(rank {rank} < {matrix.shape[1]} cells)"
             )
-        # Skip confounding validation for coefficient-only families (empty cells).
-        # These families are labels only and the coefficient is checked at DE time.
-        if not family.cells:
-            return errors
-        nuisance = [
-            variable
-            for variable in design_variables(family.design)
-            if variable not in set(family.cells)
-        ]
-        cell_index = {cell: position for position, cell in enumerate(cells)}
-        for variable in nuisance:
-            per_cell: dict[tuple[str, ...], set[str]] = {}
-            per_value: dict[str, set[tuple[str, ...]]] = {}
-            for row in sample_rows:
-                if variable not in row:
-                    continue
-                key = tuple(str(row[column]) for column in family.cells)
-                if key not in cell_index:
-                    continue
-                value = str(row[variable])
-                per_cell.setdefault(key, set()).add(value)
-                per_value.setdefault(value, set()).add(key)
-            constant_within_cells = per_cell and all(
-                len(values) == 1 for values in per_cell.values()
-            )
-            determines_cell = per_value and all(
-                len(keys) == 1 for keys in per_value.values()
-            )
-            if constant_within_cells and len(per_cell) > 1:
-                errors.append(
-                    f"family {family.id}: nuisance covariate {variable!r} is perfectly "
-                    "confounded with cell membership (constant within every cell)"
+        # Skip confounding validation for coefficient-only families (cells=()).
+        # With a single degenerate cell containing all samples, both confounding
+        # branches are vacuous: every nuisance level trivially occurs in the only
+        # cell, so the check cannot say anything meaningful.
+        if family.cells:
+            nuisance = [
+                variable
+                for variable in design_variables(family.design)
+                if variable not in set(family.cells)
+            ]
+            cell_index = {cell: position for position, cell in enumerate(cells)}
+            for variable in nuisance:
+                per_cell: dict[tuple[str, ...], set[str]] = {}
+                per_value: dict[str, set[tuple[str, ...]]] = {}
+                for row in sample_rows:
+                    if variable not in row:
+                        continue
+                    key = tuple(str(row[column]) for column in family.cells)
+                    if key not in cell_index:
+                        continue
+                    value = str(row[variable])
+                    per_cell.setdefault(key, set()).add(value)
+                    per_value.setdefault(value, set()).add(key)
+                constant_within_cells = per_cell and all(
+                    len(values) == 1 for values in per_cell.values()
                 )
-            elif determines_cell and len(per_value) > 1:
-                errors.append(
-                    f"family {family.id}: nuisance covariate {variable!r} is perfectly "
-                    "confounded with cell membership (each level occurs in one cell)"
+                determines_cell = per_value and all(
+                    len(keys) == 1 for keys in per_value.values()
                 )
+                if constant_within_cells and len(per_cell) > 1:
+                    errors.append(
+                        f"family {family.id}: nuisance covariate {variable!r} is perfectly "
+                        "confounded with cell membership (constant within every cell)"
+                    )
+                elif determines_cell and len(per_value) > 1:
+                    errors.append(
+                        f"family {family.id}: nuisance covariate {variable!r} is perfectly "
+                        "confounded with cell membership (each level occurs in one cell)"
+                    )
 
         # This parameter count is deliberately conservative: it counts cell-mean parameters
         # only (product of observed level counts per factor), ignoring nuisance covariates,
