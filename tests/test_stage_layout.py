@@ -6,7 +6,7 @@ SCRIPTS = Path(__file__).resolve().parents[1] / "src" / "tifzoret" / "workflow" 
 EXPECTED = {
     "01_inputs": {"materialize_inputs.py", "resources.R", "export_symbol_map.R"},
     "02_qc": {"qc.R", "batch.R", "sva.R", "variancepartition.R"},
-    "03_differential": {"de.R", "de_confirm.R", "omnibus.R", "factorial.R", "family_fit.R", "estimand.R", "de_render.R"},
+    "03_differential": {"de.R", "de_confirm.R", "omnibus.R", "factorial.R", "family_fit.R", "estimand.R", "term_test.R", "de_render.R"},
     "04_enrichment": {"pathways.R", "ontology.R", "spia.R", "enrichment_map.py"},
     "05_composition": {"composition.R", "deconvolution.R"},
     "06_regulators": {"regulators.R", "grn.py", "grn_radial.R"},
