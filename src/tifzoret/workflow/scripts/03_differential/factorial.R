@@ -37,20 +37,40 @@ script_arg <- grep("^--file=", commandArgs(FALSE), value = TRUE)[1]
 script_path <- normalizePath(sub("^--file=", "", script_arg), mustWork = TRUE)
 source(file.path(dirname(script_path), "..", "utils.R"), local = FALSE)
 
-args <- parse_cli(c("project-config", "vst-expression", "samples", "de-x", "de-y", "outdir"))
+# Backward compatibility: support both old (--de-x/--de-y) and new (--family-dir/--arms/--interaction) interfaces
+all_args <- commandArgs(trailingOnly = TRUE)
+using_new_interface <- any(grepl("^--family-dir", all_args))
+
+if (using_new_interface) {
+  args <- parse_cli(c("project-config", "vst-expression", "samples", "family-dir", "arms", "interaction", "outdir"))
+} else {
+  args <- parse_cli(c("project-config", "vst-expression", "samples", "de-x", "de-y", "outdir"))
+}
+
 cfg <- read_project(args[["project-config"]])
 dirs <- ensure_output_dirs(args$outdir)
 
 settings <- cfg$analysis$settings$factorial
 if (is.null(settings)) {
-  stop("factorial module requires analysis.settings.factorial (factors, effect_x, effect_y)", call. = FALSE)
+  stop("factorial module requires analysis.settings.factorial", call. = FALSE)
 }
-factors <- as.character(unlist(settings$factors, use.names = FALSE))
-if (length(factors) != 2L) {
-  stop("factorial requires exactly two factors, got: ", paste(factors, collapse = ", "), call. = FALSE)
+
+if (using_new_interface) {
+  # New interface: family-based
+  arm_ids <- strsplit(args$arms, ",", fixed = TRUE)[[1]]
+  if (length(arm_ids) != 2L) {
+    stop("factorial requires exactly two arm estimand IDs, got: ", paste(arm_ids, collapse = ", "), call. = FALSE)
+  }
+  interaction_id <- args$interaction
+} else {
+  # Old interface: direct DE tables (backward compatibility)
+  arm_ids <- c(settings$effect_x, settings$effect_y)
+  if (is.null(arm_ids[1]) || is.null(arm_ids[2])) {
+    stop("factorial with old interface requires analysis.settings.factorial.effect_x/effect_y", call. = FALSE)
+  }
+  interaction_id <- NULL
 }
-effect_x_id <- as.character(settings$effect_x)
-effect_y_id <- as.character(settings$effect_y)
+
 explicit_genes <- if (is.null(settings$genes)) character(0) else as.character(unlist(settings$genes, use.names = FALSE))
 top_genes <- if (is.null(settings$top_genes)) 16L else as.integer(settings$top_genes)
 
@@ -58,11 +78,11 @@ fdr <- if (is.null(cfg$figures$de$fdr)) 0.05 else as.numeric(cfg$figures$de$fdr)
 abs_log2fc <- if (is.null(cfg$figures$de$abs_log2fc)) 1.0 else as.numeric(cfg$figures$de$abs_log2fc)
 
 warnings <- character(0)
+factors <- NULL  # Will be set later if needed
 
 # ---------------------------------------------------------------------------
 # Inputs. vst_expression.tsv is symbol-keyed (first column gene_symbol, one
-# column per sample); the two DE tables carry gene_symbol, log2_fold_change and
-# adjusted_p_value. Nothing here needs the annotation map.
+# column per sample); DE data comes from family or direct tables depending on interface.
 # ---------------------------------------------------------------------------
 vst_tbl <- readr::read_tsv(normalizePath(args[["vst-expression"]], mustWork = TRUE),
                            show_col_types = FALSE, progress = FALSE)
@@ -71,78 +91,139 @@ sample_cols <- setdiff(names(vst_tbl), symbol_col)
 
 samples <- readr::read_tsv(normalizePath(args$samples, mustWork = TRUE),
                            show_col_types = FALSE, progress = FALSE) %>% as.data.frame()
-for (fac in factors) {
-  if (!fac %in% colnames(samples)) {
-    stop("factorial factor '", fac, "' is not a samples.tsv column", call. = FALSE)
-  }
-}
 # Only samples that appear as VST columns can contribute expression.
 samples <- samples[samples$sample_id %in% sample_cols, , drop = FALSE]
 if (!nrow(samples)) stop("no samples overlap the VST expression columns", call. = FALSE)
 
 # Grouping column for the four-group view: the study's configured figures.group
-# when present (so the palette applies), else the crossing of the two factors.
 group_col <- cfg$figures$group
 if (is.null(group_col) || !group_col %in% colnames(samples)) {
-  group_col <- ".factorial_group"
-  samples[[group_col]] <- paste(samples[[factors[1]]], samples[[factors[2]]], sep = "_")
-  warnings <- c(warnings, "figures.group absent; grouping by the crossed factors")
+  if (using_new_interface) {
+    stop("factorial requires figures.group in project config for the interaction profile view", call. = FALSE)
+  } else {
+    # Old interface: create grouping from factors if present
+    factors <- if (!is.null(settings$factors)) as.character(unlist(settings$factors, use.names = FALSE)) else NULL
+    if (!is.null(factors) && length(factors) == 2L) {
+      group_col <- ".factorial_group"
+      samples[[group_col]] <- paste(samples[[factors[1]]], samples[[factors[2]]], sep = "_")
+      warnings <- c(warnings, "figures.group absent; grouping by the crossed factors")
+    } else {
+      stop("factorial requires figures.group or settings.factorial.factors", call. = FALSE)
+    }
+  }
 }
 
-read_de <- function(path) {
-  de <- readr::read_tsv(normalizePath(path, mustWork = TRUE), show_col_types = FALSE, progress = FALSE)
-  if (!"gene_symbol" %in% names(de)) stop("DE table lacks gene_symbol: ", path, call. = FALSE)
-  num_col <- function(name) if (name %in% names(de)) suppressWarnings(as.numeric(de[[name]])) else NA_real_
-  tibble::tibble(
-    gene_symbol = as.character(de$gene_symbol),
-    lfc = num_col("log2_fold_change"),
-    se = num_col("lfc_se"),
-    base_mean = num_col("base_mean"),
-    padj = num_col("adjusted_p_value")
+if (using_new_interface) {
+  # New interface: read from family directory
+  family_de_path <- file.path(args[["family-dir"]], "tables", "de_results.tsv")
+  if (!file.exists(family_de_path)) {
+    stop("family de_results.tsv not found: ", family_de_path, call. = FALSE)
+  }
+  family_de <- readr::read_tsv(family_de_path, show_col_types = FALSE, progress = FALSE)
+
+  read_estimand <- function(de_table, estimand_id) {
+    rows <- de_table[de_table$estimand_id == estimand_id, , drop = FALSE]
+    if (!nrow(rows)) stop("estimand not found in de_results.tsv: ", estimand_id, call. = FALSE)
+    num_col <- function(name) if (name %in% names(rows)) suppressWarnings(as.numeric(rows[[name]])) else NA_real_
+    tibble::tibble(
+      gene_id = as.character(rows$gene_id),
+      gene_symbol = as.character(rows$gene_symbol),
+      lfc = num_col("log2_fold_change"),
+      se = num_col("lfc_se"),
+      base_mean = num_col("base_mean"),
+      statistic = num_col("statistic"),
+      padj = num_col("adjusted_p_value")
+    ) %>%
+      dplyr::filter(!is.na(gene_symbol), gene_symbol != "") %>%
+      dplyr::distinct(gene_symbol, .keep_all = TRUE)
+  }
+  de_arm_a <- read_estimand(family_de, arm_ids[1])
+  de_arm_b <- read_estimand(family_de, arm_ids[2])
+  de_interaction <- read_estimand(family_de, interaction_id)
+
+  # Read coefficient covariance for the synthesis table
+  covariance_path <- file.path(args[["family-dir"]], "tables", "coefficient_covariance.tsv")
+  if (!file.exists(covariance_path)) {
+    stop("coefficient_covariance.tsv not found: ", covariance_path, call. = FALSE)
+  }
+  covariance <- readr::read_tsv(covariance_path, show_col_types = FALSE, progress = FALSE)
+} else {
+  # Old interface: read from direct DE table files
+  read_de <- function(path) {
+    de <- readr::read_tsv(normalizePath(path, mustWork = TRUE), show_col_types = FALSE, progress = FALSE)
+    if (!"gene_symbol" %in% names(de)) stop("DE table lacks gene_symbol: ", path, call. = FALSE)
+    num_col <- function(name) if (name %in% names(de)) suppressWarnings(as.numeric(de[[name]])) else NA_real_
+    tibble::tibble(
+      gene_id = if ("gene_id" %in% names(de)) as.character(de$gene_id) else as.character(de$gene_symbol),
+      gene_symbol = as.character(de$gene_symbol),
+      lfc = num_col("log2_fold_change"),
+      se = num_col("lfc_se"),
+      base_mean = num_col("base_mean"),
+      statistic = NA_real_,  # Not available in old interface
+      padj = num_col("adjusted_p_value")
+    ) %>%
+      dplyr::filter(!is.na(gene_symbol), gene_symbol != "") %>%
+      dplyr::distinct(gene_symbol, .keep_all = TRUE)
+  }
+  de_arm_a <- read_de(args[["de-x"]])
+  de_arm_b <- read_de(args[["de-y"]])
+  # Synthesize interaction from arm difference (naive, no covariance)
+  de_interaction <- dplyr::inner_join(
+    dplyr::select(de_arm_a, gene_symbol, lfc_a = lfc, se_a = se),
+    dplyr::select(de_arm_b, gene_symbol, lfc_b = lfc, se_b = se),
+    by = "gene_symbol"
   ) %>%
-    dplyr::filter(!is.na(gene_symbol), gene_symbol != "") %>%
-    dplyr::distinct(gene_symbol, .keep_all = TRUE)
+    dplyr::mutate(
+      gene_id = gene_symbol,
+      lfc = lfc_b - lfc_a,
+      se = sqrt(dplyr::coalesce(se_a, 0)^2 + dplyr::coalesce(se_b, 0)^2),
+      statistic = ifelse(se > 0, (lfc_b - lfc_a) / se, NA_real_),
+      base_mean = NA_real_,
+      padj = NA_real_
+    ) %>%
+    dplyr::select(gene_id, gene_symbol, lfc, se, base_mean, statistic, padj)
+  covariance <- NULL
 }
-de_x <- read_de(args[["de-x"]])
-de_y <- read_de(args[["de-y"]])
 
 # ---------------------------------------------------------------------------
 # View 1 -- effect vs effect. Every gene with a finite fold-change in both arms.
-# delta = LFC_y - LFC_x is the descriptive interaction (how much more the gene
-# moves in arm Y than in arm X); interaction_z = delta / sqrt(se_x^2 + se_y^2)
-# is the Wald statistic for that difference of two coefficients -- large only
-# when the difference is both sizeable AND well estimated, so a huge fold-change
-# resting on near-zero counts (large SE) does not masquerade as an interaction.
+# delta = LFC_b - LFC_a is the descriptive interaction (how much more the gene
+# moves in arm B than in arm A). The interaction estimand's statistic is the
+# formal covariance-aware test statistic for the difference-of-differences.
 # ---------------------------------------------------------------------------
 merged <- dplyr::inner_join(
-  dplyr::rename(de_x, lfc_x = lfc, se_x = se, base_mean_x = base_mean, padj_x = padj),
-  dplyr::rename(de_y, lfc_y = lfc, se_y = se, base_mean_y = base_mean, padj_y = padj),
+  dplyr::rename(de_arm_a, lfc_a = lfc, se_a = se, base_mean_a = base_mean, padj_a = padj, gene_id_a = gene_id),
+  dplyr::rename(de_arm_b, lfc_b = lfc, se_b = se, base_mean_b = base_mean, padj_b = padj, gene_id_b = gene_id),
   by = "gene_symbol"
 ) %>%
-  dplyr::filter(is.finite(lfc_x), is.finite(lfc_y)) %>%
+  dplyr::inner_join(
+    dplyr::select(de_interaction, gene_symbol, interaction_lfc = lfc, interaction_se = se,
+                  interaction_statistic = statistic, interaction_padj = padj),
+    by = "gene_symbol"
+  ) %>%
+  dplyr::filter(is.finite(lfc_a), is.finite(lfc_b)) %>%
   dplyr::mutate(
-    delta = lfc_y - lfc_x,
-    base_mean = dplyr::coalesce(base_mean_x, base_mean_y),
-    se_combined = sqrt(dplyr::coalesce(se_x, 0)^2 + dplyr::coalesce(se_y, 0)^2),
-    interaction_z = ifelse(se_combined > 0, delta / se_combined, NA_real_),
-    sig_either = (!is.na(padj_x) & padj_x < fdr) | (!is.na(padj_y) & padj_y < fdr),
+    delta = lfc_b - lfc_a,
+    base_mean = dplyr::coalesce(base_mean_a, base_mean_b),
+    # Naive SE (ignoring covariance) for comparison
+    se_naive = sqrt(dplyr::coalesce(se_a, 0)^2 + dplyr::coalesce(se_b, 0)^2),
+    interaction_z_naive = ifelse(se_naive > 0, delta / se_naive, NA_real_),
     category = dplyr::case_when(
-      sig_either & abs(delta) >= abs_log2fc ~ "Interaction",
-      sig_either ~ "Concordant",
+      !is.na(interaction_padj) & interaction_padj < fdr & abs(delta) >= abs_log2fc ~ "Interaction",
+      (!is.na(padj_a) & padj_a < fdr) | (!is.na(padj_b) & padj_b < fdr) ~ "Arm effect",
       TRUE ~ "Not significant"
     )
   )
-category_levels <- c("Interaction", "Concordant", "Not significant")
+category_levels <- c("Interaction", "Arm effect", "Not significant")
 merged$category <- factor(merged$category, levels = category_levels)
 
 # ---------------------------------------------------------------------------
 # Gene selection for the profile / expression views. An explicit list wins
-# (the analyst's biological curation -- gene-name filtering is deliberately NOT
-# in the engine, which is species/study-agnostic). Otherwise, among genes
-# significant in either arm and present in the VST matrix, rank by the
-# interaction Wald |z| when standard errors are available, and fall back to
-# |delta| above the study-median base_mean (so low-count fold-change artifacts
-# do not dominate) when they are not.
+# (the analyst's biological curation). Otherwise, rank all genes by the
+# interaction estimand's |statistic| (the covariance-aware Wald z) and take the
+# top N present in the VST matrix. This ranks by the formal test, not by a
+# descriptive delta or a sig_either filter, so crossover genes (strong
+# interaction, weak arm effects) are selectable.
 # ---------------------------------------------------------------------------
 vst_symbols <- vst_tbl[[symbol_col]]
 if (length(explicit_genes)) {
@@ -151,26 +232,15 @@ if (length(explicit_genes)) {
   if (length(dropped)) warnings <- c(warnings, sprintf("configured genes absent from expression: %s", paste(dropped, collapse = ", ")))
   selection_method <- "explicit configured gene list"
 } else {
-  pool <- merged %>% dplyr::filter(sig_either, gene_symbol %in% vst_symbols)
-  if (any(is.finite(pool$interaction_z))) {
-    pool <- pool %>%
-      dplyr::filter(is.finite(interaction_z)) %>%
-      dplyr::arrange(dplyr::desc(abs(interaction_z)))
-    selection_method <- "top interaction Wald |z| = |LFC_y - LFC_x| / sqrt(se_x^2 + se_y^2) among genes significant in either arm"
-  } else {
-    expressed <- merged$base_mean[is.finite(merged$base_mean) & merged$base_mean > 0]
-    floor_bm <- if (length(expressed)) stats::median(expressed) else 0
-    pool <- pool %>%
-      dplyr::filter(!is.finite(base_mean) | base_mean >= floor_bm) %>%
-      dplyr::arrange(dplyr::desc(abs(delta)))
-    selection_method <- sprintf("top |LFC_y - LFC_x| among genes significant in either arm and expressed >= study-median base_mean (%.1f)", floor_bm)
-    warnings <- c(warnings, "lfc_se absent from the DE tables; ranked interaction genes by |delta| over an expression floor rather than the Wald z")
-  }
+  pool <- merged %>%
+    dplyr::filter(gene_symbol %in% vst_symbols, is.finite(interaction_statistic)) %>%
+    dplyr::arrange(dplyr::desc(abs(interaction_statistic)))
   selected <- utils::head(pool$gene_symbol, top_genes)
+  selection_method <- "top interaction |statistic| from the covariance-aware family fit"
 }
 selected <- unique(selected)
 if (!length(selected)) {
-  warnings <- c(warnings, "no genes selected for the profile/expression views (none significant in either arm)")
+  warnings <- c(warnings, "no genes selected for the profile/expression views (no finite interaction statistics)")
 }
 
 # Long, per-sample expression for the selected genes, joined to sample metadata.
@@ -186,13 +256,45 @@ if (length(selected)) {
 }
 
 # ---------------------------------------------------------------------------
-# Palettes. Factor-A levels get a colourblind-safe qualitative palette; the four
-# groups reuse the study palette (figures.palette) where it covers them.
+# Interaction synthesis table: per gene, the arm LFCs/SEs, interaction LFC/SE,
+# and cross-covariance terms (making the difference-of-differences auditable).
+# Only created for new interface (old interface doesn't have covariance data).
 # ---------------------------------------------------------------------------
+if (using_new_interface) {
+  synthesis <- merged %>%
+    dplyr::select(gene_id = gene_id_a, gene_symbol, base_mean,
+                  arm_a_lfc = lfc_a, arm_a_se = se_a,
+                  arm_b_lfc = lfc_b, arm_b_se = se_b,
+                  interaction_lfc, interaction_se) %>%
+    dplyr::arrange(gene_id)
+
+  # TODO: Add cross-covariance terms from coefficient_covariance.tsv
+  # This requires mapping gene_id to coefficient names, which depends on the
+  # family's contrast matrix structure. For now, omit cov columns.
+
+  readr::write_tsv(synthesis, file.path(dirs$tables, "interaction_synthesis.tsv"), na = "NA")
+}
+
+# ---------------------------------------------------------------------------
+# Palettes. Use the study palette (figures.palette) for groups. Factors are
+# optional (for backward compatibility with old configs) but required for the
+# profile/expression views.
+# ---------------------------------------------------------------------------
+factors <- if (!is.null(settings$factors)) {
+  as.character(unlist(settings$factors, use.names = FALSE))
+} else {
+  NULL
+}
 okabe_ito <- c("#0072B2", "#E69F00", "#009E73", "#CC79A7", "#56B4E9", "#D55E00", "#F0E442", "#000000")
-level_order <- function(column) unique(as.character(samples[[column]]))
-levels_a <- level_order(factors[1])
-levels_b <- level_order(factors[2])
+if (!is.null(factors) && length(factors) == 2L) {
+  level_order <- function(column) unique(as.character(samples[[column]]))
+  levels_a <- level_order(factors[1])
+  levels_b <- level_order(factors[2])
+  palette_a <- factor_level_palette(levels_a)
+  has_factors <- TRUE
+} else {
+  has_factors <- FALSE
+}
 
 # Humanize a contrast id into an axis-ready effect label using the study's
 # contrasts table: "numerator vs denominator" with underscores turned to spaces
@@ -267,7 +369,7 @@ group_palette <- group_palette[observed_groups]
 
 category_palette <- c(
   Interaction = unname(SIGNIFICANCE_PALETTE["significant_up"]),
-  Concordant = unname(SIGNIFICANCE_PALETTE["padj_only"]),
+  "Arm effect" = unname(SIGNIFICANCE_PALETTE["padj_only"]),
   "Not significant" = unname(SIGNIFICANCE_PALETTE["ns"])
 )
 
@@ -275,9 +377,9 @@ category_palette <- c(
 # Write the effect-vs-effect displayed table (all genes) and render the scatter.
 # ---------------------------------------------------------------------------
 effect_table <- merged %>%
-  dplyr::transmute(gene_symbol, base_mean, lfc_x, se_x, padj_x, lfc_y, se_y, padj_y,
-                   delta, interaction_z, category = as.character(category)) %>%
-  dplyr::arrange(dplyr::desc(abs(dplyr::coalesce(interaction_z, delta))))
+  dplyr::arrange(dplyr::desc(abs(interaction_statistic))) %>%
+  dplyr::transmute(gene_symbol, base_mean, lfc_a, se_a, padj_a, lfc_b, se_b, padj_b,
+                   delta, interaction_z = interaction_z_naive, category = as.character(category))
 readr::write_tsv(effect_table, file.path(dirs$tables, "effect_vs_effect_displayed.tsv"))
 
 if (nrow(merged)) {
@@ -288,25 +390,25 @@ if (nrow(merged)) {
   # live -- collapsed into a dot. Instead: size the window to the 99th percentile
   # of |log2FC|, and CLAMP the handful of off-window genes to the border, drawn
   # as outward triangles so they stay visible and honest without rescaling.
-  finite_lfc <- c(merged$lfc_x, merged$lfc_y)
+  finite_lfc <- c(merged$lfc_a, merged$lfc_b)
   finite_lfc <- finite_lfc[is.finite(finite_lfc)]
   core <- if (length(finite_lfc)) stats::quantile(abs(finite_lfc), 0.99, names = FALSE) else 1
   axis_limit <- max(3, ceiling(core * 2.2 * 2) / 2)   # >= 3, rounded up to 0.5
 
   plot_data <- merged %>%
     dplyr::mutate(
-      off_scale = pmax(abs(lfc_x), abs(lfc_y)) > axis_limit,
-      x_plot = pmax(pmin(lfc_x, axis_limit), -axis_limit),
-      y_plot = pmax(pmin(lfc_y, axis_limit), -axis_limit)
+      off_scale = pmax(abs(lfc_a), abs(lfc_b)) > axis_limit,
+      x_plot = pmax(pmin(lfc_a, axis_limit), -axis_limit),
+      y_plot = pmax(pmin(lfc_b, axis_limit), -axis_limit)
     ) %>%
-    # Draw order: NS first (a faint background haze), then Concordant, then the
+    # Draw order: NS first (a faint background haze), then Arm effect, then the
     # Interaction genes on top so the story sits above the crowd.
-    dplyr::arrange(category == "Concordant", category == "Interaction")
+    dplyr::arrange(category == "Arm effect", category == "Interaction")
   label_data <- plot_data %>% dplyr::filter(gene_symbol %in% selected)
   n_off <- sum(plot_data$off_scale, na.rm = TRUE)
 
   subtitle <- str_wrap(sprintf(
-    "Each gene's log2 fold-change in the two contrasts. Genes on the dashed y = x line respond identically in both arms; distance from it is the interaction (top %d by Wald z labelled)%s.",
+    "Each gene's log2 fold-change in the two arm estimands. Genes on the dashed y = x line respond identically in both arms; distance from it is the interaction (top %d by |statistic| labelled)%s.",
     length(selected),
     if (n_off) sprintf("; %d gene%s beyond ±%.1f clamped to the border (▲)",
                        n_off, ifelse(n_off == 1L, "", "s"), axis_limit) else ""
@@ -318,17 +420,17 @@ if (nrow(merged)) {
     geom_abline(slope = 1, intercept = 0, colour = MID_GREY, linetype = "dashed", linewidth = 0.4) +
     geom_point(aes(colour = category, size = category, alpha = category, shape = off_scale)) +
     scale_colour_manual(values = category_palette, drop = FALSE, name = NULL) +
-    scale_size_manual(values = c(Interaction = 2.0, Concordant = 1.5, "Not significant" = 0.5),
+    scale_size_manual(values = c(Interaction = 2.0, "Arm effect" = 1.5, "Not significant" = 0.5),
                       drop = FALSE, guide = "none") +
-    scale_alpha_manual(values = c(Interaction = 0.9, Concordant = 0.75, "Not significant" = 0.14),
+    scale_alpha_manual(values = c(Interaction = 0.9, "Arm effect" = 0.75, "Not significant" = 0.14),
                        drop = FALSE, guide = "none") +
     scale_shape_manual(values = c(`FALSE` = 16, `TRUE` = 17), guide = "none") +
     coord_equal(xlim = c(-axis_limit, axis_limit), ylim = c(-axis_limit, axis_limit), clip = "on") +
     labs(
       title = "Effect vs effect: the interaction view",
       subtitle = subtitle,
-      x = sprintf("log2 fold-change\n%s", humanize_effect(effect_x_id)),
-      y = sprintf("log2 fold-change\n%s", humanize_effect(effect_y_id))
+      x = sprintf("log2 fold-change\n%s", arm_ids[1]),
+      y = sprintf("log2 fold-change\n%s", arm_ids[2])
     ) +
     guides(colour = guide_legend(override.aes = list(size = 2.3, alpha = 1, shape = 16))) +
     theme_publication(8.6) +
@@ -349,10 +451,19 @@ save_plot_pair(effect_plot, file.path(dirs$figures, "effect_vs_effect"), 6.0, 6.
 
 # ---------------------------------------------------------------------------
 # View 2 -- interaction profile (group means across factor B, one line per
-# level of factor A, faceted by gene).
+# level of factor A, faceted by gene). Requires factors in settings.
 # ---------------------------------------------------------------------------
-profile_fields <- c("gene_symbol", factors[1], factors[2], "mean_expression", "sem", "n")
-if (length(selected)) {
+if (!has_factors) {
+  profile_fields <- c("gene_symbol", "factor_a", "factor_b", "mean_expression", "sem", "n")
+  readr::write_tsv(
+    stats::setNames(data.frame(matrix(character(0), nrow = 0, ncol = length(profile_fields))), profile_fields),
+    file.path(dirs$tables, "interaction_profile_displayed.tsv")
+  )
+  profile_plot <- empty_plot("Interaction profile", "Requires analysis.settings.factorial.factors")
+  facet_cols <- 1; facet_rows <- 1
+} else {
+  profile_fields <- c("gene_symbol", factors[1], factors[2], "mean_expression", "sem", "n")
+  if (length(selected)) {
   profile <- expr_long %>%
     dplyr::mutate(.fa = factor(.data[[factors[1]]], levels = levels_a),
                   .fb = factor(.data[[factors[2]]], levels = levels_b)) %>%
@@ -386,19 +497,20 @@ if (length(selected)) {
     ) +
     theme_publication(8.4) +
     theme(legend.position = "bottom", panel.grid.major.x = element_blank())
-  n_facets <- length(selected)
-  facet_cols <- max(1, ceiling(sqrt(n_facets)))
-  facet_rows <- ceiling(n_facets / facet_cols)
-} else {
-  readr::write_tsv(
-    stats::setNames(data.frame(matrix(character(0), nrow = 0, ncol = length(profile_fields))), profile_fields),
-    file.path(dirs$tables, "interaction_profile_displayed.tsv")
-  )
-  profile_plot <- empty_plot("Interaction profile", "No genes selected")
-  facet_cols <- 1; facet_rows <- 1
+    n_facets <- length(selected)
+    facet_cols <- max(1, ceiling(sqrt(n_facets)))
+    facet_rows <- ceiling(n_facets / facet_cols)
+  } else {
+    readr::write_tsv(
+      stats::setNames(data.frame(matrix(character(0), nrow = 0, ncol = length(profile_fields))), profile_fields),
+      file.path(dirs$tables, "interaction_profile_displayed.tsv")
+    )
+    profile_plot <- empty_plot("Interaction profile", "No genes selected")
+    facet_cols <- 1; facet_rows <- 1
+  }
+  save_plot_pair(profile_plot, file.path(dirs$figures, "interaction_profile"),
+                 max(4.5, 2.1 * facet_cols + 0.8), max(3.8, 2.0 * facet_rows + 1.0))
 }
-save_plot_pair(profile_plot, file.path(dirs$figures, "interaction_profile"),
-               max(4.5, 2.1 * facet_cols + 0.8), max(3.8, 2.0 * facet_rows + 1.0))
 
 # ---------------------------------------------------------------------------
 # View 3 -- four-group expression (per-sample points + group mean, faceted by
@@ -442,20 +554,33 @@ save_plot_pair(expr_plot, file.path(dirs$figures, "group_expression"),
 # ---------------------------------------------------------------------------
 # Summary receipt.
 # ---------------------------------------------------------------------------
-write_json_file(
-  list(
-    project_id = cfg$project$id,
-    method = "descriptive difference of two shrunken DESeq2 effects (no refit)",
-    factors = as.list(factors),
-    effect_x = effect_x_id,
-    effect_y = effect_y_id,
-    group_column = group_col,
-    fdr = fdr,
-    abs_log2fc = abs_log2fc,
-    genes_compared = nrow(merged),
-    selection_method = selection_method,
-    selected_genes = as.list(selected),
-    warnings = warnings
-  ),
-  file.path(args$outdir, "factorial_summary.json")
+summary_base <- list(
+  project_id = cfg$project$id,
+  group_column = group_col,
+  fdr = fdr,
+  abs_log2fc = abs_log2fc,
+  genes_compared = nrow(merged),
+  selection_method = selection_method,
+  selected_genes = as.list(selected),
+  warnings = warnings
 )
+
+if (using_new_interface) {
+  summary <- c(summary_base, list(
+    method = "formal interaction estimand from a shared family fit (covariance-aware)",
+    family_dir = args[["family-dir"]],
+    arm_a = arm_ids[1],
+    arm_b = arm_ids[2],
+    interaction = interaction_id,
+    factors = if (!is.null(factors)) as.list(factors) else NULL
+  ))
+} else {
+  summary <- c(summary_base, list(
+    method = "descriptive difference of two shrunken DESeq2 effects (no refit)",
+    effect_x = arm_ids[1],
+    effect_y = arm_ids[2],
+    factors = if (!is.null(factors)) as.list(factors) else NULL
+  ))
+}
+
+write_json_file(summary, file.path(args$outdir, "factorial_summary.json"))
