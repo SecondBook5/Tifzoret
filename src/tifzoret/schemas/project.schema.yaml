@@ -89,6 +89,56 @@ properties:
       # Optional batch variable (a samples.tsv column) consumed by the batch
       # module: limma::removeBatchEffect-corrected PCA + sample-distance views.
       batch: {type: string, minLength: 1}
+      families:
+        type: object
+        description: >-
+          Declared estimand families. Each family is one design plus the factor
+          columns to cross; each estimand is a signed sum of design cells,
+          compiled once to a numeric contrast vector and extracted from a
+          single shared fit.
+        additionalProperties:
+          type: object
+          required: [design, cells, estimands]
+          additionalProperties: false
+          properties:
+            design:
+              type: string
+              pattern: "^~"
+            cells:
+              type: array
+              minItems: 1
+              items: {type: string, minLength: 1}
+            reference_levels:
+              type: object
+              additionalProperties: {type: string, minLength: 1}
+            replicate_unit: {type: string, minLength: 1}
+            shrinkage: {type: string, enum: [apeglm, ashr, none]}
+            filter: {type: string, enum: [design_aware, total_count, none]}
+            term_tests:
+              oneOf:
+                - {type: string, enum: [auto]}
+                - {type: boolean}
+                - type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required: [id, reduced]
+                    additionalProperties: false
+                    properties:
+                      id: {type: string, pattern: "^[a-z0-9][a-z0-9_-]*$"}
+                      reduced: {type: string, pattern: "^~"}
+            estimands:
+              type: array
+              minItems: 1
+              items:
+                type: object
+                required: [id, expression]
+                additionalProperties: false
+                properties:
+                  id: {type: string, pattern: "^[a-z0-9][a-z0-9_-]*$"}
+                  label: {type: string}
+                  role: {type: string, enum: [primary]}
+                  expression: {type: string, minLength: 1}
       modules:
         type: object
         additionalProperties: false

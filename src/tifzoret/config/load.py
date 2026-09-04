@@ -16,6 +16,14 @@ from .paths import _resolve, _read_tsv
 from .normalize import normalize_config, resolve_modules
 from .validate import _schema, _validate_document, _load_schema_document
 from .presets import _deconvolution_preset_path
+from .estimands import (
+    cell_weight_rows,
+    compile_project_families,
+    estimand_rows,
+    family_rows,
+    synthesized_contrast_rows,
+    term_test_rows,
+)
 
 
 def _load_companion(
@@ -725,6 +733,15 @@ def load_project(config_path: str | Path) -> ResolvedProject:
     if valid_gmt_lines == 0:
         errors.append("GMT file contains no valid gene sets")
 
+    # Compiled estimand layer. Runs after the samples/contrasts cross-checks so
+    # the gate reports design problems against an already-validated sample table.
+    compiled_families, family_errors = compile_project_families(config, samples, contrasts)
+    errors.extend(family_errors)
+    existing_contrast_ids = {str(row.get("contrast_id", "")).strip() for row in contrasts}
+    contrasts = list(contrasts) + synthesized_contrast_rows(
+        compiled_families, existing_contrast_ids
+    )
+
     if errors:
         raise ProjectValidationError("\n".join(errors))
 
@@ -757,4 +774,9 @@ def load_project(config_path: str | Path) -> ResolvedProject:
         output_root=output_root,
         sample_rows=tuple(samples),
         contrast_rows=tuple(contrasts),
+        families=tuple(compiled_families),
+        family_rows=tuple(family_rows(compiled_families)),
+        estimand_rows=tuple(estimand_rows(compiled_families)),
+        cell_weight_rows=tuple(cell_weight_rows(compiled_families)),
+        term_test_rows=tuple(term_test_rows(compiled_families)),
     )

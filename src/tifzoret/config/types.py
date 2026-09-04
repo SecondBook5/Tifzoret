@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .estimands import Family
 
 
 class ProjectValidationError(ValueError):
@@ -53,6 +56,15 @@ class ResolvedProject:
     # path is in use. The first view is the primary (canonical filenames).
     regulator_views: tuple[dict[str, Any], ...] = ()
     deconvolution_signature: Path | None = None
+    # Compiled estimand layer. `families` carries the validated Family objects;
+    # the *_rows tuples are the flat, TSV-ready projections that
+    # materialize_inputs.py stages into inputs/ for the R stages to read, so an
+    # expression is never parsed twice (once in Python, once in R).
+    families: tuple[Family, ...] = ()
+    family_rows: tuple[dict[str, str], ...] = ()
+    estimand_rows: tuple[dict[str, str], ...] = ()
+    cell_weight_rows: tuple[dict[str, str], ...] = ()
+    term_test_rows: tuple[dict[str, str], ...] = ()
 
     @property
     def project_id(self) -> str:

@@ -507,6 +507,10 @@ def validate_family_design(family: Family, sample_rows: Sequence[dict[str, str]]
                 f"family {family.id}: cell-mean design is rank-deficient "
                 f"(rank {rank} < {matrix.shape[1]} cells)"
             )
+        # Skip confounding validation for coefficient-only families (empty cells).
+        # These families are labels only and the coefficient is checked at DE time.
+        if not family.cells:
+            return errors
         nuisance = [
             variable
             for variable in design_variables(family.design)
@@ -813,3 +817,193 @@ def desugar_contrast_rows(
             )
         )
     return attached, errors
+
+
+FAMILY_FIELDS = (
+    "family_id", "design", "cells", "reference_levels",
+    "replicate_unit", "shrinkage", "filter", "declared",
+)
+ESTIMAND_FIELDS = ("family_id", "estimand_id", "label", "role", "expression", "atom_kind")
+CELL_WEIGHT_FIELDS = ("family_id", "estimand_id", "cell_key", "weight")
+TERM_TEST_FIELDS = ("family_id", "term_test_id", "reduced", "df")
+
+
+def compile_project_families(
+    config: dict, sample_rows: Sequence[dict[str, str]], contrast_rows: Sequence[dict[str, str]]
+) -> tuple[list[Family], list[str]]:
+    """Compile declared families plus the desugared ``contrasts.tsv`` families.
+
+    Declared families are validated first so their ids reserve the shared
+    ``contrasts/<id>/`` namespace; the desugared families reuse the contrast ids
+    that are already unique by construction.
+    """
+    errors: list[str] = []
+    analysis = config.get("analysis", {}) or {}
+    global_design = str(analysis.get("design", "")).strip()
+    contrast_ids = {str(row.get("contrast_id", "")).strip() for row in contrast_rows}
+
+    declared, declared_errors = build_families(
+        analysis.get("families") or {}, known_ids=contrast_ids
+    )
+    errors.extend(declared_errors)
+    desugared, desugar_errors = desugar_contrast_rows(global_design, contrast_rows)
+    errors.extend(desugar_errors)
+
+    resolved: list[Family] = []
+    raw_families = analysis.get("families") or {}
+    for family in declared + desugared:
+        requested = raw_families.get(family.id, {}).get("term_tests", "auto")
+        if requested is False:
+            tests: tuple[TermTest, ...] = family.term_tests
+        elif isinstance(requested, list):
+            tests = tuple(
+                TermTest(
+                    id=str(entry["id"]),
+                    family_id=family.id,
+                    reduced=str(entry["reduced"]),
+                    df=0,
+                )
+                for entry in requested
+            )
+        elif family.declared:
+            tests = tuple(derive_term_tests(family.design, family.cells, family.id))
+        else:
+            tests = family.term_tests
+        if len(tests) > TERM_TEST_CEILING:
+            errors.append(
+                f"family {family.id}: term_tests derived {len(tests)} tests, above the "
+                f"ceiling of {TERM_TEST_CEILING}; declare them explicitly or set "
+                "term_tests: false"
+            )
+        candidate = Family(
+            id=family.id,
+            design=family.design,
+            cells=family.cells,
+            reference_levels=family.reference_levels,
+            replicate_unit=family.replicate_unit,
+            shrinkage=family.shrinkage,
+            filter=family.filter,
+            declared=family.declared,
+            estimands=family.estimands,
+            term_tests=tests,
+        )
+        errors.extend(validate_family_design(candidate, sample_rows))
+        resolved.append(
+            Family(
+                id=candidate.id,
+                design=candidate.design,
+                cells=candidate.cells,
+                reference_levels=candidate.reference_levels,
+                replicate_unit=candidate.replicate_unit,
+                shrinkage=candidate.shrinkage,
+                filter=candidate.filter,
+                declared=candidate.declared,
+                estimands=candidate.estimands,
+                term_tests=resolve_term_test_df(candidate, sample_rows),
+            )
+        )
+    return resolved, errors
+
+
+def family_rows(families: Sequence[Family]) -> list[dict[str, str]]:
+    """Flat ``inputs/families.tsv`` projection."""
+    return [
+        {
+            "family_id": family.id,
+            "design": family.design,
+            "cells": CELL_KEY_SEPARATOR.join(family.cells),
+            "reference_levels": ";".join(
+                f"{key}={value}" for key, value in sorted(family.reference_levels.items())
+            ),
+            "replicate_unit": family.replicate_unit or "",
+            "shrinkage": family.shrinkage,
+            "filter": family.filter,
+            "declared": "true" if family.declared else "false",
+        }
+        for family in families
+    ]
+
+
+def estimand_rows(families: Sequence[Family]) -> list[dict[str, str]]:
+    """Flat ``inputs/estimands.tsv`` projection."""
+    return [
+        {
+            "family_id": family.id,
+            "estimand_id": estimand.id,
+            "label": estimand.label,
+            "role": estimand.role,
+            "expression": estimand.expression.source,
+            "atom_kind": estimand.expression.atom_kind,
+        }
+        for family in families
+        for estimand in family.estimands
+    ]
+
+
+def cell_weight_rows(families: Sequence[Family]) -> list[dict[str, str]]:
+    """Long-form ``inputs/estimand_cell_weights.tsv`` projection.
+
+    ``coef(...)`` estimands emit their coefficient name as the ``cell_key``, so
+    one table carries both atom kinds and R distinguishes them via
+    ``estimands.tsv``'s ``atom_kind``.
+    """
+    rows: list[dict[str, str]] = []
+    for family in families:
+        for estimand in family.estimands:
+            weights = estimand.expression.cell_weights or estimand.expression.coef_weights
+            for key, weight in weights.items():
+                cell_key = (
+                    CELL_KEY_SEPARATOR.join(key) if isinstance(key, tuple) else str(key)
+                )
+                rows.append(
+                    {
+                        "family_id": family.id,
+                        "estimand_id": estimand.id,
+                        "cell_key": cell_key,
+                        "weight": repr(float(weight)),
+                    }
+                )
+    return rows
+
+
+def term_test_rows(families: Sequence[Family]) -> list[dict[str, str]]:
+    """Flat ``inputs/term_tests.tsv`` projection."""
+    return [
+        {
+            "family_id": family.id,
+            "term_test_id": test.id,
+            "reduced": test.reduced,
+            "df": str(test.df),
+        }
+        for family in families
+        for test in family.term_tests
+    ]
+
+
+def synthesized_contrast_rows(families: Sequence[Family], existing_ids: set[str]) -> list[dict[str, str]]:
+    """One ``contrast_rows`` entry per declared estimand (spec §8).
+
+    This is the whole compatibility seam: figures/resolve.py, report.py,
+    figures/gallery.py, hypothesis validation and expected_effects all iterate
+    ``project.contrast_rows``, so synthesizing here makes estimands first-class
+    to every one of them without editing any of those files.
+    """
+    rows: list[dict[str, str]] = []
+    for family in families:
+        if not family.declared:
+            continue
+        for estimand in family.estimands:
+            if estimand.id in existing_ids:
+                continue
+            rows.append(
+                {
+                    "contrast_id": estimand.id,
+                    "factor": "",
+                    "numerator": estimand.label,
+                    "denominator": "",
+                    "type": "estimand",
+                    "family": family.id,
+                    "role": estimand.role,
+                }
+            )
+    return rows
