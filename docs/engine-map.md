@@ -130,6 +130,7 @@ These scripts are sourced by pipeline stages rather than invoked as stages thems
 |--------|------|-----|
 | [utils.R](../src/tifzoret/workflow/scripts/utils.R) | Common utilities (plotting theme, color scales, I/O) | Ensures visual consistency and reduces duplication across R stages |
 | [estimands.R](../src/tifzoret/workflow/scripts/estimands.R) | Cell weights → contrast vector mapping | The single authority on what an estimand means numerically; sourced by family_fit.R, estimand.R, term_test.R, de_confirm.R so DESeq2 and edgeR can never disagree on a contrast's sign |
+| [family_fit.R](../src/tifzoret/workflow/scripts/03_differential/family_fit.R) | The single Wald fit for one estimand family | Every estimand in a family must share one filter, one set of size factors, one set of dispersions, one sample universe, and one coefficient covariance — structurally, not by convention |
 
 ## How the phases relate
 

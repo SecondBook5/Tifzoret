@@ -494,3 +494,17 @@ configured_gene_panels <- function(panel_cfg) {
   }
   panels
 }
+
+# (X'X)^-1 for a design matrix, used for hat-value diagnostics. Falls back to a
+# pseudo-inverse via SVD when the crossproduct is singular so a rank-deficient
+# design still reports leverage rather than aborting the diagnostics.
+MASS_safe_solve <- function(design_matrix) {
+  crossproduct <- t(design_matrix) %*% design_matrix
+  inverse <- tryCatch(solve(crossproduct), error = function(e) NULL)
+  if (!is.null(inverse)) return(inverse)
+  decomposition <- svd(crossproduct)
+  positive <- decomposition$d > max(decomposition$d) * 1e-12
+  decomposition$v[, positive, drop = FALSE] %*%
+    diag(1 / decomposition$d[positive], sum(positive)) %*%
+    t(decomposition$u[, positive, drop = FALSE])
+}
