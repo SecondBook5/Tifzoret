@@ -29,6 +29,10 @@ ANNOTATION = str(INPUTS / "annotation.tsv")
 INPUT_MANIFEST = str(INPUTS / "input_manifest.json")
 SOURCE_CONTRASTS = str(PROJECT.contrasts)
 CONTRASTS = str(INPUTS / "contrasts.tsv")
+FAMILIES = str(INPUTS / "families.tsv")
+ESTIMANDS = str(INPUTS / "estimands.tsv")
+CELL_WEIGHTS = str(INPUTS / "estimand_cell_weights.tsv")
+TERM_TESTS = str(INPUTS / "term_tests.tsv")
 # Companion documents (hypotheses/panels/recipe) may be authored as sibling files
 # or inlined in the main config; either way load_project points these at their
 # canonical INPUTS location and materialize_inputs stages the resolved document
@@ -445,7 +449,11 @@ CURVATURE_PATTERNS = [analysis("advanced/curvature", "tables/edge_curvature.tsv"
 MEDIATION_PATTERNS = [analysis("advanced/mediation", "tables/mediation_inputs.tsv"), analysis("advanced/mediation", "tables/mediation_results.tsv"), analysis("advanced/mediation", "mediation_summary.json"), analysis("advanced/mediation", "tables/mediation_power.tsv"), analysis("advanced/mediation", "mediation_power_summary.json")]
 MULTILAYER_PATTERNS = [analysis("advanced/multilayer", "tables/multilayer_nodes.tsv"), analysis("advanced/multilayer", "tables/multilayer_triangulated.tsv"), analysis("advanced/multilayer", "tables/multilayer_edges.tsv"), analysis("advanced/multilayer", "figures/multilayer_network.pdf"), analysis("advanced/multilayer", "figures/multilayer_network.png"), analysis("advanced/multilayer", "multilayer_summary.json")]
 
-CANONICAL_INPUTS = [COUNTS, SAMPLES, ANNOTATION, CONTRASTS, INPUT_MANIFEST]
+CANONICAL_INPUTS = [
+    COUNTS, SAMPLES, ANNOTATION, CONTRASTS,
+    FAMILIES, ESTIMANDS, CELL_WEIGHTS, TERM_TESTS,
+    INPUT_MANIFEST,
+]
 FINAL_OUTPUTS = list(CANONICAL_INPUTS)
 FINAL_OUTPUTS.extend(ABUNDANCE_OUTPUTS.values())
 if MODULES["pathways"] or MODULES["ontology"]:

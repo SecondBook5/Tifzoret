@@ -161,6 +161,34 @@ def materialize_contrasts(project: ResolvedProject, output: Path) -> None:
     write_tsv(output, header, [dict(row) for row in project.contrast_rows])
 
 
+def materialize_estimands(
+    project: ResolvedProject,
+    families_output: Path,
+    estimands_output: Path,
+    weights_output: Path,
+    term_tests_output: Path,
+) -> None:
+    """Stage the compiled estimand layer for the R stages.
+
+    The R side reads the raw project YAML (utils.R read_project) and therefore
+    cannot see Python's compiled families. Writing them here — exactly as
+    contrasts.tsv is written from project.contrast_rows — means an expression is
+    parsed once, in Python, and R only maps cell weights onto model-matrix
+    columns.
+    """
+    from tifzoret.config.estimands import (  # local import keeps module import cheap
+        CELL_WEIGHT_FIELDS,
+        ESTIMAND_FIELDS,
+        FAMILY_FIELDS,
+        TERM_TEST_FIELDS,
+    )
+
+    write_tsv(families_output, list(FAMILY_FIELDS), [dict(r) for r in project.family_rows])
+    write_tsv(estimands_output, list(ESTIMAND_FIELDS), [dict(r) for r in project.estimand_rows])
+    write_tsv(weights_output, list(CELL_WEIGHT_FIELDS), [dict(r) for r in project.cell_weight_rows])
+    write_tsv(term_tests_output, list(TERM_TEST_FIELDS), [dict(r) for r in project.term_test_rows])
+
+
 def materialize_companion(
     base: Path, raw_value: Any, validated: dict[str, Any] | None, output: str | None
 ) -> None:
@@ -761,6 +789,10 @@ def main() -> None:
     parser.add_argument("--samples", required=True)
     parser.add_argument("--annotation", required=True)
     parser.add_argument("--contrasts", required=True)
+    parser.add_argument("--families", required=True)
+    parser.add_argument("--estimands", required=True)
+    parser.add_argument("--cell-weights", dest="cell_weights", required=True)
+    parser.add_argument("--term-tests", dest="term_tests", required=True)
     parser.add_argument("--manifest", required=True)
     parser.add_argument("--panels")
     parser.add_argument("--claims")
@@ -786,6 +818,13 @@ def main() -> None:
 
     materialize_samples(project, samples_output)
     materialize_contrasts(project, contrasts_output)
+    materialize_estimands(
+        project,
+        Path(args.families).resolve(),
+        Path(args.estimands).resolve(),
+        Path(args.cell_weights).resolve(),
+        Path(args.term_tests).resolve(),
+    )
     companion_base = project.config_path.parent
     hypotheses_block = project.config.get("hypotheses", {})
     materialize_companion(

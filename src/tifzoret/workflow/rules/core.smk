@@ -17,6 +17,10 @@ rule materialize_inputs:
         samples=SAMPLES,
         annotation=ANNOTATION,
         contrasts=CONTRASTS,
+        families=FAMILIES,
+        estimands=ESTIMANDS,
+        cell_weights=CELL_WEIGHTS,
+        term_tests=TERM_TESTS,
         manifest=INPUT_MANIFEST,
         **COMPANION_OUTPUTS,
         **ABUNDANCE_OUTPUTS
@@ -32,7 +36,10 @@ rule materialize_inputs:
     shell:
         "python {input.script} --project-config {input.config:q} --counts {output.counts:q} "
         "--samples {output.samples:q} --annotation {output.annotation:q} "
-        "--contrasts {output.contrasts:q} {params.companion} {params.abundance} "
+        "--contrasts {output.contrasts:q} "
+        "--families {output.families:q} --estimands {output.estimands:q} "
+        "--cell-weights {output.cell_weights:q} --term-tests {output.term_tests:q} "
+        "{params.companion} {params.abundance} "
         "--manifest {output.manifest:q} --threads {threads} > {log:q} 2>&1"
 
 rule study_qc:
