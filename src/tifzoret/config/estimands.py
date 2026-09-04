@@ -13,6 +13,7 @@ semantics are interpreted, so coefficient coding is never implemented twice.
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from itertools import combinations
 
@@ -359,7 +360,7 @@ def _term_label(term: frozenset[str], order: list[str]) -> str:
     return ":".join(sorted(term, key=order.index))
 
 
-def format_formula(terms) -> str:
+def format_formula(terms: Sequence[frozenset[str]]) -> str:
     """Render model terms back into a one-sided formula string."""
     materialized = list(terms)
     if not materialized:
@@ -373,7 +374,7 @@ def format_formula(terms) -> str:
     return "~ " + " + ".join(_term_label(term, order) for term in ordered)
 
 
-def derive_term_tests(design: str, cells, family_id: str) -> list[TermTest]:
+def derive_term_tests(design: str, cells: Sequence[str], family_id: str) -> list[TermTest]:
     """Derive the nested full-vs-reduced lattice over the family's cell factors.
 
     Two generators, per spec §7.4:
