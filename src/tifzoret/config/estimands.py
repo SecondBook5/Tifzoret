@@ -620,8 +620,18 @@ def family_slug(design: str) -> str:
 
 
 def _quote_level(level: str) -> str:
-    """Quote a level if it contains special characters that require escaping."""
-    return f"'{level}'" if re.search(r"[,()'\"]", level) else level
+    """Quote a level if it contains special characters that require escaping.
+
+    Uses double quotes if the level contains a single quote, single quotes if it
+    contains a double quote, and single quotes for any other special characters.
+    """
+    if not re.search(r"[,()'\"]", level):
+        return level
+    # Prefer single quotes, but use double if single quote is in the level
+    if "'" not in level:
+        return f"'{level}'"
+    else:
+        return f'"{level}"'
 
 
 def desugar_contrast_rows(
@@ -637,14 +647,22 @@ def desugar_contrast_rows(
     no longer needed.
     """
     errors: list[str] = []
+    # Group by exact design string, not by family_id, to prevent collisions
     grouped: dict[str, dict] = {}
+    design_order: list[str] = []  # Track first appearance order for stable IDs
+
     for row in contrast_rows:
         contrast_id = str(row.get("contrast_id", "")).strip()
         row_type = (str(row.get("type", "")).strip() or "pairwise").lower()
         design = str(row.get("design", "")).strip() or global_design
-        family_id = "main" if design == global_design else family_slug(design)
+
+        # Track first appearance of each design
+        if design not in grouped:
+            design_order.append(design)
+
+        # Use exact design string as key
         bucket = grouped.setdefault(
-            family_id,
+            design,
             {
                 "design": design,
                 "cells": [],
@@ -669,7 +687,7 @@ def desugar_contrast_rows(
             existing = bucket["reference_levels"].get(key)
             if existing is not None and existing != value:
                 errors.append(
-                    f"family {family_id}: conflicting reference_levels for {key!r} "
+                    f"family on design {design!r}: conflicting reference_levels for {key!r} "
                     f"({existing!r} vs {value!r}); give one of these contrasts its own design"
                 )
             bucket["reference_levels"][key] = value
@@ -709,7 +727,7 @@ def desugar_contrast_rows(
             bucket["cells"].append(factor)
         if len(bucket["cells"]) > 1:
             errors.append(
-                f"family {family_id}: contrasts on different factors ({', '.join(bucket['cells'])}) "
+                f"family on design {design!r}: contrasts on different factors ({', '.join(bucket['cells'])}) "
                 "cannot share one desugared family; give one of them its own design"
             )
             continue
@@ -723,17 +741,54 @@ def desugar_contrast_rows(
             }
         )
 
-    config = {
-        family_id: {
+    # Second pass: assign family IDs, handling slug collisions
+    family_id_map: dict[str, str] = {}  # design -> family_id
+    slug_designs: dict[str, list[str]] = {}  # slug -> list of designs that map to it
+
+    # First, collect which designs map to which slugs
+    for design in design_order:
+        if design != global_design:
+            slug = family_slug(design)
+            slug_designs.setdefault(slug, []).append(design)
+
+    # Then assign IDs based on order of first appearance
+    for design in design_order:
+        if design == global_design:
+            family_id = "main"
+        else:
+            slug = family_slug(design)
+            designs_with_this_slug = slug_designs[slug]
+
+            if len(designs_with_this_slug) == 1:
+                # No collision
+                family_id = slug
+            else:
+                # Collision: append numeric suffix based on position
+                position = designs_with_this_slug.index(design) + 1
+                if position == 1:
+                    family_id = slug
+                else:
+                    family_id = f"{slug}_{position}"
+
+        family_id_map[design] = family_id
+
+    # Build config with assigned family IDs
+    config = {}
+    for design in design_order:
+        family_id = family_id_map[design]
+        bucket = grouped[design]
+        config[family_id] = {
             key: value for key, value in bucket.items() if key != "term_tests"
         }
-        for family_id, bucket in grouped.items()
-    }
+
     families, build_errors = build_families(config, known_ids=set())
     errors.extend(build_errors)
     attached: list[Family] = []
     for family in families:
-        raw_tests = grouped[family.id]["term_tests"]
+        # Map family.design back to grouped to get term_tests and reference_levels
+        design = family.design
+        bucket = grouped[design]
+        raw_tests = bucket["term_tests"]
         tests = tuple(
             TermTest(
                 id=entry["id"],
@@ -748,7 +803,7 @@ def desugar_contrast_rows(
                 id=family.id,
                 design=family.design,
                 cells=family.cells,
-                reference_levels=grouped[family.id]["reference_levels"],
+                reference_levels=bucket["reference_levels"],
                 replicate_unit=family.replicate_unit,
                 shrinkage=family.shrinkage,
                 filter=family.filter,

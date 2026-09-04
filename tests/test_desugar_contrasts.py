@@ -122,3 +122,51 @@ def test_family_slug_is_deterministic_and_filesystem_safe():
     assert family_slug("~ condition + nuisance_z") == "design_condition_nuisance_z"
     assert family_slug("~ factor_a * factor_b") == "design_factor_a_factor_b"
     assert family_slug("~ condition") == family_slug("~  condition  ")
+
+
+def test_two_designs_that_slug_identically_produce_separate_families():
+    """Two designs that slug to the same ID produce separate families with numeric suffixes."""
+    rows = [
+        _row(contrast_id="one", numerator="a", design="~ condition + batch"),
+        _row(contrast_id="two", numerator="b", design="~ condition * batch"),
+    ]
+    families, errors = desugar_contrast_rows("~ condition", rows)
+    assert errors == []
+    assert len(families) == 2
+
+    # Find families by their designs
+    family_by_design = {f.design: f for f in families}
+
+    assert "~ condition + batch" in family_by_design
+    assert "~ condition * batch" in family_by_design
+
+    # Check that the estimands are assigned to the right families
+    additive_family = family_by_design["~ condition + batch"]
+    multiplicative_family = family_by_design["~ condition * batch"]
+
+    assert len(additive_family.estimands) == 1
+    assert additive_family.estimands[0].id == "one"
+
+    assert len(multiplicative_family.estimands) == 1
+    assert multiplicative_family.estimands[0].id == "two"
+
+    # Check the IDs have numeric suffixes for collision
+    assert additive_family.id == "design_condition_batch"
+    assert multiplicative_family.id == "design_condition_batch_2"
+
+
+def test_a_level_containing_a_single_quote_roundtrips():
+    """A level containing a single quote is correctly quoted and parsed back."""
+    rows = [
+        _row(
+            contrast_id="quote_level",
+            numerator="it's",
+            denominator="plain",
+        )
+    ]
+    families, errors = desugar_contrast_rows("~ condition", rows)
+    assert errors == []
+    estimand = families[0].estimands[0]
+
+    # The expression should have the correct cell weights with the original level string
+    assert estimand.expression.cell_weights == {("it's",): 1.0, ("plain",): -1.0}
