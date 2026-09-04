@@ -31,4 +31,4 @@ def test_every_stage_has_all_header_fields():
 
 def test_found_expected_stage_count():
     # Guards against the glob silently matching nothing (e.g. wrong path after a move).
-    assert len(list(_stage_files())) == 35
+    assert len(list(_stage_files())) == 36
