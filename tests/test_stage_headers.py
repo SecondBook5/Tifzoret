@@ -8,8 +8,8 @@ from pathlib import Path
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "src" / "tifzoret" / "workflow" / "scripts"
 REQUIRED = ("STAGE:", "WHAT:", "WHY:", "HOW:", "INPUTS:", "PRODUCES:", "CALLED BY:", "ENV:")
-# utils.R and estimands.R are shared helpers, not stages; report_assets holds no scripts.
-EXCLUDE = {"utils.R", "estimands.R"}
+# utils.R, estimands.R, and de_render.R are shared helpers, not stages; report_assets holds no scripts.
+EXCLUDE = {"utils.R", "estimands.R", "de_render.R"}
 
 
 def _stage_files():
@@ -31,4 +31,4 @@ def test_every_stage_has_all_header_fields():
 
 def test_found_expected_stage_count():
     # Guards against the glob silently matching nothing (e.g. wrong path after a move).
-    assert len(list(_stage_files())) == 36
+    assert len(list(_stage_files())) == 37
