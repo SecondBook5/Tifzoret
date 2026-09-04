@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from itertools import combinations
 
 
 class EstimandSyntaxError(ValueError):
@@ -321,3 +322,114 @@ def build_families(
             )
         )
     return families, errors
+
+
+TERM_TEST_CEILING = 12
+
+
+def parse_formula_terms(design: str) -> list[frozenset[str]]:
+    """Expand a one-sided R formula into its model terms.
+
+    ``a * b`` becomes ``a``, ``b``, ``a:b``; ``a:b`` stays a single term. Order
+    of first appearance is preserved so a rendered formula reads like the
+    declared one.
+    """
+    body = design.split("~", 1)[-1]
+    terms: list[frozenset[str]] = []
+    for piece in body.split("+"):
+        piece = piece.strip()
+        if not piece or piece == "1":
+            continue
+        if "*" in piece:
+            factors = [part.strip() for part in piece.split("*") if part.strip()]
+            for size in range(1, len(factors) + 1):
+                for combo in combinations(factors, size):
+                    candidate = frozenset(combo)
+                    if candidate not in terms:
+                        terms.append(candidate)
+        else:
+            factors = [part.strip() for part in piece.split(":") if part.strip()]
+            candidate = frozenset(factors)
+            if candidate and candidate not in terms:
+                terms.append(candidate)
+    return terms
+
+
+def _term_label(term: frozenset[str], order: list[str]) -> str:
+    return ":".join(sorted(term, key=order.index))
+
+
+def format_formula(terms) -> str:
+    """Render model terms back into a one-sided formula string."""
+    materialized = list(terms)
+    if not materialized:
+        return "~ 1"
+    order: list[str] = []
+    for term in materialized:
+        for factor in sorted(term):
+            if factor not in order:
+                order.append(factor)
+    ordered = sorted(materialized, key=lambda term: (len(term), sorted(term)))
+    return "~ " + " + ".join(_term_label(term, order) for term in ordered)
+
+
+def derive_term_tests(design: str, cells, family_id: str) -> list[TermTest]:
+    """Derive the nested full-vs-reduced lattice over the family's cell factors.
+
+    Two generators, per spec §7.4:
+
+    * for each non-empty subset ``S`` of cell factors, drop every cell term that
+      intersects ``S`` (so ``{factor_b}`` drops both ``factor_b`` and
+      ``factor_a:factor_b`` — "does this gene respond to factor_b in *any*
+      state?");
+    * for each interaction term of order >= 2, drop that term and every
+      higher-order term containing it, keeping the main effects.
+
+    Nuisance terms — every term using no cell factor — stay in both models and
+    are never tested.
+
+    Note: ``df`` here counts dropped *terms*, which equals dropped coefficients
+    only when every cell factor has two levels. Task 4 recomputes ``df`` from
+    the actual level counts once ``samples.tsv`` is available; this value is
+    a structural placeholder used only for the nesting check.
+    """
+    cell_set = set(cells)
+    order = list(cells)
+    all_terms = parse_formula_terms(design)
+    cell_terms = [term for term in all_terms if term <= cell_set and term]
+    nuisance_terms = [term for term in all_terms if not (term & cell_set)]
+    tests: list[TermTest] = []
+    seen: set[str] = set()
+
+    def emit(test_id: str, dropped: list[frozenset[str]]) -> None:
+        if test_id in seen or not dropped:
+            return
+        seen.add(test_id)
+        kept = [term for term in cell_terms if term not in dropped]
+        tests.append(
+            TermTest(
+                id=test_id,
+                family_id=family_id,
+                reduced=format_formula(kept + nuisance_terms),
+                df=len(dropped),
+            )
+        )
+
+    for size in range(1, len(order) + 1):
+        for combo in combinations(order, size):
+            subset = set(combo)
+            dropped = [term for term in cell_terms if term & subset]
+            test_id = (
+                "any_effect"
+                if subset == cell_set
+                else "_".join(sorted(combo, key=order.index)) + "_any"
+            )
+            emit(test_id, dropped)
+
+    for term in cell_terms:
+        if len(term) < 2:
+            continue
+        dropped = [other for other in cell_terms if term <= other]
+        emit(_term_label(term, order).replace(":", "_") + "_interaction", dropped)
+
+    return tests
