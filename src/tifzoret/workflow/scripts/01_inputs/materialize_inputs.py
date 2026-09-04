@@ -39,6 +39,7 @@ if str(SOURCE_ROOT) not in sys.path:
     sys.path.insert(0, str(SOURCE_ROOT))
 
 from tifzoret.config import ResolvedProject, _resolve, load_project  # noqa: E402
+from tifzoret.workflow.common import read_tsv, write_tsv, sha256  # noqa: E402
 
 
 STRAND_MODES = {"unstranded": 0, "forward": 1, "reverse": 2}
@@ -115,38 +116,6 @@ def extracted_archive_bams(project: ResolvedProject) -> Iterator[tuple[Path, ...
                 f"unsupported archive format for {project.archive}; expected ZIP or TAR"
             )
         yield tuple(extracted)
-
-
-def sha256(path: Path) -> str:
-    """Return the hex SHA-256 digest of ``path``, read in fixed-size blocks."""
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for block in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(block)
-    return digest.hexdigest()
-
-
-def write_tsv(path: Path, fieldnames: list[str], rows: list[dict[str, object]]) -> None:
-    """Write ``rows`` as a tab-separated file with a header, creating parent directories."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(
-            handle,
-            fieldnames=fieldnames,
-            delimiter="\t",
-            lineterminator="\n",
-            extrasaction="ignore",
-        )
-        writer.writeheader()
-        writer.writerows(rows)
-
-
-def read_tsv(path: Path, *, comments: bool = False) -> tuple[list[str], list[dict[str, str]]]:
-    """Read a tab-separated file into its header list and row dicts; optionally drop ``#`` lines."""
-    with path.open(newline="", encoding="utf-8") as handle:
-        lines = (line for line in handle if not comments or not line.startswith("#"))
-        reader = csv.DictReader(lines, delimiter="\t")
-        return list(reader.fieldnames or []), list(reader)
 
 
 def materialize_samples(project: ResolvedProject, output: Path) -> None:
@@ -873,7 +842,7 @@ def main() -> None:
         "analysis_set": project.analysis_set,
         "species": project.config["species"],
         "reference": project.config["reference"],
-        "contrast_semantics": "positive effects are numerator minus denominator",
+        "contrast_semantics": "positive effects indicate higher expression in cells with positive weights (cell-means arithmetic)",
         "source": provenance,
         "canonical": {
             "counts": {"path": str(counts_output), "sha256": sha256(counts_output)},

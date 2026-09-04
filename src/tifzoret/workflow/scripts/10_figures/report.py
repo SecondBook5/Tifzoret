@@ -600,7 +600,7 @@ def build_payload(project, root: Path) -> dict:
             "project_id": project.project_id,
             "analysis_set": project.analysis_set,
             "profile": project.config["analysis"]["profile"],
-            "contrast_semantics": "All signed effects are numerator minus denominator.",
+            "contrast_semantics": "All signed effects use cell-means arithmetic: positive weights minus negative weights.",
             "engine": {"name": "Tifzoret", "version": version},
             "counts": {
                 "figures": len(figures["assembled"]) + len(figures["panels"]),

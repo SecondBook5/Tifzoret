@@ -103,6 +103,65 @@ analyzing.
 
 ---
 
+## 4.5. Factorial Designs with Interactions
+
+For experiments with two or more factors where you want to test **interactions**
+(does the effect of treatment depend on genotype?), use `analysis.families` in
+`project.yaml` instead of `contrasts.tsv`.
+
+**When to use families:**
+- You have a factorial design (e.g., treatment × genotype, dose × timepoint)
+- You want to test main effects AND interactions
+- You need related comparisons to share one statistical model
+
+**Example: 2×2 Treatment × Genotype**
+
+```yaml
+analysis:
+  families:
+    fam_factorial:
+      design: "~ treatment * genotype"
+      cells: [treatment, genotype]
+      estimands:
+        - id: main_treatment
+          role: primary
+          expression: "(treated,wt) + (treated,mutant) - (control,wt) - (control,mutant)"
+          label: "Treatment effect (averaged over genotype)"
+        - id: interaction
+          role: primary
+          expression: "(treated,mutant) - (treated,wt) - (control,mutant) + (control,wt)"
+          label: "Treatment × Genotype interaction"
+```
+
+The `expression` uses **cell-means syntax**: each `(level_a, level_b)` is one
+experimental group. The interaction tests whether treatment works differently in
+mutant vs. WT.
+
+**To get started quickly:**
+```bash
+tifzoret init my-factorial --input factorial
+```
+This creates a complete 2×2 example you can adapt to your design.
+
+**What you get:**
+- One DESeq2 fit for the whole design (shared dispersions)
+- Covariance-aware standard errors for each estimand
+- Automatic term tests (main effect tests, interaction test, omnibus test)
+- All estimands comparable because they come from one model
+
+**Interpreting results:**
+- **Main effects** answer: "Does treatment matter, ignoring genotype?" "Does
+  genotype matter, ignoring treatment?"
+- **Interaction** answers: "Does the treatment effect depend on genotype?" A
+  significant interaction means the simple effects differ — treatment may work in
+  WT but not mutant, or vice versa.
+- **Simple effects** (e.g., `(treated,mutant) - (control,mutant)`) examine one
+  factor at one level of the other
+
+For more details, see `docs/configuration.md` (the `analysis.families` section).
+
+---
+
 ## 5. `project.yaml` — the main file
 
 This describes your data and what analyses to run. You do not write it from

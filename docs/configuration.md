@@ -89,12 +89,61 @@ abundance.
 ## Analysis
 
 `analysis.design` is an R formula and can include arbitrary covariates.
-`analysis.contrasts` points to the explicit contrast table; each row's optional
-`type` column selects `pairwise` (default), `coefficient` (a named design
-coefficient), or `omnibus` (a DESeq2 likelihood-ratio test across all levels of
-a multi-level factor, which carries no numerator/denominator). `profile` selects
-`standard`, `publication`, or `full`; `analysis.modules` can override each
-resolved module. Batch correction, edgeR confirmation, signature-matrix
+`analysis.contrasts` points to the explicit contrast table (legacy format:
+`contrast_id`, `factor`, `numerator`, `denominator`). Rows from `contrasts.tsv`
+are automatically desugared into estimand families at config-load time. For new
+studies or complex designs (factorials, interactions), use `analysis.families`
+directly (see below). `profile` selects `standard`, `publication`, or `full`;
+`analysis.modules` can override each resolved module.
+
+### Estimand Families (`analysis.families`)
+
+For factorial designs, interactions, or multiple related comparisons sharing a
+design, define families directly in `project.yaml`:
+
+```yaml
+analysis:
+  families:
+    fam_factorial:
+      design: "~ treatment * genotype"
+      cells: [treatment, genotype]
+      estimands:
+        - id: main_treatment
+          role: primary
+          expression: "(treated,wt) + (treated,mutant) - (control,wt) - (control,mutant)"
+          label: "Treatment main effect (averaged over genotype)"
+        - id: main_genotype
+          role: primary
+          expression: "(control,mutant) + (treated,mutant) - (control,wt) - (treated,wt)"
+          label: "Genotype main effect (averaged over treatment)"
+        - id: interaction
+          role: primary
+          expression: "(treated,mutant) - (treated,wt) - (control,mutant) + (control,wt)"
+          label: "Treatment × Genotype interaction"
+```
+
+**Required fields:**
+- `design`: R formula (e.g., `~ factor_a * factor_b`)
+- `cells`: List of factor names that define design cells
+- `estimands`: List of estimand specifications
+
+**Estimand fields:**
+- `id`: Unique identifier (filesystem-safe)
+- `role`: `primary`, `secondary`, or `exploratory` (affects filtering/display)
+- `expression`: Cell-means arithmetic using `(level_a, level_b)` notation
+- `label` (optional): Human-readable description
+
+**Desugaring:** Legacy `contrasts.tsv` rows become single-family estimands:
+- Pairwise contrast → two-cell estimand: `(numerator) - (denominator)`
+- The old `type: coefficient` and `type: omnibus` syntax is deprecated but still
+  supported via desugaring
+
+**Knobs (under `analysis.settings.de`):**
+- `gene_filter_threshold`: Minimum gene count (default: 10)
+- `shrinkage`: `apeglm` (default), `ashr`, `normal`, or `none` (apeglm falls
+  back to ashr if reparameterization fails; ashr is not installed by default)
+
+Batch correction, edgeR confirmation, signature-matrix
 deconvolution, Ollivier-Ricci curvature, cross-contrast consensus, SPIA
 pathway-topology impact, variancePartition variance decomposition, and
 enrichment-map term clustering belong to no profile and run only when switched

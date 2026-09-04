@@ -71,10 +71,21 @@ the design covariates (categorical terms as random effects, numeric as fixed)
 across the most-variable genes and summarizes the median variance fraction per
 covariate, emitting well-formed empty outputs when no covariate is usable.
 
-Coefficient and omnibus contrasts are deliberately scoped to DE and pathway
-stages only; the downstream two-group modules (composition, regulators,
-networks, hypotheses, publication) expand over pairwise contrasts, which they
-assume.
+Differential expression uses an **estimand architecture** where each hypothesis
+is expressed as a linear combination of design cell means using cell-means
+syntax: `(level_a, level_b) - (level_c, level_d)`. Related estimands (e.g.,
+main effects and interactions in a factorial design) are grouped into a
+**family** and extracted from a single DESeq2 fit, ensuring shared dispersion
+estimates and enabling covariance-aware standard errors: `SE(c'β) = sqrt(c'Σc)`
+rather than the naive independent sum. A **term-test lattice** is automatically
+derived from each family's design, generating nested full-vs-reduced
+likelihood-ratio tests for each factor and interaction. Design validity is
+enforced at configuration time (rank, replication, confounding checks) before
+any compute begins. The eleven downstream two-group modules (composition,
+regulators, networks, hypotheses, publication, pathways, ontology, SPIA,
+enrichment maps, SVA, WGCNA) expand over pairwise estimands that are
+auto-desugared from legacy `contrasts.tsv` rows at config-load time, preserving
+backward compatibility.
 
 ## 4. Functional enrichment and ontology
 
