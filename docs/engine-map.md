@@ -44,6 +44,7 @@ Per-contrast differential expression engines. These run once per declared contra
 
 | Stage | What | Why | Rule | Env |
 |-------|------|-----|------|-----|
+| [03_differential/family_fit.R](../src/tifzoret/workflow/scripts/03_differential/family_fit.R) | The single Wald fit for one estimand family | Every estimand in a family must share one filter, one set of size factors, one set of dispersions, one sample universe, and one coefficient covariance — structurally, not by convention | `family_fit` (core.smk) | r.yaml |
 | [03_differential/de.R](../src/tifzoret/workflow/scripts/03_differential/de.R) | Primary differential expression per contrast (DESeq2 ~condition) | Identifies genes whose expression differs between conditions; produces log2FC + adjusted p-value for every gene | `contrast_de` (core.smk) | r.yaml |
 | [03_differential/omnibus.R](../src/tifzoret/workflow/scripts/03_differential/omnibus.R) | Omnibus differential expression (multi-level factor LRT) | Asks whether a gene differs across ANY level of a factor (>2 levels); complements pairwise contrasts for multi-group designs | `contrast_omnibus` (core.smk) | r.yaml |
 | [03_differential/factorial.R](../src/tifzoret/workflow/scripts/03_differential/factorial.R) | Factorial interaction exploratory figures (2×2 designs) | Makes interaction (difference-of-differences) legible: genes whose response to treatment A depends on treatment B | `study_factorial` (core.smk) | r.yaml |
@@ -130,7 +131,6 @@ These scripts are sourced by pipeline stages rather than invoked as stages thems
 |--------|------|-----|
 | [utils.R](../src/tifzoret/workflow/scripts/utils.R) | Common utilities (plotting theme, color scales, I/O) | Ensures visual consistency and reduces duplication across R stages |
 | [estimands.R](../src/tifzoret/workflow/scripts/estimands.R) | Cell weights → contrast vector mapping | The single authority on what an estimand means numerically; sourced by family_fit.R, estimand.R, term_test.R, de_confirm.R so DESeq2 and edgeR can never disagree on a contrast's sign |
-| [family_fit.R](../src/tifzoret/workflow/scripts/03_differential/family_fit.R) | The single Wald fit for one estimand family | Every estimand in a family must share one filter, one set of size factors, one set of dispersions, one sample universe, and one coefficient covariance — structurally, not by convention |
 
 ## How the phases relate
 

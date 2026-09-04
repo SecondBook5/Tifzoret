@@ -24,6 +24,7 @@ def test_produces_every_declared_output(tmp_path):
         "tables/tested_gene_universe.tsv",
         "tables/design_diagnostics.tsv",
         "figures/design_diagnostics.png",
+        "figures/design_diagnostics.pdf",
         "family_summary.json",
     ):
         assert (outdir / relative).is_file(), relative
