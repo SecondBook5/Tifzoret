@@ -1,12 +1,10 @@
 """Tests for the opt-in ``factorial`` interaction-visualization module.
 
-The module makes a factorial (crossed-factor) design legible with three
-project-agnostic study-level views: an effect-vs-effect quadrant scatter (one
-arm's log2 fold-change against the other, with the no-interaction diagonal), an
-interaction profile (group means of the top-interaction genes across one factor,
-one line per level of the other), and a four-group faceted expression view. It
-reads the QC symbol-keyed VST expression and the two configured signed-contrast
-DE tables; it adds no statistics, only presentation.
+The module synthesizes interaction views from a family's fitted estimands (spec
+§F): it consumes the family's covariance-aware arm and interaction estimands,
+ranks genes by the interaction statistic, and renders three views: effect-vs-
+effect scatter, interaction profile, and group expression. It adds no new
+statistics — only presentation of the family's computed estimands.
 """
 
 from __future__ import annotations
@@ -74,49 +72,44 @@ def test_factorial_requires_its_settings_block(tmp_path):
         load_project(config)
 
 
-def test_factorial_rejects_unknown_effect_contrast(tmp_path):
-    """effect_x/effect_y must name signed (pairwise/coefficient) contrasts that
-    actually produce a directional DE table."""
+def test_factorial_requires_a_family_reference(tmp_path):
+    """The descriptive factors/effect_x/effect_y form is gone (spec §F)."""
     config = _project_copy(tmp_path)
     data = yaml.safe_load(config.read_text())
+    # Old keys: factors, effect_x, effect_y — all removed.
     _enable_factorial(
         data,
         factors=["condition", "batch"],
         effect_x="treatment_a_vs_control",
-        effect_y="does_not_exist",
-    )
-    config.write_text(yaml.safe_dump(data, sort_keys=False))
-    with pytest.raises(ProjectValidationError, match="is not a signed"):
-        load_project(config)
-
-
-def test_factorial_rejects_factor_absent_from_samples(tmp_path):
-    """The crossed factors must be samples.tsv columns."""
-    config = _project_copy(tmp_path)
-    data = yaml.safe_load(config.read_text())
-    _enable_factorial(
-        data,
-        factors=["condition", "genotype"],  # genotype is not a samples column
-        effect_x="treatment_a_vs_control",
         effect_y="treatment_b_vs_control",
     )
     config.write_text(yaml.safe_dump(data, sort_keys=False))
-    with pytest.raises(ProjectValidationError, match="genotype"):
+    with pytest.raises(ProjectValidationError, match=r"(family|arms|interaction)"):
         load_project(config)
 
 
 def test_factorial_wires_into_the_dag(tmp_path):
     """With valid settings the study_factorial rule joins the DAG and reads the
-    two configured contrasts' DE tables."""
+    family directory."""
     config = _project_copy(tmp_path)
     data = yaml.safe_load(config.read_text())
     _enable_factorial(
         data,
-        factors=["condition", "batch"],
-        effect_x="treatment_a_vs_control",
-        effect_y="treatment_b_vs_control",
+        family="fam_factorial",
+        arms=["est_arm_a", "est_arm_b"],
+        interaction="est_interaction",
         top_genes=6,
     )
+    # Add a mock family definition
+    data["analysis"]["families"] = [
+        {"family_id": "fam_factorial", "design": "~ condition * batch",
+         "estimands": [
+             {"estimand_id": "est_arm_a", "cells": {"condition_A": 1, "condition_B": -1}},
+             {"estimand_id": "est_arm_b", "cells": {"batch_X": 1, "batch_Y": -1}},
+             {"estimand_id": "est_interaction", "atom_kind": "interaction",
+              "term": "condition:batch"}
+         ]}
+    ]
     config.write_text(yaml.safe_dump(data, sort_keys=False))
 
     project = load_project(config)
@@ -381,3 +374,25 @@ def test_factorial_survives_invalid_regex_levels_and_sparse_palette(tmp_path):
     assert {row["group"] for row in expression} == {
         "dose[hi_no", "dose[hi_yes", "dose[lo_no", "dose[lo_yes"
     }
+
+
+def test_interaction_synthesis_carries_the_covariance_terms(tmp_path):
+    """The difference-of-differences must be auditable from the file."""
+    if shutil.which("Rscript") is None:
+        pytest.skip("Rscript not available")
+    pytest.skip("Requires family-based factorial implementation")
+    # TODO: Stage a family with arm and interaction estimands, run factorial.R,
+    # assert tables/interaction_synthesis.tsv has columns:
+    #   gene_id, arm_*_lfc, arm_*_se, interaction_lfc, interaction_se,
+    #   cov_arm_a_arm_b, and that
+    #   interaction_se != sqrt(arm_a_se^2 + arm_b_se^2)
+
+
+def test_gene_selection_comes_from_the_interaction_statistic(tmp_path):
+    """sig_either is gone: selection ranks on the interaction estimand's
+    `statistic`, so the crossover gene is selectable."""
+    if shutil.which("Rscript") is None:
+        pytest.skip("Rscript not available")
+    pytest.skip("Requires family-based factorial implementation")
+    # TODO: Stage a family with interaction estimand, run factorial.R,
+    # verify gene selection uses interaction statistic not sig_either

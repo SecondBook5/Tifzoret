@@ -471,34 +471,26 @@ def load_project(config_path: str | Path) -> ResolvedProject:
     # The enrichment map clusters enriched terms from the pathways stage outputs.
     if modules["enrichment_map"] and not modules["pathways"]:
         errors.append("modules.enrichment_map requires modules.pathways")
-    # The factorial views read the QC symbol-keyed VST expression and the two
-    # configured signed-contrast DE tables (one per crossed arm), so they require
-    # qc + de, the two crossed factors as samples columns, and effect_x/effect_y
-    # naming signed (pairwise/coefficient) contrasts that emit a directional table.
+    # The factorial views synthesize interaction views from a family's fitted
+    # estimands (spec §F): it requires qc (VST expression), de (family path), and
+    # references a family with arm and interaction estimands.
     if modules["factorial"]:
         if not modules["qc"]:
             errors.append("modules.factorial requires modules.qc because it reads the QC VST expression")
         if not modules["de"]:
-            errors.append("modules.factorial requires modules.de because it reads the two effect contrasts' DE tables")
+            errors.append("modules.factorial requires modules.de (the family fit path)")
         factorial_settings = (config["analysis"].get("settings", {}) or {}).get("factorial") or {}
-        factors = factorial_settings.get("factors")
-        if not factors:
-            errors.append("modules.factorial requires analysis.settings.factorial.factors (two samples.tsv columns)")
-        else:
-            for factor_name in factors:
-                if factor_name not in sample_header:
-                    errors.append(f"modules.factorial factor {factor_name!r} is absent from samples.tsv")
-        signed_ids = {
-            row.get("contrast_id", "").strip()
-            for row in contrasts
-            if (row.get("type", "") or "pairwise").strip().lower() in ("pairwise", "coefficient")
-        }
-        for role in ("effect_x", "effect_y"):
-            effect = factorial_settings.get(role)
-            if not effect:
-                errors.append(f"modules.factorial requires analysis.settings.factorial.{role} (a signed contrast id)")
-            elif effect not in signed_ids:
-                errors.append(f"modules.factorial {role} {effect!r} is not a signed (pairwise/coefficient) contrast id")
+        family_id = factorial_settings.get("family")
+        arms = factorial_settings.get("arms")
+        interaction = factorial_settings.get("interaction")
+        if not family_id:
+            errors.append("modules.factorial requires analysis.settings.factorial.family (a family_id)")
+        if not arms:
+            errors.append("modules.factorial requires analysis.settings.factorial.arms (list of arm estimand_ids)")
+        elif not isinstance(arms, list) or len(arms) != 2:
+            errors.append("modules.factorial.arms must be a list of exactly two estimand_ids")
+        if not interaction:
+            errors.append("modules.factorial requires analysis.settings.factorial.interaction (interaction estimand_id)")
 
     signature_path: Path | None = None
     regulon_path: Path | None = None

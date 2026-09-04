@@ -13,21 +13,19 @@
 
 # Confirmatory second differential-expression engine: edgeR quasi-likelihood
 # (glmQLFit + glmQLFTest) run on the SAME counts, design, and contrast that
-# DESeq2 used in de.R, then cross-checked for concordance. This is a robustness
-# control, not a replacement -- two independent negative-binomial engines that
-# agree on direction and on the top hits give a reviewer confidence the calls are
-# not an artefact of one method's shrinkage or dispersion model.
+# DESeq2 used in the family path, then cross-checked for concordance. This is a
+# robustness control, not a replacement -- two independent negative-binomial
+# engines that agree on direction and on the top hits give a reviewer confidence
+# the calls are not an artefact of one method's shrinkage or dispersion model.
 #
-# Scope: pairwise contrasts only. edgeR tests a model.matrix coefficient column
-# (factor + numerator level, with the factor releveled to the denominator so the
-# sign matches DESeq2's numerator - denominator convention). Coefficient
-# (interaction) contrasts use DESeq2 resultsNames() naming that does not map
-# cleanly onto model.matrix columns, and omnibus contrasts have no signed effect,
-# so both are excluded upstream (the rule expands over pairwise contrasts).
+# Generalized (spec §10): accepts arbitrary estimands via the shared family path.
+# edgeR's QL model accepts a general design matrix and a general contrast vector,
+# so there is no statistical reason to restrict this to two-group comparisons.
 
 script_arg <- grep("^--file=", commandArgs(FALSE), value = TRUE)[1]
 script_path <- normalizePath(sub("^--file=", "", script_arg), mustWork = TRUE)
 source(file.path(dirname(script_path), "..", "utils.R"), local = FALSE)
+source(file.path(dirname(script_path), "..", "estimands.R"), local = FALSE)
 
 suppressPackageStartupMessages({
   library(edgeR)
@@ -43,60 +41,55 @@ CONCORDANCE_PALETTE <- c(
 )
 CONCORDANCE_CLASSES <- c("both", "deseq2_only", "edger_only", "neither")
 
-args <- parse_cli(c("project-config", "counts", "samples", "annotation", "contrasts", "contrast-id", "de", "outdir"))
+args <- parse_cli(c("project-config", "counts", "samples", "annotation", "families", "estimands", "cell-weights", "family-dir", "estimand-id", "de", "outdir"))
 cfg <- read_project(args[["project-config"]])
 cfg$.counts <- normalizePath(args$counts, mustWork = TRUE)
 cfg$.samples <- normalizePath(args$samples, mustWork = TRUE)
 cfg$.annotation <- normalizePath(args$annotation, mustWork = TRUE)
-cfg$.contrasts <- normalizePath(args$contrasts, mustWork = TRUE)
 dirs <- ensure_output_dirs(args$outdir)
 
 counts <- read_counts_contract(cfg$.counts)
 metadata <- readr::read_tsv(cfg$.samples, show_col_types = FALSE, progress = FALSE) %>% as.data.frame()
 annotation <- read_annotation_contract(cfg$.annotation)
-contrasts <- readr::read_tsv(cfg$.contrasts, show_col_types = FALSE, progress = FALSE)
-contrast <- contrasts[contrasts$contrast_id == args[["contrast-id"]], , drop = FALSE]
-if (nrow(contrast) != 1L) stop("Could not resolve exactly one contrast: ", args[["contrast-id"]], call. = FALSE)
 
-resolved <- resolve_contrast(contrast, cfg$design$formula)
-if (!identical(resolved$type, "pairwise")) {
-  stop("de_confirm supports pairwise contrasts only; ", args[["contrast-id"]], " is type ", resolved$type, call. = FALSE)
+# Read family_id from the family directory's summary
+family_summary_path <- file.path(args[["family-dir"]], "family_summary.json")
+if (!file.exists(family_summary_path)) {
+  stop("family summary not found: ", family_summary_path, call. = FALSE)
 }
-factor_name <- resolved$factor_name
-numerator <- resolved$numerator
-denominator <- resolved$denominator
-design_formula <- resolved$design_formula
+family_summary <- jsonlite::fromJSON(family_summary_path)
+family_id <- family_summary$family_id
+
+# Read family and estimand specifications from the shared TSV manifests
+spec <- read_estimand_spec(args$estimands, args[["estimand-id"]])
+family <- read_family_spec(args$families, spec$family_id)
+weights <- read_cell_weights(args[["cell-weights"]], spec$estimand_id)
+design_formula <- stats::as.formula(family$design)
 
 metadata <- metadata[match(colnames(counts), metadata$sample_id), , drop = FALSE]
 rownames(metadata) <- metadata$sample_id
 for (field in all.vars(design_formula)) metadata[[field]] <- factor(metadata[[field]])
-# Relevel the tested factor to the denominator so the coefficient's sign matches
-# DESeq2 (positive = up in numerator); honour any per-row reference levels too.
-metadata[[factor_name]] <- stats::relevel(factor(metadata[[factor_name]]), ref = denominator)
-for (relevel_factor in names(resolved$reference_levels)) {
-  metadata[[relevel_factor]] <- stats::relevel(factor(metadata[[relevel_factor]]), ref = resolved$reference_levels[[relevel_factor]])
-}
 
+# edgeR's QL model accepts a general design matrix and a general contrast vector,
+# so there is no statistical reason to restrict this to a two-group comparison.
+# The contrast vector comes from the SAME estimands.R function the DESeq2 path
+# used -- two implementations of that mapping is how two engines end up
+# disagreeing on sign while both look plausible.
 design <- stats::model.matrix(design_formula, data = metadata)
-coefficient_column <- paste0(factor_name, numerator)
-if (!coefficient_column %in% colnames(design)) {
-  stop(
-    "Could not resolve edgeR coefficient column ", coefficient_column,
-    "; available: ", paste(colnames(design), collapse = ", "),
-    call. = FALSE
-  )
-}
+contrast_vector <- compile_contrast_vector(
+  c(family, spec), weights, metadata, design_formula, make.names(colnames(design)))
 
-# edgeR quasi-likelihood pipeline: TMM normalization, empirical-Bayes dispersion,
-# QL F-test of the numerator coefficient. filterByExpr uses the same design so
-# the low-count filter respects the experimental structure.
-dge <- edgeR::DGEList(counts = counts)
-keep <- edgeR::filterByExpr(dge, design)
-dge <- dge[keep, , keep.lib.sizes = FALSE]
+# The family's exported universe, so concordance is computed on identical genes
+# rather than on an inner join of two different filters.
+universe <- readr::read_tsv(
+  file.path(args[["family-dir"]], "tables", "tested_gene_universe.tsv"),
+  show_col_types = FALSE, progress = FALSE)
+keep <- rownames(counts) %in% universe$gene_id[universe$retained]
+dge <- edgeR::DGEList(counts = counts[keep, , drop = FALSE])
 dge <- edgeR::calcNormFactors(dge)
 dge <- edgeR::estimateDisp(dge, design)
 fit <- edgeR::glmQLFit(dge, design)
-qlf <- edgeR::glmQLFTest(fit, coef = coefficient_column)
+qlf <- edgeR::glmQLFTest(fit, contrast = as.numeric(contrast_vector))
 edger <- edgeR::topTags(qlf, n = Inf, sort.by = "none")$table
 
 fdr <- cfg$figures$de$fdr
@@ -114,7 +107,7 @@ edger_table <- data.frame(
   mutate(
     gene_symbol = ifelse(is.na(gene_symbol) | gene_symbol == "", gene_id, gene_symbol),
     edger_significant = !is.na(edger_fdr) & edger_fdr < fdr & abs(edger_log2_fold_change) >= lfc,
-    contrast_id = args[["contrast-id"]]
+    contrast_id = args[["estimand-id"]]
   ) %>%
   arrange(edger_fdr, desc(abs(edger_log2_fold_change)))
 readr::write_tsv(edger_table, file.path(dirs$tables, "edger_results.tsv"), na = "NA")
@@ -190,7 +183,7 @@ concordance_plot <- ggplot(finite_lfc, aes(deseq2_log2_fold_change, edger_log2_f
     name = "Significant in"
   ) +
   labs(
-    title = paste0("DESeq2 vs edgeR concordance: ", numerator, " versus ", denominator),
+    title = paste0("DESeq2 vs edgeR concordance: ", spec$label),
     subtitle = subtitle,
     x = "DESeq2 log2 fold-change",
     y = "edgeR log2 fold-change"
@@ -202,10 +195,9 @@ save_plot_pair(concordance_plot, file.path(dirs$figures, "de_concordance"), 6.2,
 write_json_file(
   list(
     project_id = cfg$project$id,
-    contrast_id = args[["contrast-id"]],
-    factor = factor_name,
-    numerator = numerator,
-    denominator = denominator,
+    contrast_id = args[["estimand-id"]],
+    family_id = family$family_id,
+    estimand_id = args[["estimand-id"]],
     method = "edger_quasi_likelihood",
     genes_compared = nrow(concordance),
     deseq2_significant = n_deseq2_sig,
