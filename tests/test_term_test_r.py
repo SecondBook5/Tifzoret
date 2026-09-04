@@ -51,10 +51,12 @@ def test_produces_the_lrt_contract(tmp_path):
     assert rows
     for column in (
         "gene_id", "gene_symbol", "base_mean", "lrt_statistic", "df",
-        "p_value", "adjusted_p_value", "significant", "family_id", "term_test_id",
+        "p_value", "adjusted_p_value", "negative_log10_p", "significant",
+        "family_id", "term_test_id",
     ):
         assert column in rows[0], column
     assert (outdir / "figures" / "pvalue_distribution.png").is_file()
+    assert (outdir / "figures" / "pvalue_distribution.pdf").is_file()
 
 
 def test_records_the_reduced_model_and_df(tmp_path):
