@@ -2,9 +2,9 @@
 
 The engine's single most load-bearing scientific invariant is that positive
 log2_fold_change = numerator - denominator, single-sourced through
-resolve_contrast() in utils.R. This executing test runs de.R on a fixture
-with unambiguous up- and down-in-numerator genes and asserts the signs +
-direction labels are correct.
+resolve_contrast() in utils.R. This executing test runs the family path
+(materialize_inputs → family_fit → estimand) on a fixture with unambiguous
+up- and down-in-numerator genes and asserts the signs + direction labels are correct.
 """
 
 from __future__ import annotations
@@ -19,7 +19,9 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = ROOT / "src" / "tifzoret" / "templates" / "minimal"
-DE_R = ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "03_differential" / "de.R"
+MATERIALIZE_INPUTS = ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "01_inputs" / "materialize_inputs.py"
+FAMILY_FIT_R = ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "03_differential" / "family_fit.R"
+ESTIMAND_R = ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "03_differential" / "estimand.R"
 
 
 def test_de_sign_convention_numerator_minus_denominator(tmp_path):
@@ -49,17 +51,57 @@ def test_de_sign_convention_numerator_minus_denominator(tmp_path):
     project_dir = tmp_path / "project"
     shutil.copytree(TEMPLATE, project_dir)
 
-    # Run de.R on the treatment_a_vs_control contrast.
+    # Run materialize_inputs to generate families/estimands/cell_weights.
+    inputs_dir = tmp_path / "inputs"
+    subprocess.run(
+        [
+            "python", str(MATERIALIZE_INPUTS),
+            "--project-config", str(project_dir / "project.yaml"),
+            "--counts", str(inputs_dir / "counts.tsv"),
+            "--samples", str(inputs_dir / "samples.tsv"),
+            "--annotation", str(inputs_dir / "annotation.tsv"),
+            "--contrasts", str(inputs_dir / "contrasts.tsv"),
+            "--families", str(inputs_dir / "families.tsv"),
+            "--estimands", str(inputs_dir / "estimands.tsv"),
+            "--cell-weights", str(inputs_dir / "estimand_cell_weights.tsv"),
+            "--term-tests", str(inputs_dir / "term_tests.tsv"),
+            "--manifest", str(inputs_dir / "input_manifest.json"),
+            "--threads", "1",
+        ],
+        check=True, capture_output=True, text=True,
+    )
+
+    # Run family_fit.R for the treatment_a_vs_control family.
+    family_dir = tmp_path / "families" / "treatment_a_vs_control"
+    subprocess.run(
+        [
+            "Rscript", "--vanilla", str(FAMILY_FIT_R),
+            "--project-config", str(project_dir / "project.yaml"),
+            "--counts", str(inputs_dir / "counts.tsv"),
+            "--samples", str(inputs_dir / "samples.tsv"),
+            "--families", str(inputs_dir / "families.tsv"),
+            "--estimands", str(inputs_dir / "estimands.tsv"),
+            "--cell-weights", str(inputs_dir / "estimand_cell_weights.tsv"),
+            "--family-id", "treatment_a_vs_control",
+            "--outdir", str(family_dir),
+        ],
+        check=True, capture_output=True, text=True,
+    )
+
+    # Run estimand.R to extract the estimand.
     outdir = tmp_path / "out"
     subprocess.run(
         [
-            "Rscript", "--vanilla", str(DE_R),
+            "Rscript", "--vanilla", str(ESTIMAND_R),
             "--project-config", str(project_dir / "project.yaml"),
-            "--counts", str(project_dir / "counts.tsv"),
-            "--samples", str(project_dir / "samples.tsv"),
-            "--annotation", str(project_dir / "annotation.tsv"),
-            "--contrasts", str(project_dir / "contrasts.tsv"),
-            "--contrast-id", "treatment_a_vs_control",
+            "--counts", str(inputs_dir / "counts.tsv"),
+            "--samples", str(inputs_dir / "samples.tsv"),
+            "--annotation", str(inputs_dir / "annotation.tsv"),
+            "--families", str(inputs_dir / "families.tsv"),
+            "--estimands", str(inputs_dir / "estimands.tsv"),
+            "--cell-weights", str(inputs_dir / "estimand_cell_weights.tsv"),
+            "--family-dir", str(family_dir),
+            "--estimand-id", "treatment_a_vs_control",
             "--outdir", str(outdir),
         ],
         check=True, capture_output=True, text=True,

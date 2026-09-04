@@ -28,10 +28,11 @@ annotation <- read_annotation_contract(args$annotation)
 contrasts <- readr::read_tsv(args$contrasts, show_col_types = FALSE, progress = FALSE)
 contrast <- contrasts[contrasts$contrast_id == args[["contrast-id"]], , drop = FALSE]
 if (nrow(contrast) != 1L) stop("Could not resolve contrast", call. = FALSE)
-# Route direction resolution through the shared resolver used by de.R/pathways.R
-# so the relevel reference and numerator identity come from one code path. This
-# stage only ever runs on pairwise contrasts (PAIRWISE_CONTRAST_IDS gate), so the
-# guard is a documented assertion and cannot fire in practice.
+# Route direction resolution through the shared resolver used by pathways.R and
+# other downstream modules so the relevel reference and numerator identity come
+# from one code path. This stage only ever runs on pairwise contrasts
+# (PAIRWISE_CONTRAST_IDS gate), so the guard is a documented assertion and cannot
+# fire in practice.
 resolved <- resolve_contrast(contrast, cfg$design$formula)
 if (!identical(resolved$type, "pairwise")) stop("composition stage supports pairwise contrasts only", call. = FALSE)
 factor_name <- resolved$factor_name; numerator <- resolved$numerator; denominator <- resolved$denominator

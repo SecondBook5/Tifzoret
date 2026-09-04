@@ -68,8 +68,8 @@ readr::write_tsv(
 
 # ---------------------------------------------------------------------------
 # The canonical fit. DESeq() (not the manual estimate* sequence) so Cook's
-# outlier filtering/replacement behaves exactly as it did in the superseded
-# de.R; estimand.R reuses THIS object's dispersions and replaced counts.
+# outlier filtering/replacement behaves consistently; estimand.R reuses THIS
+# object's dispersions and replaced counts.
 # ---------------------------------------------------------------------------
 dds <- DESeq2::DESeqDataSetFromMatrix(
   countData = counts[keep, , drop = FALSE], colData = metadata, design = design_formula)

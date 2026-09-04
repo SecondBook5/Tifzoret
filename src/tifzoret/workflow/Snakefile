@@ -84,35 +84,32 @@ MODULES = {
 with open(SOURCE_CONTRASTS, newline="") as handle:
     CONTRAST_ROWS = list(csv.DictReader(handle, delimiter="\t"))
 CONTRAST_IDS = [row["contrast_id"] for row in CONTRAST_ROWS]
-# DE and pathways understand both pairwise and coefficient (difference-in-
-# differences) contrasts. The remaining per-contrast modules assume a two-group
-# design and would mis-specify or fail on a coefficient contrast, so they expand
-# over pairwise contrasts only. A row is pairwise when its optional `type` column
-# is absent, empty, or the literal "pairwise" (every row in a pairwise-only study).
+# Every contrast row now desugars into a family (config/estimands.py), so the DE
+# path expands over estimands rather than over contrast types. PAIRWISE_CONTRAST_IDS
+# is retained unchanged: the eleven two-group modules still assume a two-level
+# comparison and stay correctly excluded until sub-project 5 makes them factorial.
 PAIRWISE_CONTRAST_IDS = [
     row["contrast_id"]
     for row in CONTRAST_ROWS
     if (row.get("type") or "pairwise").strip().lower() == "pairwise"
 ]
-# Signed contrasts (pairwise + coefficient) produce a directional effect and run
-# through contrast_de + pathways. Omnibus (LRT) contrasts have no signed effect,
-# so they run through contrast_omnibus instead. With no omnibus rows present,
-# SIGNED_CONTRAST_IDS == CONTRAST_IDS, so pairwise-only studies are unchanged.
-SIGNED_CONTRAST_IDS = [
-    row["contrast_id"]
-    for row in CONTRAST_ROWS
-    if (row.get("type") or "pairwise").strip().lower() in ("pairwise", "coefficient")
+FAMILY_IDS = [family.id for family in PROJECT.families]
+FAMILY_ESTIMANDS = [
+    (family.id, estimand.id) for family in PROJECT.families for estimand in family.estimands
 ]
-OMNIBUS_CONTRAST_IDS = [
-    row["contrast_id"]
-    for row in CONTRAST_ROWS
-    if (row.get("type") or "pairwise").strip().lower() == "omnibus"
+ESTIMAND_IDS = [estimand_id for _, estimand_id in FAMILY_ESTIMANDS]
+FAMILY_TERM_TESTS = [
+    (family.id, test.id) for family in PROJECT.families for test in family.term_tests
 ]
+FAMILY_OF_ESTIMAND = {estimand_id: family_id for family_id, estimand_id in FAMILY_ESTIMANDS}
+# Pathways/ontology consume any signed estimand table, which is now every estimand.
+SIGNED_CONTRAST_IDS = list(ESTIMAND_IDS)
 
 R_ENV = str(WORKFLOW_ROOT / "envs" / "r.yaml")
 CORE_ENV = str(WORKFLOW_ROOT / "envs" / "core.yaml")
 NETWORK_ENV = str(WORKFLOW_ROOT / "envs" / "network.yaml")
 UTILS_R = str(WORKFLOW_ROOT / "scripts" / "utils.R")
+ESTIMANDS_R = str(WORKFLOW_ROOT / "scripts" / "estimands.R")
 
 def qc(path):
     return str(RESULTS / "qc" / path)
@@ -131,6 +128,12 @@ def variance_partition(path):
 
 def factorial(path):
     return str(RESULTS / "factorial" / path)
+
+def family(path):
+    return str(RESULTS / "families" / "{family_id}" / path)
+
+def term_test(path):
+    return str(RESULTS / "families" / "{family_id}" / "term_tests" / "{term_test_id}" / path)
 
 def contrast(path):
     return str(RESULTS / "contrasts" / "{contrast_id}" / path)
@@ -240,6 +243,17 @@ FACTORIAL_OUTPUTS = [
     factorial("factorial_summary.json"),
 ]
 
+FAMILY_PATTERNS = [
+    family("objects/deseq2.rds"),
+    family("tables/coefficient_covariance.tsv"),
+    family("tables/contrast_matrix.tsv"),
+    family("tables/tested_gene_universe.tsv"),
+    family("tables/design_diagnostics.tsv"),
+    family("figures/design_diagnostics.pdf"),
+    family("figures/design_diagnostics.png"),
+    family("family_summary.json"),
+]
+
 DE_PATTERNS = [
     analysis("de", "objects/deseq2.rds"),
     analysis("de", "tables/de_results.tsv"),
@@ -267,16 +281,12 @@ DE_PATTERNS = [
     analysis("de", "de_summary.json"),
 ]
 
-OMNIBUS_PATTERNS = [
-    analysis("omnibus", "objects/deseq2_lrt.rds"),
-    analysis("omnibus", "tables/omnibus_results.tsv"),
-    analysis("omnibus", "tables/pvalue_distribution_displayed.tsv"),
-    analysis("omnibus", "tables/omnibus_heatmap_displayed.tsv"),
-    analysis("omnibus", "figures/pvalue_distribution.pdf"),
-    analysis("omnibus", "figures/pvalue_distribution.png"),
-    analysis("omnibus", "figures/omnibus_heatmap.pdf"),
-    analysis("omnibus", "figures/omnibus_heatmap.png"),
-    analysis("omnibus", "omnibus_summary.json"),
+TERM_TEST_PATTERNS = [
+    term_test("tables/lrt_results.tsv"),
+    term_test("tables/pvalue_distribution_displayed.tsv"),
+    term_test("figures/pvalue_distribution.pdf"),
+    term_test("figures/pvalue_distribution.png"),
+    term_test("term_test_summary.json"),
 ]
 
 # Confirmatory edgeR quasi-likelihood run + DESeq2 concordance (de_confirm
@@ -469,8 +479,16 @@ if MODULES["variance_partition"]:
 if MODULES["factorial"]:
     FINAL_OUTPUTS.extend(FACTORIAL_OUTPUTS)
 if MODULES["de"]:
-    FINAL_OUTPUTS.extend(expand(DE_PATTERNS, contrast_id=SIGNED_CONTRAST_IDS))
-    FINAL_OUTPUTS.extend(expand(OMNIBUS_PATTERNS, contrast_id=OMNIBUS_CONTRAST_IDS))
+    for family_id in FAMILY_IDS:
+        FINAL_OUTPUTS.extend(
+            pattern.format(family_id=family_id) for pattern in FAMILY_PATTERNS
+        )
+    FINAL_OUTPUTS.extend(expand(DE_PATTERNS, contrast_id=ESTIMAND_IDS))
+    for family_id, term_test_id in FAMILY_TERM_TESTS:
+        FINAL_OUTPUTS.extend(
+            pattern.format(family_id=family_id, term_test_id=term_test_id)
+            for pattern in TERM_TEST_PATTERNS
+        )
 if MODULES["de_confirm"]:
     FINAL_OUTPUTS.extend(expand(DE_CONFIRM_PATTERNS, contrast_id=PAIRWISE_CONTRAST_IDS))
 if MODULES["consensus"]:

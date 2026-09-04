@@ -14,12 +14,12 @@ MID_GREY <- "#697783"
 LIGHT_GREY <- "#E7ECF0"
 
 # ---------------------------------------------------------------------------
-# Differential-expression significance scheme (shared by de.R volcano + MA).
+# Differential-expression significance scheme (shared by estimand.R volcano + MA).
 # ---------------------------------------------------------------------------
 # Five-class palette copied byte-for-byte from the old pipeline's
 # SIGNIFICANCE_PALETTE (workflow/stages/de/de_packages.R) so the engine's DE
 # plots match the published figures exactly. Single source of truth: both the
-# volcano and MA constructors in de.R (and therefore de_overview) consume this
+# volcano and MA constructors in estimand.R (and therefore de_overview) consume this
 # palette together with classify_significance() below.
 SIGNIFICANCE_PALETTE <- c(
   significant_up = "#B22222",
@@ -145,10 +145,10 @@ parse_reference_levels <- function(text) {
   result
 }
 
-# Single source of truth for interpreting one contrast row, shared by de.R and
-# pathways.R. Pairwise rows (the default, and every row in a study without the
-# optional columns) reproduce historical behavior exactly: the global design,
-# relevel `factor` to `denominator`, extract `factor_numerator_vs_denominator`.
+# Single source of truth for interpreting one contrast row, shared by de_confirm.R,
+# pathways.R, composition.R, and regulators.R. Pairwise rows (the default, and every
+# row in a study without the optional columns) reproduce historical behavior exactly:
+# the global design, relevel `factor` to `denominator`, extract `factor_numerator_vs_denominator`.
 # Coefficient rows carry a per-row design, explicit reference levels, and a
 # named resultsNames() coefficient (a difference-in-differences interaction).
 resolve_contrast <- function(contrast_row, global_design) {

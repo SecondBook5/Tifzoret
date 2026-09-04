@@ -82,20 +82,29 @@ Output: `results/<project>/<analysis_set>/batch/*.pdf`.
 
 ## Phase 3: Differential expression (per contrast)
 
-From here on, stages fan out: each declared contrast runs independently through the enabled modules.
+From here on, stages fan out: differential expression proceeds family-by-family, then each estimand extraction runs independently through the enabled modules.
 
-**Rule: `contrast_de`** ([`core.smk`](../src/tifzoret/workflow/rules/core.smk))  
-**Script: [`de.R`](../src/tifzoret/workflow/scripts/03_differential/de.R)**
+**Rule: `family_fit`** ([`core.smk`](../src/tifzoret/workflow/rules/core.smk))  
+**Script: [`family_fit.R`](../src/tifzoret/workflow/scripts/03_differential/family_fit.R)**
 
-For each contrast `<contrast_id>`, this stage:
+For each family `<family_id>`, this stage:
 1. Builds a DESeq2 dataset from counts and samples
-2. Estimates size factors and dispersions
+2. Estimates size factors and dispersions (one set per family)
 3. Fits the design formula (e.g., `~batch + condition`)
-4. Extracts the coefficient for `numerator - denominator`
-5. Applies shrinkage (apeglm, ashr, normal, or none per config)
-6. Writes results with log2FC, adjusted p-value, and base mean
+4. Exports the full coefficient covariance matrix and contrast matrix
 
-Output: `results/<project>/<analysis_set>/<contrast>/de/de_results.tsv` and summary plots (`volcano.pdf`, `ma_plot.pdf`, `pvalue_hist.pdf`).
+Output: `results/families/<family_id>/objects/deseq2.rds`, coefficient covariance, and design diagnostics.
+
+**Rule: `family_estimand`** ([`core.smk`](../src/tifzoret/workflow/rules/core.smk))  
+**Script: [`estimand.R`](../src/tifzoret/workflow/scripts/03_differential/estimand.R)**
+
+For each estimand (former contrast) `<estimand_id>`, this stage:
+1. Extracts the estimand from its family's shared Wald fit
+2. Computes covariance-aware standard errors (exact sqrt(c' Sigma c))
+3. Applies reparameterized shrinkage (apeglm on composite contrasts)
+4. Writes results with log2FC, adjusted p-value, and base mean
+
+Output: `results/contrasts/<estimand_id>/analyses/de/de_results.tsv` and summary plots (`volcano.pdf`, `ma_plot.pdf`, `pvalue_hist.pdf`).
 
 **Optional rule: `contrast_de_confirm`** ([`modules.smk`](../src/tifzoret/workflow/rules/modules.smk))  
 **Script: [`de_confirm.R`](../src/tifzoret/workflow/scripts/03_differential/de_confirm.R)**

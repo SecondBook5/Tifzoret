@@ -37,7 +37,7 @@ def test_publication_profile_executes_to_completion(tmp_path):
         pytest.skip("Rscript not available")
 
     # Check if required R packages are available. The publication profile needs
-    # DESeq2 (for de.R), viper (for regulators.R), and fgsea (for pathways.R).
+    # DESeq2 (for family_fit/estimand), viper (for regulators.R), and fgsea (for pathways.R).
     for package in ("DESeq2", "viper", "fgsea"):
         try:
             subprocess.run(

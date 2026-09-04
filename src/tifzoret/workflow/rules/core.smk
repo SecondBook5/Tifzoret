@@ -216,77 +216,98 @@ rule study_factorial:
         "--de-x {input.de_x:q} --de-y {input.de_y:q} "
         "--outdir {RESULTS}/factorial > {log:q} 2>&1"
 
-rule contrast_de:
+rule family_fit:
     input:
         counts=COUNTS,
         samples=SAMPLES,
-        annotation=ANNOTATION,
-        contrasts=CONTRASTS,
+        families=FAMILIES,
+        estimands=ESTIMANDS,
+        cell_weights=CELL_WEIGHTS,
         config=str(CONFIG_PATH),
-        script=str(WORKFLOW_ROOT / "scripts" / "03_differential" / "de.R"),
-        utils=UTILS_R
+        script=str(WORKFLOW_ROOT / "scripts" / "03_differential" / "family_fit.R"),
+        utils=UTILS_R,
+        estimands_r=ESTIMANDS_R
     output:
-        dds=analysis("de", "objects/deseq2.rds"),
-        results=analysis("de", "tables/de_results.tsv"),
-        volcano_table=analysis("de", "tables/volcano_displayed.tsv"),
-        heatmap_table=analysis("de", "tables/de_heatmap_displayed.tsv"),
-        ma_table=analysis("de", "tables/ma_displayed.tsv"),
-        pvalue_table=analysis("de", "tables/pvalue_distribution_displayed.tsv"),
-        lfc_table=analysis("de", "tables/lfc_distribution_displayed.tsv"),
-        de_pca_table=analysis("de", "tables/de_pca_coordinates.tsv"),
-        de_pca_ellipses=analysis("de", "tables/de_pca_ellipses.tsv"),
-        volcano_pdf=analysis("de", "figures/volcano.pdf"),
-        volcano_png=analysis("de", "figures/volcano.png"),
-        heatmap_pdf=analysis("de", "figures/de_heatmap.pdf"),
-        heatmap_png=analysis("de", "figures/de_heatmap.png"),
-        ma_pdf=analysis("de", "figures/ma.pdf"),
-        ma_png=analysis("de", "figures/ma.png"),
-        pvalue_pdf=analysis("de", "figures/pvalue_distribution.pdf"),
-        pvalue_png=analysis("de", "figures/pvalue_distribution.png"),
-        lfc_pdf=analysis("de", "figures/lfc_distribution.pdf"),
-        lfc_png=analysis("de", "figures/lfc_distribution.png"),
-        de_pca_pdf=analysis("de", "figures/de_pca.pdf"),
-        de_pca_png=analysis("de", "figures/de_pca.png"),
-        overview_pdf=analysis("de", "figures/de_overview.pdf"),
-        overview_png=analysis("de", "figures/de_overview.png"),
-        summary=analysis("de", "de_summary.json")
+        dds=family("objects/deseq2.rds"),
+        covariance=family("tables/coefficient_covariance.tsv"),
+        contrast_matrix=family("tables/contrast_matrix.tsv"),
+        universe=family("tables/tested_gene_universe.tsv"),
+        diagnostics=family("tables/design_diagnostics.tsv"),
+        diagnostics_pdf=family("figures/design_diagnostics.pdf"),
+        diagnostics_png=family("figures/design_diagnostics.png"),
+        summary=family("family_summary.json")
     log:
-        analysis("de", "logs/de.log")
+        family("logs/family_fit.log")
     conda:
         R_ENV
     shell:
         "Rscript --vanilla {input.script} --project-config {input.config:q} "
-        "--counts {input.counts:q} --samples {input.samples:q} --annotation {input.annotation:q} "
-        "--contrasts {input.contrasts:q} "
-        "--contrast-id {wildcards.contrast_id:q} "
+        "--counts {input.counts:q} --samples {input.samples:q} "
+        "--families {input.families:q} --estimands {input.estimands:q} "
+        "--cell-weights {input.cell_weights:q} "
+        "--family-id {wildcards.family_id:q} "
+        "--outdir {RESULTS}/families/{wildcards.family_id} > {log:q} 2>&1"
+
+rule family_estimand:
+    input:
+        counts=COUNTS,
+        samples=SAMPLES,
+        annotation=ANNOTATION,
+        families=FAMILIES,
+        estimands=ESTIMANDS,
+        cell_weights=CELL_WEIGHTS,
+        dds=lambda wildcards: str(
+            RESULTS / "families" / FAMILY_OF_ESTIMAND[wildcards.contrast_id] / "objects" / "deseq2.rds"
+        ),
+        config=str(CONFIG_PATH),
+        script=str(WORKFLOW_ROOT / "scripts" / "03_differential" / "estimand.R"),
+        render=str(WORKFLOW_ROOT / "scripts" / "03_differential" / "de_render.R"),
+        utils=UTILS_R,
+        estimands_r=ESTIMANDS_R
+    output:
+        DE_PATTERNS
+    log:
+        analysis("de", "logs/estimand.log")
+    params:
+        family_dir=lambda wildcards: str(
+            RESULTS / "families" / FAMILY_OF_ESTIMAND[wildcards.contrast_id]
+        )
+    conda:
+        R_ENV
+    shell:
+        "Rscript --vanilla {input.script} --project-config {input.config:q} "
+        "--counts {input.counts:q} --samples {input.samples:q} "
+        "--annotation {input.annotation:q} --families {input.families:q} "
+        "--estimands {input.estimands:q} --cell-weights {input.cell_weights:q} "
+        "--family-dir {params.family_dir:q} --estimand-id {wildcards.contrast_id:q} "
         "--outdir {RESULTS}/contrasts/{wildcards.contrast_id}/analyses/de > {log:q} 2>&1"
 
-rule contrast_omnibus:
+rule family_term_test:
     input:
-        counts=COUNTS,
-        samples=SAMPLES,
         annotation=ANNOTATION,
-        contrasts=CONTRASTS,
+        families=FAMILIES,
+        term_tests=TERM_TESTS,
+        dds=family("objects/deseq2.rds"),
+        universe=family("tables/tested_gene_universe.tsv"),
         config=str(CONFIG_PATH),
-        script=str(WORKFLOW_ROOT / "scripts" / "03_differential" / "omnibus.R"),
-        utils=UTILS_R
+        script=str(WORKFLOW_ROOT / "scripts" / "03_differential" / "term_test.R"),
+        utils=UTILS_R,
+        estimands_r=ESTIMANDS_R
     output:
-        dds=analysis("omnibus", "objects/deseq2_lrt.rds"),
-        results=analysis("omnibus", "tables/omnibus_results.tsv"),
-        pvalue_table=analysis("omnibus", "tables/pvalue_distribution_displayed.tsv"),
-        heatmap_table=analysis("omnibus", "tables/omnibus_heatmap_displayed.tsv"),
-        pvalue_pdf=analysis("omnibus", "figures/pvalue_distribution.pdf"),
-        pvalue_png=analysis("omnibus", "figures/pvalue_distribution.png"),
-        heatmap_pdf=analysis("omnibus", "figures/omnibus_heatmap.pdf"),
-        heatmap_png=analysis("omnibus", "figures/omnibus_heatmap.png"),
-        summary=analysis("omnibus", "omnibus_summary.json")
+        results=term_test("tables/lrt_results.tsv"),
+        pvalue_table=term_test("tables/pvalue_distribution_displayed.tsv"),
+        pvalue_pdf=term_test("figures/pvalue_distribution.pdf"),
+        pvalue_png=term_test("figures/pvalue_distribution.png"),
+        summary=term_test("term_test_summary.json")
     log:
-        analysis("omnibus", "logs/omnibus.log")
+        term_test("logs/term_test.log")
     conda:
         R_ENV
     shell:
         "Rscript --vanilla {input.script} --project-config {input.config:q} "
-        "--counts {input.counts:q} --samples {input.samples:q} --annotation {input.annotation:q} "
-        "--contrasts {input.contrasts:q} "
-        "--contrast-id {wildcards.contrast_id:q} "
-        "--outdir {RESULTS}/contrasts/{wildcards.contrast_id}/analyses/omnibus > {log:q} 2>&1"
+        "--annotation {input.annotation:q} --families {input.families:q} "
+        "--term-tests {input.term_tests:q} "
+        "--family-dir {RESULTS}/families/{wildcards.family_id} "
+        "--family-id {wildcards.family_id:q} --term-test-id {wildcards.term_test_id:q} "
+        "--outdir {RESULTS}/families/{wildcards.family_id}/term_tests/{wildcards.term_test_id} "
+        "> {log:q} 2>&1"

@@ -23,6 +23,9 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = ROOT / "src" / "tifzoret" / "templates" / "minimal"
+MATERIALIZE_INPUTS = ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "01_inputs" / "materialize_inputs.py"
+FAMILY_FIT_R = ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "03_differential" / "family_fit.R"
+ESTIMAND_R = ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "03_differential" / "estimand.R"
 DE_CONFIRM_R = ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "03_differential" / "de_confirm.R"
 SPIA_R = ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "04_enrichment" / "spia.R"
 BATCH_R = ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "02_qc" / "batch.R"
@@ -45,6 +48,78 @@ def _has_rscript_package(package: str) -> bool | str:
         return f"{package} probe timed out"
     except subprocess.CalledProcessError:
         return f"{package} not available"
+
+
+def _run_family_de(
+    tmp_path: Path,
+    project_dir: Path,
+    estimand_id: str,
+    config_path: Path | None = None,
+) -> Path:
+    """Run the family DE path (materialize_inputs → family_fit → estimand).
+
+    Returns the output directory containing de_results.tsv.
+    """
+    if config_path is None:
+        config_path = project_dir / "project.yaml"
+
+    # Run materialize_inputs to generate families/estimands/cell_weights.
+    inputs_dir = tmp_path / "inputs"
+    subprocess.run(
+        [
+            "python", str(MATERIALIZE_INPUTS),
+            "--project-config", str(config_path),
+            "--counts", str(inputs_dir / "counts.tsv"),
+            "--samples", str(inputs_dir / "samples.tsv"),
+            "--annotation", str(inputs_dir / "annotation.tsv"),
+            "--contrasts", str(inputs_dir / "contrasts.tsv"),
+            "--families", str(inputs_dir / "families.tsv"),
+            "--estimands", str(inputs_dir / "estimands.tsv"),
+            "--cell-weights", str(inputs_dir / "estimand_cell_weights.tsv"),
+            "--term-tests", str(inputs_dir / "term_tests.tsv"),
+            "--manifest", str(inputs_dir / "input_manifest.json"),
+            "--threads", "1",
+        ],
+        check=True, capture_output=True, text=True,
+    )
+
+    # Run family_fit.R for the estimand's family.
+    family_dir = tmp_path / "families" / estimand_id
+    subprocess.run(
+        [
+            "Rscript", "--vanilla", str(FAMILY_FIT_R),
+            "--project-config", str(config_path),
+            "--counts", str(inputs_dir / "counts.tsv"),
+            "--samples", str(inputs_dir / "samples.tsv"),
+            "--families", str(inputs_dir / "families.tsv"),
+            "--estimands", str(inputs_dir / "estimands.tsv"),
+            "--cell-weights", str(inputs_dir / "estimand_cell_weights.tsv"),
+            "--family-id", estimand_id,
+            "--outdir", str(family_dir),
+        ],
+        check=True, capture_output=True, text=True,
+    )
+
+    # Run estimand.R to extract the estimand.
+    de_outdir = tmp_path / "de"
+    subprocess.run(
+        [
+            "Rscript", "--vanilla", str(ESTIMAND_R),
+            "--project-config", str(config_path),
+            "--counts", str(inputs_dir / "counts.tsv"),
+            "--samples", str(inputs_dir / "samples.tsv"),
+            "--annotation", str(inputs_dir / "annotation.tsv"),
+            "--families", str(inputs_dir / "families.tsv"),
+            "--estimands", str(inputs_dir / "estimands.tsv"),
+            "--cell-weights", str(inputs_dir / "estimand_cell_weights.tsv"),
+            "--family-dir", str(family_dir),
+            "--estimand-id", estimand_id,
+            "--outdir", str(de_outdir),
+        ],
+        check=True, capture_output=True, text=True,
+    )
+
+    return de_outdir
 
 
 def test_de_confirm_concordance_with_edger(tmp_path):
@@ -71,22 +146,8 @@ def test_de_confirm_concordance_with_edger(tmp_path):
     project_dir = tmp_path / "project"
     shutil.copytree(TEMPLATE, project_dir)
 
-    # Run de.R first to produce the primary DESeq2 results that de_confirm reads.
-    de_r = ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "03_differential" / "de.R"
-    de_outdir = tmp_path / "de"
-    subprocess.run(
-        [
-            "Rscript", "--vanilla", str(de_r),
-            "--project-config", str(project_dir / "project.yaml"),
-            "--counts", str(project_dir / "counts.tsv"),
-            "--samples", str(project_dir / "samples.tsv"),
-            "--annotation", str(project_dir / "annotation.tsv"),
-            "--contrasts", str(project_dir / "contrasts.tsv"),
-            "--contrast-id", "treatment_a_vs_control",
-            "--outdir", str(de_outdir),
-        ],
-        check=True, capture_output=True, text=True,
-    )
+    # Run the family DE path to produce the primary DESeq2 results that de_confirm reads.
+    de_outdir = _run_family_de(tmp_path, project_dir, "treatment_a_vs_control")
 
     # Run de_confirm.R on the same contrast.
     confirm_outdir = tmp_path / "de_confirm"
@@ -184,22 +245,8 @@ def test_spia_pathway_topology_analysis(tmp_path):
     }
     config_path.write_text(yaml.safe_dump(config, sort_keys=False))
 
-    # Run de.R first.
-    de_r = ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "03_differential" / "de.R"
-    de_outdir = tmp_path / "de"
-    subprocess.run(
-        [
-            "Rscript", "--vanilla", str(de_r),
-            "--project-config", str(config_path),
-            "--counts", str(project_dir / "counts.tsv"),
-            "--samples", str(project_dir / "samples.tsv"),
-            "--annotation", str(project_dir / "annotation.tsv"),
-            "--contrasts", str(project_dir / "contrasts.tsv"),
-            "--contrast-id", "treatment_a_vs_control",
-            "--outdir", str(de_outdir),
-        ],
-        check=True, capture_output=True, text=True,
-    )
+    # Run the family DE path first.
+    de_outdir = _run_family_de(tmp_path, project_dir, "treatment_a_vs_control", config_path)
 
     # Run spia.R.
     spia_outdir = tmp_path / "spia"

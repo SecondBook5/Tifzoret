@@ -102,5 +102,7 @@ def test_r_scripts_parse():
     scripts = ROOT / "src" / "tifzoret" / "workflow" / "scripts"
     assert (scripts / "utils.R").is_file()
     assert (scripts / "02_qc" / "qc.R").is_file()
-    assert (scripts / "03_differential" / "de.R").is_file()
+    assert (scripts / "03_differential" / "family_fit.R").is_file()
+    assert (scripts / "03_differential" / "estimand.R").is_file()
+    assert (scripts / "03_differential" / "term_test.R").is_file()
     assert (scripts / "04_enrichment" / "pathways.R").is_file()

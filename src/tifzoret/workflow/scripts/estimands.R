@@ -25,9 +25,7 @@
 
 CELL_KEY_SEPARATOR <- "|"
 
-# Which samples the heatmap/PCA display. de.R branched on contrast type: a
-# pairwise contrast showed its two factor levels; a coefficient contrast showed
-# everything. An estimand generalizes both -- it shows exactly the samples in
+# Which samples the heatmap/PCA display. An estimand shows exactly the samples in
 # the cells its expression references, which reproduces the pairwise behaviour
 # for a two-cell estimand and the all-groups behaviour for an interaction.
 display_samples_for_cells <- function(metadata, cells, cell_keys) {
