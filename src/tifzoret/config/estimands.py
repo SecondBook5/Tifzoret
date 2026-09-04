@@ -164,3 +164,160 @@ def _split_levels(inner: str) -> list[str]:
         index += 1
     levels.append("".join(current))
     return levels
+
+
+SHRINKAGE_CHOICES = ("apeglm", "ashr", "none")
+FILTER_CHOICES = ("design_aware", "total_count", "none")
+WEIGHT_SUM_TOLERANCE = 1e-9
+CELL_KEY_SEPARATOR = "|"
+
+
+@dataclass(frozen=True)
+class Estimand:
+    """One row of a family's contrast matrix."""
+
+    id: str
+    family_id: str
+    label: str
+    role: str
+    expression: ParsedExpression
+
+
+@dataclass(frozen=True)
+class TermTest:
+    """One full-vs-reduced likelihood-ratio comparison within a family."""
+
+    id: str
+    family_id: str
+    reduced: str
+    df: int
+
+
+@dataclass(frozen=True)
+class Family:
+    """A design plus the crossed factor columns: the unit of fitting."""
+
+    id: str
+    design: str
+    cells: tuple[str, ...]
+    reference_levels: dict[str, str]
+    replicate_unit: str | None
+    shrinkage: str
+    filter: str
+    declared: bool
+    estimands: tuple[Estimand, ...]
+    term_tests: tuple[TermTest, ...] = ()
+
+
+def design_variables(design: str) -> list[str]:
+    """The variable names appearing in an R-style one-sided formula."""
+    body = design.split("~", 1)[-1]
+    tokens = re.findall(r"[A-Za-z_.][A-Za-z0-9_.]*", body)
+    return [token for token in dict.fromkeys(tokens) if token not in {"I", "log", "log2"}]
+
+
+def build_families(
+    families_config: dict, *, known_ids: set[str]
+) -> tuple[list[Family], list[str]]:
+    """Build validated ``Family`` objects from ``analysis.families``.
+
+    Performs only the checks that need no sample table: syntax, arity,
+    sum-to-zero, knob choices, primary-role count, and id collisions. The
+    sample-dependent gate lives in :func:`validate_family_design`.
+    """
+    errors: list[str] = []
+    families: list[Family] = []
+    seen: set[str] = set(known_ids)
+    for family_id, raw in (families_config or {}).items():
+        design = str(raw.get("design", "")).strip()
+        cells = tuple(str(column) for column in (raw.get("cells") or ()))
+        variables = set(design_variables(design))
+        if cells:
+            for column in cells:
+                if column not in variables:
+                    errors.append(
+                        f"family {family_id}: cell column {column!r} is absent from design {design!r}"
+                    )
+        shrinkage = str(raw.get("shrinkage", SHRINKAGE_CHOICES[0]))
+        if shrinkage not in SHRINKAGE_CHOICES:
+            errors.append(
+                f"family {family_id}: shrinkage {shrinkage!r} must be one of "
+                f"{', '.join(SHRINKAGE_CHOICES)}"
+            )
+        gene_filter = str(raw.get("filter", FILTER_CHOICES[0]))
+        if gene_filter not in FILTER_CHOICES:
+            errors.append(
+                f"family {family_id}: filter {gene_filter!r} must be one of "
+                f"{', '.join(FILTER_CHOICES)}"
+            )
+        raw_estimands = raw.get("estimands") or []
+        declared = bool(raw.get("_declared", True))
+        if declared and not raw_estimands:
+            errors.append(f"family {family_id}: requires at least one estimand")
+        estimands: list[Estimand] = []
+        primaries = 0
+        for entry in raw_estimands:
+            estimand_id = str(entry.get("id", "")).strip()
+            if not estimand_id:
+                errors.append(f"family {family_id}: an estimand is missing its id")
+                continue
+            if estimand_id in seen:
+                errors.append(
+                    f"family {family_id}: estimand id {estimand_id!r} collides with "
+                    "another estimand or contrast id"
+                )
+            seen.add(estimand_id)
+            role = str(entry.get("role", "")).strip()
+            if role == "primary":
+                primaries += 1
+            elif role:
+                errors.append(
+                    f"estimand {estimand_id}: role {role!r} must be 'primary' or absent"
+                )
+            try:
+                parsed = parse_expression(str(entry.get("expression", "")), len(cells))
+            except EstimandSyntaxError as error:
+                errors.append(f"estimand {estimand_id}: {error}")
+                continue
+            if (
+                parsed.atom_kind == "cell"
+                and abs(parsed.weight_sum) > WEIGHT_SUM_TOLERANCE
+            ):
+                errors.append(
+                    f"estimand {estimand_id}: cell weights must sum to zero, got "
+                    f"{parsed.weight_sum:g}"
+                )
+            estimands.append(
+                Estimand(
+                    id=estimand_id,
+                    family_id=family_id,
+                    label=str(entry.get("label", estimand_id)),
+                    role=role,
+                    expression=parsed,
+                )
+            )
+        if declared and raw_estimands and primaries != 1:
+            errors.append(
+                f"family {family_id}: a declared family requires exactly one "
+                f"role: primary estimand, found {primaries}"
+            )
+        reference_levels = {
+            str(key): str(value)
+            for key, value in (raw.get("reference_levels") or {}).items()
+        }
+        replicate_unit = raw.get("replicate_unit")
+        families.append(
+            Family(
+                id=family_id,
+                design=design,
+                cells=cells,
+                reference_levels=reference_levels,
+                replicate_unit=str(replicate_unit) if replicate_unit else None,
+                shrinkage=shrinkage,
+                filter=gene_filter,
+                declared=declared,
+                estimands=tuple(estimands),
+                term_tests=(),
+            )
+        )
+    return families, errors
