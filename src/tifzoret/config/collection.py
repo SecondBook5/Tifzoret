@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from .types import ProjectValidationError, ResolvedProject
-from .paths import _resolve
+from .types import _resolve
 from .validate import _load_schema_document
 from .load import load_project
 
