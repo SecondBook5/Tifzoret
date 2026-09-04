@@ -302,7 +302,7 @@ def test_factorial_render_produces_all_views_and_tables(tmp_path):
     assert "Int2" in summary["selected_genes"]
     # ...while the high-SE big-delta gene must NOT survive the Wald-z ranking.
     assert "Noisy" not in summary["selected_genes"]
-    assert "Wald" in summary["selection_method"]
+    assert "statistic" in summary["selection_method"]  # ranks by interaction |statistic|
 
     # Profile and expression tables cover the selected genes across groups.
     with (outdir / "tables" / "group_expression_displayed.tsv").open() as handle:

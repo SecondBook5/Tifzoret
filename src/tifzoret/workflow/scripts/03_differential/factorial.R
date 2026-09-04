@@ -286,6 +286,30 @@ factors <- if (!is.null(settings$factors)) {
   NULL
 }
 okabe_ito <- c("#0072B2", "#E69F00", "#009E73", "#CC79A7", "#56B4E9", "#D55E00", "#F0E442", "#000000")
+
+# Factor-A level -> colour. Prefer a study-palette group whose name contains the
+# level (case-insensitive) so each factor level inherits the study's hue for the
+# group it names (the last match is usually the "strong"/challenged group, e.g.
+# the treated arm); fall back to a colourblind-safe qualitative palette when
+# nothing matches.
+factor_level_palette <- function(levels) {
+  pal_values <- unlist(cfg$figures$palette, use.names = TRUE)
+  pal_groups <- names(pal_values)
+  out <- stats::setNames(rep(NA_character_, length(levels)), levels)
+  for (i in seq_along(levels)) {
+    # Match the level as a literal substring (case-insensitive), never a regex:
+    # factor levels are arbitrary sample values, so an unbalanced bracket or paren
+    # (e.g. a truncated "dose[hi" or "Cre(neo" annotation) would abort the render
+    # with a TRE pattern-compilation error, and a metacharacter like "." would
+    # silently match the WRONG group. fixed = TRUE makes the match literal on both
+    # counts (a balanced "[KO]"/"(+)" compiles but still matches by regex meaning).
+    hits <- pal_groups[nzchar(pal_groups) & grepl(tolower(levels[[i]]), tolower(pal_groups), fixed = TRUE)]
+    if (length(hits)) out[[i]] <- unname(pal_values[[hits[[length(hits)]]]])
+  }
+  missing <- which(is.na(out))
+  if (length(missing)) out[missing] <- okabe_ito[(seq_along(missing) - 1L) %% length(okabe_ito) + 1L]
+  out
+}
 if (!is.null(factors) && length(factors) == 2L) {
   level_order <- function(column) unique(as.character(samples[[column]]))
   levels_a <- level_order(factors[1])
@@ -321,31 +345,6 @@ humanize_effect <- function(effect_id) {
   }
   label
 }
-
-# Factor-A level -> colour. Prefer a study-palette group whose name contains the
-# level (case-insensitive) so each factor level inherits the study's hue for the
-# group it names (the last match is usually the "strong"/challenged group, e.g.
-# the treated arm); fall back to a colourblind-safe qualitative palette when
-# nothing matches.
-factor_level_palette <- function(levels) {
-  pal_values <- unlist(cfg$figures$palette, use.names = TRUE)
-  pal_groups <- names(pal_values)
-  out <- stats::setNames(rep(NA_character_, length(levels)), levels)
-  for (i in seq_along(levels)) {
-    # Match the level as a literal substring (case-insensitive), never a regex:
-    # factor levels are arbitrary sample values, so an unbalanced bracket or paren
-    # (e.g. a truncated "dose[hi" or "Cre(neo" annotation) would abort the render
-    # with a TRE pattern-compilation error, and a metacharacter like "." would
-    # silently match the WRONG group. fixed = TRUE makes the match literal on both
-    # counts (a balanced "[KO]"/"(+)" compiles but still matches by regex meaning).
-    hits <- pal_groups[nzchar(pal_groups) & grepl(tolower(levels[[i]]), tolower(pal_groups), fixed = TRUE)]
-    if (length(hits)) out[[i]] <- unname(pal_values[[hits[[length(hits)]]]])
-  }
-  missing <- which(is.na(out))
-  if (length(missing)) out[missing] <- okabe_ito[(seq_along(missing) - 1L) %% length(okabe_ito) + 1L]
-  out
-}
-palette_a <- factor_level_palette(levels_a)
 
 observed_groups <- unique(as.character(samples[[group_col]]))
 # Order the crossed groups by the study palette's declared order when it covers
