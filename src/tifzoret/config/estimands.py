@@ -489,6 +489,15 @@ def validate_family_design(family: Family, sample_rows: Sequence[dict[str, str]]
     membership = cell_membership(family, sample_rows)
     for estimand in family.estimands:
         for cell in estimand.expression.cell_weights:
+            # Check for CELL_KEY_SEPARATOR in any level before checking membership,
+            # because a level containing the separator would be mis-parsed in R
+            for level in cell:
+                if CELL_KEY_SEPARATOR in level:
+                    errors.append(
+                        f"estimand {estimand.id}: level {level!r} in cell "
+                        f"({CELL_KEY_SEPARATOR.join(cell)}) contains the reserved "
+                        f"separator {CELL_KEY_SEPARATOR!r}; the level must be renamed"
+                    )
             if cell not in membership:
                 observed = ", ".join(
                     CELL_KEY_SEPARATOR.join(key) for key in sorted(membership)

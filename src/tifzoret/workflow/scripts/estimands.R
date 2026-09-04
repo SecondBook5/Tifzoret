@@ -101,6 +101,20 @@ cell_newdata <- function(cells, cell_keys, metadata, design_formula) {
   variables <- all.vars(design_formula)
   frame <- data.frame(row.names = seq_along(cell_keys))
   parts <- strsplit(cell_keys, CELL_KEY_SEPARATOR, fixed = TRUE)
+  # Arity check: every cell key must split into exactly length(cells) pieces.
+  # Python should already reject malformed keys, but the sign authority defends itself.
+  arities <- vapply(parts, length, integer(1))
+  expected <- length(cells)
+  if (any(arities != expected)) {
+    bad_indices <- which(arities != expected)
+    bad_keys <- cell_keys[bad_indices]
+    bad_arities <- arities[bad_indices]
+    stop(
+      "cell key arity mismatch: expected ", expected, " level(s) but got ",
+      paste(bad_arities, collapse = ", "), " for key(s): ",
+      paste(bad_keys, collapse = ", "), call. = FALSE
+    )
+  }
   for (index in seq_along(cells)) {
     column <- cells[[index]]
     values <- vapply(parts, function(piece) piece[[index]], character(1))

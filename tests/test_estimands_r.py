@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from _factorial_support import build_fixture, read_tsv_rows, require_r
+from _factorial_support import build_fixture, require_r
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "src" / "tifzoret" / "workflow" / "scripts"
@@ -207,6 +207,45 @@ def test_an_unknown_coefficient_name_is_a_hard_error(tmp_path):
     )
     assert result.returncode != 0
     assert "not_a_coefficient" in result.stderr
+
+
+def test_malformed_cell_key_arity_is_a_hard_error(tmp_path):
+    """A cell key with wrong arity (e.g., level containing | that got split) must fail loudly."""
+    require_r("DESeq2")
+    # Manually write a malformed weights table with 3 parts instead of 2
+    (tmp_path / "families.tsv").write_text(
+        "family_id\tdesign\tcells\treference_levels\treplicate_unit\tshrinkage\tfilter\tdeclared\n"
+        "fam_a\t~ factor_a * factor_b\tfactor_a|factor_b\t\t\tapeglm\tdesign_aware\ttrue\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "estimands.tsv").write_text(
+        "family_id\testimand_id\tlabel\trole\texpression\tatom_kind\n"
+        "fam_a\test_x\tLabel\tprimary\tsource-text\tcell\n",
+        encoding="utf-8",
+    )
+    # Cell key with 3 parts (a2|extra|b2) instead of 2
+    (tmp_path / "estimand_cell_weights.tsv").write_text(
+        "family_id\testimand_id\tcell_key\tweight\n"
+        "fam_a\test_x\ta2|extra|b2\t1.0\n"
+        "fam_a\test_x\ta1|b1\t-1.0\n",
+        encoding="utf-8",
+    )
+    script = tmp_path / "probe.R"
+    script.write_text(
+        f'source("{ESTIMANDS_R.as_posix()}")\n'
+        'spec <- read_family_spec("families.tsv", "fam_a")\n'
+        'est  <- read_estimand_spec("estimands.tsv", "est_x")\n'
+        'w    <- read_cell_weights("estimand_cell_weights.tsv", "est_x")\n'
+        'md <- data.frame(sample_id="s1", factor_a=factor("a1"), factor_b=factor("b1"))\n'
+        'compile_contrast_vector(c(spec, est), w, md, ~ factor_a * factor_b, c("Intercept"))\n',
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        ["Rscript", "--vanilla", str(script)], capture_output=True, text=True, cwd=tmp_path
+    )
+    assert result.returncode != 0
+    assert "arity" in result.stderr
+    assert "a2|extra|b2" in result.stderr
 
 
 def test_contrast_alignment_matches_deseq2_results_on_saturated_model(tmp_path):
