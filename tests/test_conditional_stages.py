@@ -21,10 +21,10 @@ import pytest
 import yaml
 
 
+from _factorial_support import read_tsv_rows, require_r, stage_family
+
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = ROOT / "src" / "tifzoret" / "templates" / "minimal"
-MATERIALIZE_INPUTS = ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "01_inputs" / "materialize_inputs.py"
-FAMILY_FIT_R = ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "03_differential" / "family_fit.R"
 ESTIMAND_R = ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "03_differential" / "estimand.R"
 DE_CONFIRM_R = ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "03_differential" / "de_confirm.R"
 SPIA_R = ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "04_enrichment" / "spia.R"
@@ -50,74 +50,36 @@ def _has_rscript_package(package: str) -> bool | str:
         return f"{package} not available"
 
 
-def _run_family_de(
-    tmp_path: Path,
-    project_dir: Path,
-    estimand_id: str,
-    config_path: Path | None = None,
-) -> Path:
-    """Run the family DE path (materialize_inputs → family_fit → estimand).
+def _run_family_de(tmp_path: Path, estimand_id: str, scenario: str = "positive_interaction") -> Path:
+    """Run the family DE path (stage_family → estimand) using the factorial fixture.
 
     Returns the output directory containing de_results.tsv.
     """
-    if config_path is None:
-        config_path = project_dir / "project.yaml"
-
-    # Run materialize_inputs to generate families/estimands/cell_weights.
-    inputs_dir = tmp_path / "inputs"
-    subprocess.run(
-        [
-            "python", str(MATERIALIZE_INPUTS),
-            "--project-config", str(config_path),
-            "--counts", str(inputs_dir / "counts.tsv"),
-            "--samples", str(inputs_dir / "samples.tsv"),
-            "--annotation", str(inputs_dir / "annotation.tsv"),
-            "--contrasts", str(inputs_dir / "contrasts.tsv"),
-            "--families", str(inputs_dir / "families.tsv"),
-            "--estimands", str(inputs_dir / "estimands.tsv"),
-            "--cell-weights", str(inputs_dir / "estimand_cell_weights.tsv"),
-            "--term-tests", str(inputs_dir / "term_tests.tsv"),
-            "--manifest", str(inputs_dir / "input_manifest.json"),
-            "--threads", "1",
-        ],
-        check=True, capture_output=True, text=True,
+    # Use stage_family to get a proper family fit with the factorial fixture.
+    family_dir = stage_family(
+        tmp_path,
+        ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "03_differential" / "family_fit.R",
+        TEMPLATE,
+        scenario=scenario
     )
 
-    # Run family_fit.R for the estimand's family.
-    family_dir = tmp_path / "families" / estimand_id
-    subprocess.run(
-        [
-            "Rscript", "--vanilla", str(FAMILY_FIT_R),
-            "--project-config", str(config_path),
-            "--counts", str(inputs_dir / "counts.tsv"),
-            "--samples", str(inputs_dir / "samples.tsv"),
-            "--families", str(inputs_dir / "families.tsv"),
-            "--estimands", str(inputs_dir / "estimands.tsv"),
-            "--cell-weights", str(inputs_dir / "estimand_cell_weights.tsv"),
-            "--family-id", estimand_id,
-            "--outdir", str(family_dir),
-        ],
-        check=True, capture_output=True, text=True,
-    )
-
-    # Run estimand.R to extract the estimand.
+    # Extract the specified estimand.
+    fixture = tmp_path / "fx"
     de_outdir = tmp_path / "de"
-    subprocess.run(
-        [
-            "Rscript", "--vanilla", str(ESTIMAND_R),
-            "--project-config", str(config_path),
-            "--counts", str(inputs_dir / "counts.tsv"),
-            "--samples", str(inputs_dir / "samples.tsv"),
-            "--annotation", str(inputs_dir / "annotation.tsv"),
-            "--families", str(inputs_dir / "families.tsv"),
-            "--estimands", str(inputs_dir / "estimands.tsv"),
-            "--cell-weights", str(inputs_dir / "estimand_cell_weights.tsv"),
-            "--family-dir", str(family_dir),
-            "--estimand-id", estimand_id,
-            "--outdir", str(de_outdir),
-        ],
-        check=True, capture_output=True, text=True,
-    )
+    result = subprocess.run(
+        ["Rscript", "--vanilla", str(ESTIMAND_R),
+         "--project-config", str(tmp_path / "project" / "project.yaml"),
+         "--counts", str(fixture / "counts.tsv"),
+         "--samples", str(fixture / "samples.tsv"),
+         "--annotation", str(fixture / "annotation.tsv"),
+         "--families", str(tmp_path / "families.tsv"),
+         "--estimands", str(tmp_path / "estimands.tsv"),
+         "--cell-weights", str(tmp_path / "estimand_cell_weights.tsv"),
+         "--family-dir", str(family_dir),
+         "--estimand-id", estimand_id,
+         "--outdir", str(de_outdir)],
+        capture_output=True, text=True, cwd=tmp_path)
+    assert result.returncode == 0, result.stderr
 
     return de_outdir
 
@@ -127,39 +89,38 @@ def test_de_confirm_concordance_with_edger(tmp_path):
     producing a concordance table that classifies genes by whether both engines,
     one only, or neither called them significant.
 
-    This test runs de.R first to produce the primary DESeq2 results, then runs
-    de_confirm.R and asserts that:
+    This test runs the family path first to produce the primary DESeq2 results,
+    then runs de_confirm.R and asserts that:
     - The edger_results.tsv is produced with log2 fold-change and FDR columns
     - The concordance.tsv is produced with concordance classes
     - At least one gene is classified as "both" (significant in both engines)
     """
-    if shutil.which("Rscript") is None:
-        pytest.skip("Rscript not available")
+    # de_confirm requires both DESeq2 and edgeR.
+    require_r("DESeq2", "edgeR", "apeglm")
 
-    # de_confirm requires both DESeq2 (for de.R) and edgeR.
-    for package in ("DESeq2", "edgeR"):
-        result = _has_rscript_package(package)
-        if result is not True:
-            pytest.skip(result)
+    # Use est_arm_a1 which is a simple two-cell pairwise (a1|b2 vs a1|b1).
+    estimand_id = "est_arm_a1"
+    de_outdir = _run_family_de(tmp_path, estimand_id)
 
-    # Copy the minimal template.
-    project_dir = tmp_path / "project"
-    shutil.copytree(TEMPLATE, project_dir)
-
-    # Run the family DE path to produce the primary DESeq2 results that de_confirm reads.
-    de_outdir = _run_family_de(tmp_path, project_dir, "treatment_a_vs_control")
+    # Create a contrasts.tsv for de_confirm (it expects the old format).
+    fixture = tmp_path / "fx"
+    (tmp_path / "contrasts.tsv").write_text(
+        "contrast_id\tfactor\tnumerator\tdenominator\n"
+        f"{estimand_id}\tfactor_b\tb2\tb1\n",
+        encoding="utf-8",
+    )
 
     # Run de_confirm.R on the same contrast.
     confirm_outdir = tmp_path / "de_confirm"
     subprocess.run(
         [
             "Rscript", "--vanilla", str(DE_CONFIRM_R),
-            "--project-config", str(project_dir / "project.yaml"),
-            "--counts", str(project_dir / "counts.tsv"),
-            "--samples", str(project_dir / "samples.tsv"),
-            "--annotation", str(project_dir / "annotation.tsv"),
-            "--contrasts", str(project_dir / "contrasts.tsv"),
-            "--contrast-id", "treatment_a_vs_control",
+            "--project-config", str(tmp_path / "project" / "project.yaml"),
+            "--counts", str(fixture / "counts.tsv"),
+            "--samples", str(fixture / "samples.tsv"),
+            "--annotation", str(fixture / "annotation.tsv"),
+            "--contrasts", str(tmp_path / "contrasts.tsv"),
+            "--contrast-id", estimand_id,
             "--de", str(de_outdir / "tables" / "de_results.tsv"),
             "--outdir", str(confirm_outdir),
         ],
@@ -189,7 +150,7 @@ def test_de_confirm_concordance_with_edger(tmp_path):
     assert len(concordance_rows) > 0, "de_concordance_displayed.tsv is empty"
     # Check that concordance classification was performed.
     concordance_classes = {row["concordance_class"] for row in concordance_rows}
-    # The minimal template has clear up/down genes, so at least some should be
+    # The factorial fixture has clear up/down genes, so at least some should be
     # called by both engines (concordance_class == "both").
     assert "both" in concordance_classes, (
         "Expected at least some genes to be significant in both engines "
@@ -201,8 +162,8 @@ def test_spia_pathway_topology_analysis(tmp_path):
     """spia.R performs topology-aware pathway perturbation analysis using SPIA.
 
     SPIA is opt-in and requires SPIA/graphite packages plus species-matched org.db.
-    It may gracefully skip if dependencies are unavailable. This test runs de.R
-    first, then runs spia.R and asserts that either:
+    It may gracefully skip if dependencies are unavailable. This test runs the family
+    path first, then runs spia.R and asserts that either:
     - Real SPIA results are produced (spia_pathways.tsv with pathways, summary.json
       with method="SPIA"), OR
     - The stage gracefully skipped (empty tables, summary.json with skipped=true).
@@ -211,20 +172,16 @@ def test_spia_pathway_topology_analysis(tmp_path):
     graceful degradation), but it DOES assert that the stage ran to completion
     and produced well-formed outputs in either case.
     """
-    if shutil.which("Rscript") is None:
-        pytest.skip("Rscript not available")
+    # SPIA requires DESeq2 and apeglm upstream.
+    require_r("DESeq2", "apeglm")
 
-    # SPIA requires DESeq2 for de.R upstream.
-    result = _has_rscript_package("DESeq2")
-    if result is not True:
-        pytest.skip(result)
+    # Use est_arm_a1 for the DE results.
+    estimand_id = "est_arm_a1"
+    de_outdir = _run_family_de(tmp_path, estimand_id)
 
-    # Copy the minimal template and configure it for mouse (SPIA needs a real species).
-    project_dir = tmp_path / "project"
-    shutil.copytree(TEMPLATE, project_dir)
-    config_path = project_dir / "project.yaml"
+    # Update the project config for mouse species (SPIA needs a real species).
+    config_path = tmp_path / "project" / "project.yaml"
     config = yaml.safe_load(config_path.read_text())
-    # Set species to mouse so SPIA can attempt to use org.Mm.eg.db.
     config["species"] = {
         "provider": "mouse",
         "scientific_name": "Mus musculus",
@@ -234,7 +191,6 @@ def test_spia_pathway_topology_analysis(tmp_path):
         "genome_build": "GRCm39",
         "annotation_release": 107,
     }
-    # Enable SPIA module and KEGG provider.
     config["analysis"]["modules"] = {"spia": True}
     config["resources"] = {
         "cache": "~/.cache/tifzoret/resources",
@@ -245,9 +201,6 @@ def test_spia_pathway_topology_analysis(tmp_path):
     }
     config_path.write_text(yaml.safe_dump(config, sort_keys=False))
 
-    # Run the family DE path first.
-    de_outdir = _run_family_de(tmp_path, project_dir, "treatment_a_vs_control", config_path)
-
     # Run spia.R.
     spia_outdir = tmp_path / "spia"
     subprocess.run(
@@ -255,7 +208,7 @@ def test_spia_pathway_topology_analysis(tmp_path):
             "Rscript", "--vanilla", str(SPIA_R),
             "--project-config", str(config_path),
             "--de", str(de_outdir / "tables" / "de_results.tsv"),
-            "--contrast-id", "treatment_a_vs_control",
+            "--contrast-id", estimand_id,
             "--outdir", str(spia_outdir),
         ],
         check=True, capture_output=True, text=True,

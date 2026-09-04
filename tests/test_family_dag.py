@@ -77,10 +77,9 @@ def test_the_dag_builds_with_a_declared_family(tmp_path):
     data["analysis"].setdefault("modules", {})["factorial"] = False
     config_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
     result = subprocess.run(
-        [sys.executable, "-m", "snakemake", "--snakefile", str(WORKFLOW / "Snakefile"),
-         "--configfile", str(config_path), "-n", "--quiet"],
-        capture_output=True, text=True, cwd=tmp_path,
-        env={"PYTHONPATH": str(ROOT / "src"), "PATH": "/usr/bin:/bin"})
+        [sys.executable, "-m", "tifzoret", "dry-run", str(config_path),
+         "--no-conda", "--cores", "1"],
+        capture_output=True, text=True, check=False)
     assert result.returncode == 0, result.stdout + result.stderr
     assert "family_fit" in result.stdout or "family_fit" in result.stderr
 
