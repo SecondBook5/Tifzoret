@@ -610,3 +610,151 @@ def resolve_term_test_df(family: Family, sample_rows: Sequence[dict[str, str]]) 
             TermTest(id=test.id, family_id=test.family_id, reduced=test.reduced, df=df)
         )
     return tuple(resolved)
+
+
+def family_slug(design: str) -> str:
+    """A deterministic, filesystem-safe family id derived from a design formula."""
+    body = design.split("~", 1)[-1].lower()
+    slug = re.sub(r"[^a-z0-9]+", "_", body).strip("_")
+    return f"design_{slug}" if slug else "design_intercept"
+
+
+def _quote_level(level: str) -> str:
+    """Quote a level if it contains special characters that require escaping."""
+    return f"'{level}'" if re.search(r"[,()'\"]", level) else level
+
+
+def desugar_contrast_rows(
+    global_design: str, contrast_rows: Sequence[dict[str, str]]
+) -> tuple[list[Family], list[str]]:
+    """Translate every ``contrasts.tsv`` row into a family plus an estimand.
+
+    Pairwise rows become a k=1 family whose estimand is ``(numerator) -
+    (denominator)``; coefficient rows become a ``coef(...)`` estimand; omnibus
+    rows become a term test. Rows sharing a design share one family — and
+    therefore one fit — because a cell-mean expression does not depend on the
+    reference level, so the per-contrast releveling that forced separate fits is
+    no longer needed.
+    """
+    errors: list[str] = []
+    grouped: dict[str, dict] = {}
+    for row in contrast_rows:
+        contrast_id = str(row.get("contrast_id", "")).strip()
+        row_type = (str(row.get("type", "")).strip() or "pairwise").lower()
+        design = str(row.get("design", "")).strip() or global_design
+        family_id = "main" if design == global_design else family_slug(design)
+        bucket = grouped.setdefault(
+            family_id,
+            {
+                "design": design,
+                "cells": [],
+                "estimands": [],
+                "term_tests": [],
+                "reference_levels": {},
+                "_declared": False,
+            },
+        )
+        factor = str(row.get("factor", "")).strip()
+        references: dict[str, str] = {}
+        raw_references = str(row.get("reference_levels", "")).strip()
+        for piece in (part for part in raw_references.split(";") if part.strip()):
+            if "=" not in piece:
+                errors.append(
+                    f"contrast {contrast_id}: reference_levels entry {piece!r} must be factor=level"
+                )
+                continue
+            key, value = piece.split("=", 1)
+            references[key.strip()] = value.strip()
+        for key, value in references.items():
+            existing = bucket["reference_levels"].get(key)
+            if existing is not None and existing != value:
+                errors.append(
+                    f"family {family_id}: conflicting reference_levels for {key!r} "
+                    f"({existing!r} vs {value!r}); give one of these contrasts its own design"
+                )
+            bucket["reference_levels"][key] = value
+
+        if row_type == "omnibus":
+            reduced = str(row.get("reduced", "")).strip()
+            if not reduced:
+                errors.append(f"contrast {contrast_id}: omnibus row requires a reduced formula")
+                continue
+            bucket["term_tests"].append(
+                {"id": contrast_id, "reduced": reduced, "df": 0}
+            )
+            if factor and factor not in bucket["cells"]:
+                bucket["cells"].append(factor)
+            continue
+
+        if row_type == "coefficient":
+            coefficient = str(row.get("coefficient", "")).strip()
+            if not coefficient:
+                errors.append(
+                    f"contrast {contrast_id}: coefficient row requires a coefficient"
+                )
+                continue
+            bucket["estimands"].append(
+                {"id": contrast_id, "label": contrast_id, "expression": f"coef({coefficient})"}
+            )
+            continue
+
+        numerator = str(row.get("numerator", "")).strip()
+        denominator = str(row.get("denominator", "")).strip()
+        if not factor or not numerator or not denominator:
+            errors.append(
+                f"contrast {contrast_id}: pairwise row requires factor, numerator, denominator"
+            )
+            continue
+        if factor not in bucket["cells"]:
+            bucket["cells"].append(factor)
+        if len(bucket["cells"]) > 1:
+            errors.append(
+                f"family {family_id}: contrasts on different factors ({', '.join(bucket['cells'])}) "
+                "cannot share one desugared family; give one of them its own design"
+            )
+            continue
+        bucket["estimands"].append(
+            {
+                "id": contrast_id,
+                "label": f"{numerator} vs {denominator}",
+                "expression": (
+                    f"({_quote_level(numerator)}) - ({_quote_level(denominator)})"
+                ),
+            }
+        )
+
+    config = {
+        family_id: {
+            key: value for key, value in bucket.items() if key != "term_tests"
+        }
+        for family_id, bucket in grouped.items()
+    }
+    families, build_errors = build_families(config, known_ids=set())
+    errors.extend(build_errors)
+    attached: list[Family] = []
+    for family in families:
+        raw_tests = grouped[family.id]["term_tests"]
+        tests = tuple(
+            TermTest(
+                id=entry["id"],
+                family_id=family.id,
+                reduced=entry["reduced"],
+                df=entry["df"],
+            )
+            for entry in raw_tests
+        )
+        attached.append(
+            Family(
+                id=family.id,
+                design=family.design,
+                cells=family.cells,
+                reference_levels=grouped[family.id]["reference_levels"],
+                replicate_unit=family.replicate_unit,
+                shrinkage=family.shrinkage,
+                filter=family.filter,
+                declared=False,
+                estimands=family.estimands,
+                term_tests=tests,
+            )
+        )
+    return attached, errors
