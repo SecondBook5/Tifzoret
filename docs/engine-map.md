@@ -10,7 +10,7 @@ The dependency graph for a configured project is visualized in [`dag.svg`](dag.s
 
 ## The ten phases
 
-Tifzoret organizes its 35 stage scripts into ten sequential phases. Every stage is listed below with:
+Tifzoret organizes its 36 stage scripts into ten sequential phases. Every stage is listed below with:
 - Its target location in the phase-organized tree (shown as `NN_phase/script`; links point to the current flat location in `workflow/scripts/`)
 - What it does (one-line summary)
 - Why it exists (the scientific motivation)

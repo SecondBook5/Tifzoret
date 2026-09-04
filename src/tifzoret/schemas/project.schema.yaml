@@ -336,24 +336,24 @@ properties:
           factorial:
             type: object
             additionalProperties: false
-            required: [factors, effect_x, effect_y]
+            required: [family, arms, interaction]
             properties:
-              # The two crossed design factors (samples.tsv columns) whose
-              # interaction the views make legible; the interaction profile puts
-              # factors[2] on the x-axis with one line per level of factors[1].
-              factors:
+              # The family_id whose fitted estimands provide the arm and
+              # interaction effects (spec §F).
+              family: {type: string, minLength: 1}
+              # The two arm estimand_ids (e.g., main effects or simple effects
+              # within one level) compared in the effect-vs-effect view.
+              arms:
                 type: array
                 minItems: 2
                 maxItems: 2
                 uniqueItems: true
                 items: {type: string, minLength: 1}
-              # The two signed contrasts compared as the x and y effects (each a
-              # pairwise/coefficient contrast id producing a directional DE table).
-              effect_x: {type: string, minLength: 1}
-              effect_y: {type: string, minLength: 1}
+              # The interaction estimand_id whose statistic ranks genes for the
+              # profile/expression views (covariance-aware difference-of-differences).
+              interaction: {type: string, minLength: 1}
               # Explicit genes shown in the profile/expression views. Omit to
-              # auto-select the genes with the largest interaction (|LFC_y-LFC_x|
-              # among genes significant in either arm).
+              # auto-select by the interaction statistic.
               genes:
                 type: array
                 minItems: 1

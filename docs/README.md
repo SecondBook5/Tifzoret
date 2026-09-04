@@ -11,7 +11,7 @@ needed.
 | Document | Read it for |
 |----------|-------------|
 | [authoring-a-study.md](authoring-a-study.md) | **Start here** — how to write the config that defines a study and spin up a new paper repo. |
-| [engine-map.md](engine-map.md) | The ordered stage index — entry point through 35 analysis stages, organized by phase. |
+| [engine-map.md](engine-map.md) | The ordered stage index — entry point through 36 analysis stages, organized by phase. |
 | [walkthrough.md](walkthrough.md) | A single narrated trace of one run from `tifzoret run` to `manifest.json`. |
 | [using-the-engine.md](using-the-engine.md) | Operator answers: how to configure inputs, skip/choose stages, resume runs, and find outputs. |
 | [cli.md](cli.md) | Complete `tifzoret` command and flag reference — the usage "API". |

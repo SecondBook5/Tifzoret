@@ -150,18 +150,19 @@ def _run_family_de_minimal(tmp_path: Path, estimand_id: str) -> tuple[Path, Path
     return de_outdir, project_dir
 
 
-def test_de_confirm_concordance_with_edger(tmp_path):
-    """Test DESeq2/edgeR concordance on the same contrast.
+# TODO: de_confirm.R stage itself has no test coverage; retargeting blocked on
+# fixture format mismatch with factorial designs (Task 14 may address)
+def test_deseq2_edger_concordance(tmp_path):
+    """Test raw DESeq2/edgeR concordance on the same contrast.
 
-    Two independent negative-binomial engines (DESeq2 + edgeR) that agree on
-    direction reduce false discoveries. This test runs both engines on the same
-    factorial fixture data and asserts that:
-    - Both engines produce non-zero log2 fold-changes
-    - At least some genes are called significant by both engines
-    - Significant genes have concordant direction (same sign)
+    Two independent negative-binomial engines that agree on direction reduce
+    false discoveries. This test verifies that DESeq2 and edgeR produce
+    concordant results (same sign of log2FC for genes with meaningful effects)
+    when run on the same factorial fixture data.
 
-    Uses direct edgeR calls rather than de_confirm.R to avoid contrasts.tsv
-    format mismatches with factorial designs.
+    Note: This tests the engines directly, not the de_confirm.R stage (which is
+    an opt-in downstream module). The de_confirm.R stage wraps this concordance
+    check for production use but is not itself tested here.
     """
     # Requires both DESeq2 (for family path) and edgeR (for direct concordance test).
     require_r("DESeq2", "edgeR", "apeglm")
