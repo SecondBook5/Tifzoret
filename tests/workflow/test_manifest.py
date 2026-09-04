@@ -148,7 +148,7 @@ def test_manifest_expands_environment_variables_in_input_paths(tmp_path):
 
     manifest = json.loads(output.read_text(encoding="utf-8"))
     assert manifest["schema_version"] == 2
-    assert manifest["contrast_semantics"] == "all signed effects are numerator minus denominator"
+    assert manifest["contrast_semantics"] == "all signed effects use cell-means arithmetic (positive cells minus negative cells)"
     input_paths = {record["path"] for record in manifest["inputs"]}
     assert str(tmp_path / "genes.gtf") in input_paths
     gtf_record = next(record for record in manifest["inputs"] if record["path"] == str(tmp_path / "genes.gtf"))
