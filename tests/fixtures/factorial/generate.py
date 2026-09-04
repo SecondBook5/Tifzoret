@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import csv
 import hashlib
+from collections.abc import Callable
 from pathlib import Path
 
 import numpy as np
@@ -42,7 +43,11 @@ def _cells(levels: dict[str, tuple[str, ...]]) -> list[dict[str, str]]:
     return combos
 
 
-def _samples(levels, per_cell, nuisance=None):
+def _samples(
+    levels: dict[str, tuple[str, ...]],
+    per_cell: int | Callable[[dict[str, str]], int],
+    nuisance: Callable[[dict[str, str], int, int], str] | None = None,
+) -> list[dict[str, str]]:
     rows: list[dict[str, str]] = []
     index = 0
     for cell in _cells(levels):

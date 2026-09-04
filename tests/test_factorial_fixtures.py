@@ -60,11 +60,16 @@ def test_single_factor_fixture_has_one_cell_column(tmp_path):
 def test_unbalanced_nuisance_varies_within_cells(tmp_path):
     module = fixtures()
     rows = read_tsv_rows(module.build("unbalanced_nuisance", tmp_path / "x") / "samples.tsv")
-    per_cell: dict[tuple[str, str], set[str]] = {}
+    per_cell: dict[tuple[str, str], list[str]] = {}
     for row in rows:
-        per_cell.setdefault((row["factor_a"], row["factor_b"]), set()).add(row["nuisance_z"])
-    assert any(len(values) > 1 for values in per_cell.values())
-    assert not all(len(values) == 1 for values in per_cell.values())
+        per_cell.setdefault((row["factor_a"], row["factor_b"]), []).append(row["nuisance_z"])
+    # At least one cell varies within
+    assert any(len(set(values)) > 1 for values in per_cell.values())
+    # Mix differs between cells (a1 cells have different z1:z2 ratio than a2 cells)
+    ratios = {cell: values.count("z1") / len(values) for cell, values in per_cell.items()}
+    a1_ratios = {ratio for cell, ratio in ratios.items() if cell[0] == "a1"}
+    a2_ratios = {ratio for cell, ratio in ratios.items() if cell[0] == "a2"}
+    assert a1_ratios != a2_ratios
 
 
 def test_confounded_batch_is_constant_within_every_cell(tmp_path):
