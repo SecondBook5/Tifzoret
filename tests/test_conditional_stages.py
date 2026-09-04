@@ -25,6 +25,8 @@ from _factorial_support import read_tsv_rows, require_r, stage_family
 
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = ROOT / "src" / "tifzoret" / "templates" / "minimal"
+MATERIALIZE_INPUTS = ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "01_inputs" / "materialize_inputs.py"
+FAMILY_FIT_R = ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "03_differential" / "family_fit.R"
 ESTIMAND_R = ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "03_differential" / "estimand.R"
 DE_CONFIRM_R = ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "03_differential" / "de_confirm.R"
 SPIA_R = ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "04_enrichment" / "spia.R"
@@ -50,15 +52,15 @@ def _has_rscript_package(package: str) -> bool | str:
         return f"{package} not available"
 
 
-def _run_family_de(tmp_path: Path, estimand_id: str, scenario: str = "positive_interaction") -> Path:
-    """Run the family DE path (stage_family → estimand) using the factorial fixture.
+def _run_family_de_factorial(tmp_path: Path, estimand_id: str, scenario: str = "positive_interaction") -> Path:
+    """Run the family DE path using the factorial fixture.
 
     Returns the output directory containing de_results.tsv.
     """
     # Use stage_family to get a proper family fit with the factorial fixture.
     family_dir = stage_family(
         tmp_path,
-        ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "03_differential" / "family_fit.R",
+        FAMILY_FIT_R,
         TEMPLATE,
         scenario=scenario
     )
@@ -84,6 +86,70 @@ def _run_family_de(tmp_path: Path, estimand_id: str, scenario: str = "positive_i
     return de_outdir
 
 
+def _run_family_de_minimal(tmp_path: Path, estimand_id: str) -> tuple[Path, Path]:
+    """Run the family DE path on the minimal template (desugar → family_fit → estimand).
+
+    Returns (de_outdir, project_dir) where project_dir contains the original contrasts.tsv.
+    """
+    # Copy minimal template
+    project_dir = tmp_path / "project"
+    shutil.copytree(TEMPLATE, project_dir)
+
+    # Run materialize_inputs to desugar contrasts into families/estimands/cell_weights.
+    # The minimal template's pairwise contrasts all desugar into a single family named "main".
+    inputs_dir = tmp_path / "inputs"
+    result = subprocess.run(
+        ["python", str(MATERIALIZE_INPUTS),
+         "--project-config", str(project_dir / "project.yaml"),
+         "--counts", str(inputs_dir / "counts.tsv"),
+         "--samples", str(inputs_dir / "samples.tsv"),
+         "--annotation", str(inputs_dir / "annotation.tsv"),
+         "--contrasts", str(inputs_dir / "contrasts.tsv"),
+         "--families", str(inputs_dir / "families.tsv"),
+         "--estimands", str(inputs_dir / "estimands.tsv"),
+         "--cell-weights", str(inputs_dir / "estimand_cell_weights.tsv"),
+         "--term-tests", str(inputs_dir / "term_tests.tsv"),
+         "--manifest", str(inputs_dir / "input_manifest.json"),
+         "--threads", "1"],
+        capture_output=True, text=True, cwd=tmp_path)
+    assert result.returncode == 0, result.stderr
+
+    # Run family_fit.R on the desugared family (family_id is "main" for the minimal template)
+    family_id = "main"
+    family_dir = tmp_path / "families" / family_id
+    result = subprocess.run(
+        ["Rscript", "--vanilla", str(FAMILY_FIT_R),
+         "--project-config", str(project_dir / "project.yaml"),
+         "--counts", str(inputs_dir / "counts.tsv"),
+         "--samples", str(inputs_dir / "samples.tsv"),
+         "--families", str(inputs_dir / "families.tsv"),
+         "--estimands", str(inputs_dir / "estimands.tsv"),
+         "--cell-weights", str(inputs_dir / "estimand_cell_weights.tsv"),
+         "--family-id", family_id,
+         "--outdir", str(family_dir)],
+        capture_output=True, text=True, cwd=tmp_path)
+    assert result.returncode == 0, result.stderr
+
+    # Run estimand.R to produce de_results.tsv
+    de_outdir = tmp_path / "de"
+    result = subprocess.run(
+        ["Rscript", "--vanilla", str(ESTIMAND_R),
+         "--project-config", str(project_dir / "project.yaml"),
+         "--counts", str(inputs_dir / "counts.tsv"),
+         "--samples", str(inputs_dir / "samples.tsv"),
+         "--annotation", str(inputs_dir / "annotation.tsv"),
+         "--families", str(inputs_dir / "families.tsv"),
+         "--estimands", str(inputs_dir / "estimands.tsv"),
+         "--cell-weights", str(inputs_dir / "estimand_cell_weights.tsv"),
+         "--family-dir", str(family_dir),
+         "--estimand-id", estimand_id,
+         "--outdir", str(de_outdir)],
+        capture_output=True, text=True, cwd=tmp_path)
+    assert result.returncode == 0, result.stderr
+
+    return de_outdir, project_dir
+
+
 def test_de_confirm_concordance_with_edger(tmp_path):
     """de_confirm.R runs edgeR quasi-likelihood DE on the same contrast as DESeq2,
     producing a concordance table that classifies genes by whether both engines,
@@ -98,11 +164,13 @@ def test_de_confirm_concordance_with_edger(tmp_path):
     # de_confirm requires both DESeq2 and edgeR.
     require_r("DESeq2", "edgeR", "apeglm")
 
-    # Use est_arm_a1 which is a simple two-cell pairwise (a1|b2 vs a1|b1).
+    # Use est_arm_a1 from factorial fixture (a1|b2 vs a1|b1 pairwise comparison).
+    # This gives us proper de_results.tsv with good dispersion fitting.
     estimand_id = "est_arm_a1"
-    de_outdir = _run_family_de(tmp_path, estimand_id)
+    de_outdir = _run_family_de_factorial(tmp_path, estimand_id)
 
-    # Create a contrasts.tsv for de_confirm (it expects the old format).
+    # Create a simple pairwise contrasts.tsv for de_confirm.R.
+    # Map the factorial estimand to a simple pairwise format de_confirm.R understands.
     fixture = tmp_path / "fx"
     (tmp_path / "contrasts.tsv").write_text(
         "contrast_id\tfactor\tnumerator\tdenominator\n"
@@ -110,7 +178,7 @@ def test_de_confirm_concordance_with_edger(tmp_path):
         encoding="utf-8",
     )
 
-    # Run de_confirm.R on the same contrast.
+    # Run de_confirm.R with the factorial fixture data and simple contrasts.tsv
     confirm_outdir = tmp_path / "de_confirm"
     subprocess.run(
         [
@@ -175,9 +243,9 @@ def test_spia_pathway_topology_analysis(tmp_path):
     # SPIA requires DESeq2 and apeglm upstream.
     require_r("DESeq2", "apeglm")
 
-    # Use est_arm_a1 for the DE results.
+    # Use est_arm_a1 for the DE results from factorial fixture.
     estimand_id = "est_arm_a1"
-    de_outdir = _run_family_de(tmp_path, estimand_id)
+    de_outdir = _run_family_de_factorial(tmp_path, estimand_id)
 
     # Update the project config for mouse species (SPIA needs a real species).
     config_path = tmp_path / "project" / "project.yaml"
