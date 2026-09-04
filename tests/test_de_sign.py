@@ -38,9 +38,11 @@ def test_de_sign_convention_numerator_minus_denominator(tmp_path):
     try:
         subprocess.run(
             ["Rscript", "-e", "library(DESeq2)"],
-            check=True, capture_output=True, timeout=5,
+            check=True, capture_output=True, timeout=120,
         )
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+    except subprocess.TimeoutExpired:
+        pytest.skip("DESeq2 probe timed out")
+    except subprocess.CalledProcessError:
         pytest.skip("DESeq2 not available")
 
     # Copy the minimal template to a temp directory.

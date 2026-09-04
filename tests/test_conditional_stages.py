@@ -28,18 +28,23 @@ SPIA_R = ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "04_enrichment" / 
 BATCH_R = ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "02_qc" / "batch.R"
 
 
-def _has_rscript_package(package: str) -> bool:
-    """Check if an R package is available to system Rscript."""
+def _has_rscript_package(package: str) -> bool | str:
+    """Check if an R package is available to system Rscript.
+
+    Returns True if available, or a string skip reason otherwise.
+    """
     if shutil.which("Rscript") is None:
-        return False
+        return "Rscript not available"
     try:
         subprocess.run(
             ["Rscript", "-e", f"library({package})"],
-            check=True, capture_output=True, timeout=5,
+            check=True, capture_output=True, timeout=120,
         )
         return True
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
-        return False
+    except subprocess.TimeoutExpired:
+        return f"{package} probe timed out"
+    except subprocess.CalledProcessError:
+        return f"{package} not available"
 
 
 def test_de_confirm_concordance_with_edger(tmp_path):
@@ -58,8 +63,9 @@ def test_de_confirm_concordance_with_edger(tmp_path):
 
     # de_confirm requires both DESeq2 (for de.R) and edgeR.
     for package in ("DESeq2", "edgeR"):
-        if not _has_rscript_package(package):
-            pytest.skip(f"{package} not available")
+        result = _has_rscript_package(package)
+        if result is not True:
+            pytest.skip(result)
 
     # Copy the minimal template.
     project_dir = tmp_path / "project"
@@ -148,8 +154,9 @@ def test_spia_pathway_topology_analysis(tmp_path):
         pytest.skip("Rscript not available")
 
     # SPIA requires DESeq2 for de.R upstream.
-    if not _has_rscript_package("DESeq2"):
-        pytest.skip("DESeq2 not available")
+    result = _has_rscript_package("DESeq2")
+    if result is not True:
+        pytest.skip(result)
 
     # Copy the minimal template and configure it for mouse (SPIA needs a real species).
     project_dir = tmp_path / "project"
@@ -256,8 +263,9 @@ def test_batch_corrected_pca_and_distance(tmp_path):
 
     # batch.R requires DESeq2 (for qc.R upstream) and limma (for removeBatchEffect).
     for package in ("DESeq2", "limma"):
-        if not _has_rscript_package(package):
-            pytest.skip(f"{package} not available")
+        result = _has_rscript_package(package)
+        if result is not True:
+            pytest.skip(result)
 
     # Copy the minimal template and add a batch column to samples.tsv.
     project_dir = tmp_path / "project"

@@ -42,9 +42,11 @@ def test_publication_profile_executes_to_completion(tmp_path):
         try:
             subprocess.run(
                 ["Rscript", "-e", f"library({package})"],
-                check=True, capture_output=True, timeout=5,
+                check=True, capture_output=True, timeout=120,
             )
-        except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        except subprocess.TimeoutExpired:
+            pytest.skip(f"{package} probe timed out")
+        except subprocess.CalledProcessError:
             pytest.skip(f"{package} not available")
 
     # Copy the publication template to a temp directory.
