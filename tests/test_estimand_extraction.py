@@ -64,13 +64,15 @@ def test_contrast_id_carries_the_estimand_id(tmp_path):
 def test_confidence_interval_matches_the_mle_and_se(tmp_path):
     require_r("DESeq2", "apeglm")
     outdir, _ = _extract(tmp_path, "est_interaction")
+    # qnorm(0.975) = 1.959964
+    z_975 = 1.959964
     for row in read_tsv_rows(outdir / "tables" / "de_results.tsv")[:50]:
         if row["lfc_se"] in ("NA", ""):
             continue
         raw = float(row["log2_fold_change_raw"])
         se = float(row["lfc_se"])
-        assert abs(float(row["ci_low"]) - (raw - 1.96 * se)) < 1e-6
-        assert abs(float(row["ci_high"]) - (raw + 1.96 * se)) < 1e-6
+        assert abs(float(row["ci_low"]) - (raw - z_975 * se)) < 1e-6
+        assert abs(float(row["ci_high"]) - (raw + z_975 * se)) < 1e-6
 
 
 def test_composite_estimand_se_equals_the_exported_covariance(tmp_path):
@@ -132,7 +134,10 @@ def test_composite_se_is_smaller_than_the_naive_independent_sum(tmp_path):
 
 
 def test_reparameterized_shrinkage_does_not_move_inference(tmp_path):
-    """Spec §7.3/§11 test 7: apeglm may only touch log2_fold_change."""
+    """Spec §7.3/§11 test 7: apeglm may only touch log2_fold_change.
+
+    Verifies the reparameterized MLE reproduces the canonical contrast to within
+    a thousandth of a standard error (SE-relative tolerance, scale-free)."""
     require_r("DESeq2", "apeglm")
     outdir, _ = _extract(tmp_path, "est_arm_a2")
     summary = json.loads((outdir / "de_summary.json").read_text(encoding="utf-8"))

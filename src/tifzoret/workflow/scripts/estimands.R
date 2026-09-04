@@ -25,6 +25,20 @@
 
 CELL_KEY_SEPARATOR <- "|"
 
+# Which samples the heatmap/PCA display. de.R branched on contrast type: a
+# pairwise contrast showed its two factor levels; a coefficient contrast showed
+# everything. An estimand generalizes both -- it shows exactly the samples in
+# the cells its expression references, which reproduces the pairwise behaviour
+# for a two-cell estimand and the all-groups behaviour for an interaction.
+display_samples_for_cells <- function(metadata, cells, cell_keys) {
+  if (!length(cells) || !length(cell_keys)) return(rep(TRUE, nrow(metadata)))
+  keys <- apply(metadata[, cells, drop = FALSE], 1,
+                function(row) paste(row, collapse = CELL_KEY_SEPARATOR))
+  referenced <- keys %in% cell_keys
+  if (!any(referenced)) return(rep(TRUE, nrow(metadata)))
+  referenced
+}
+
 read_tsv_plain <- function(path) {
   utils::read.delim(
     normalizePath(path, mustWork = TRUE),
