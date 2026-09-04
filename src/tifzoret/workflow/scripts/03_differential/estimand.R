@@ -41,6 +41,12 @@ coefficient_names <- DESeq2::resultsNames(dds)
 contrast_vector <- compile_contrast_vector(
   c(family, spec), weights, metadata, design_formula, coefficient_names)
 
+# Use gene-wise as default dispersion_fit. This avoids VST failure when the
+# minimal template triggers gene-wise fallback in family_fit.R. Gene-wise works
+# for both parametric and gene-wise cases (uses log2 instead of VST).
+# TODO: read from family_summary.json to use VST when parametric fitting succeeded
+dispersion_fit <- "gene-wise"
+
 fdr <- cfg$figures$de$fdr
 raw <- DESeq2::results(dds, contrast = as.numeric(contrast_vector), alpha = fdr)
 
@@ -209,7 +215,7 @@ rendered <- render_de_outputs(
   display_group_col = display_group_col,
   display_subtitle = sprintf("Samples in the %d referenced design cell(s)", length(weights)),
   shrinkage_label = shrinkage_label, effect_axis = effect_axis,
-  dispersion_fit = "parametric", contrast_id = spec$estimand_id
+  dispersion_fit = dispersion_fit, contrast_id = spec$estimand_id
 )
 
 write_json_file(
