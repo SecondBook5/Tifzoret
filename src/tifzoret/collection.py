@@ -126,7 +126,7 @@ def run_collection(collection: ResolvedCollection) -> Path:
         "generated_utc": datetime.now(timezone.utc).isoformat(),
         "collection": collection.config["collection"],
         "method": "signed weighted Stouffer with two-sided p-values and BH correction",
-        "contrast_semantics": "positive input effects are project numerator minus denominator",
+        "contrast_semantics": "positive effects indicate higher expression in cells with positive weights (estimand cell-means syntax: positive terms minus negative terms)",
         "studies": [
             {"id": spec["id"], "project": str(project.config_path), "contrast": spec["contrast"], "de": str(path)}
             for spec, project, path, _ in studies

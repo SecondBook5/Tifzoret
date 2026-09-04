@@ -263,7 +263,7 @@ def main() -> None:
         "species": project.config["species"],
         "reference": project.config["reference"],
         "configuration": project.config,
-        "contrast_semantics": "all signed effects are numerator minus denominator",
+        "contrast_semantics": "all signed effects use cell-means arithmetic (positive cells minus negative cells)",
         "contrasts": [
             {
                 "contrast_id": row["contrast_id"],

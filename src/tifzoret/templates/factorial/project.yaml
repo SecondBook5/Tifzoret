@@ -1,0 +1,68 @@
+version: 2
+project:
+  id: factorial_demo
+  title: 2×2 Factorial Design Demonstration (Treatment × Genotype)
+species:
+  provider: custom
+  scientific_name: synthetic
+  taxonomy_id: null
+reference:
+  genome_build: synthetic
+  annotation_release: null
+inputs:
+  kind: counts
+  counts: counts.tsv
+  samples: samples.tsv
+  annotation: annotation.tsv
+analysis:
+  design: "~ treatment * genotype"
+  contrasts: contrasts.tsv
+  families:
+    fam_factorial:
+      design: "~ treatment * genotype"
+      cells: [treatment, genotype]
+      estimands:
+        - id: interaction
+          role: primary
+          expression: "(treated,mutant) - (treated,wt) - (control,mutant) + (control,wt)"
+          label: "Treatment × Genotype interaction"
+        - id: main_treatment
+          expression: "(treated,wt) + (treated,mutant) - (control,wt) - (control,mutant)"
+          label: "Treatment main effect (averaged over genotype)"
+        - id: main_genotype
+          expression: "(control,mutant) + (treated,mutant) - (control,wt) - (treated,wt)"
+          label: "Genotype main effect (averaged over treatment)"
+        - id: simple_treated
+          expression: "(treated,mutant) - (treated,wt)"
+          label: "Genotype effect in treated samples only"
+  profile: standard
+resources:
+  cache: ~/.cache/tifzoret/resources
+  offline: false
+  refresh: false
+  gene_sets:
+    gmt: gene_sets.gmt
+    min_size: 4
+    max_size: 100
+figures:
+  group: treatment_genotype
+  palette:
+    control_wt: "#A6CEE3"
+    control_mutant: "#1F78B4"
+    treated_wt: "#F4A6A6"
+    treated_mutant: "#E31A1C"
+  pca:
+    ellipse_level: 0.80
+  de:
+    fdr: 0.05
+    abs_log2fc: 1.0
+    top_labels: 12
+    top_heatmap_genes: 30
+    z_limit: 1.5
+  pathways:
+    top_ora_terms: 8
+    top_gsva_terms: 12
+    gsea_curves_per_direction: 2
+    seed: 1
+output:
+  root: results

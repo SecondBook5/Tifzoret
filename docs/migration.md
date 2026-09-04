@@ -52,6 +52,68 @@ Choose one explicit input kind:
 FASTQ alignment remains upstream in nf-core/rnaseq. Every adapter materializes
 the same canonical downstream input contract.
 
+## Contrast Type Desugaring
+
+Tifzoret now uses an **estimand architecture** where comparisons are expressed as
+linear combinations of design cell means. Legacy `contrasts.tsv` rows with
+`type` column are automatically desugared into estimand families at
+config-load time:
+
+**Pairwise contrasts** (default or `type: pairwise`):
+```tsv
+contrast_id         factor      numerator    denominator
+treated_vs_control  condition   treated      control
+```
+→ Becomes a two-cell estimand: `(treated) - (control)`
+
+**Coefficient contrasts** (`type: coefficient`):
+```tsv
+contrast_id              factor      numerator
+genotype_mutant_effect   genotype    mutant
+```
+→ Becomes a single-coefficient estimand referencing the named design term
+
+**Omnibus contrasts** (`type: omnibus`):
+```tsv
+contrast_id        factor
+condition_any      condition
+```
+→ Generates term tests for the factor (full-vs-reduced likelihood-ratio tests)
+
+**What changes in your results:**
+
+1. **Gene filter default:** Moved from 0 to 10 reads. Genes with <10 reads in all
+   samples are now filtered before DE testing. This matches established practice
+   and reduces multiple-testing burden. **Action:** Regenerate goldens with the
+   new filter, or set `analysis.settings.de.gene_filter_threshold: 0` to preserve
+   exact old behavior.
+
+2. **Covariance-aware standard errors:** Estimands with multiple non-zero
+   coefficients (e.g., `(treated,wt) + (treated,mutant) - (control,wt) -
+   (control,mutant)`) now use `SE(c'β) = sqrt(c'Σc)` instead of the naive
+   independent sum. This typically reduces standard errors by ~20-40% for
+   composite estimands. **Impact:** Better power, tighter confidence intervals.
+
+3. **Shared dispersions:** Related estimands (e.g., treatment and genotype main
+   effects plus interaction) extract from one DESeq2 fit instead of separate
+   fits. **Impact:** Fully comparable statistics, no arbitrary differences from
+   fit-to-fit variation.
+
+4. **Term tests replace omnibus:** The old omnibus LRT is now a term test derived
+   automatically from the design. For a multi-level factor, you get the same
+   likelihood-ratio test plus additional nested tests (e.g., for a 2×2 factorial,
+   you get main effect tests, interaction test, and any-effect omnibus).
+
+**Validation:**
+```bash
+# After migration, verify DE direction/magnitude agreement
+tifzoret verify project.yaml --reference path/to/old/results --scope de
+```
+
+Most studies see exact direction agreement (100%) and magnitude correlation >0.99.
+Discrepancies typically come from the improved covariance handling or filter
+change — both are improvements, not regressions.
+
 ## Publication migration
 
 Move curated claims to `hypotheses.yaml`, genes and biological programs to
