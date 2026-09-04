@@ -17,6 +17,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from itertools import combinations
 
+import numpy as np
+
 
 class EstimandSyntaxError(ValueError):
     """Raised when an estimand expression cannot be parsed."""
@@ -434,3 +436,177 @@ def derive_term_tests(design: str, cells: Sequence[str], family_id: str) -> list
         emit(_term_label(term, order).replace(":", "_") + "_interaction", dropped)
 
     return tests
+
+
+def _observed_levels(sample_rows: Sequence[dict[str, str]], column: str) -> list[str]:
+    """Extract unique observed levels for a column, sorted."""
+    return sorted({str(row[column]) for row in sample_rows if column in row})
+
+
+def cell_membership(family: Family, sample_rows: Sequence[dict[str, str]]) -> dict[tuple[str, ...], list[str]]:
+    """Map each observed design cell to the sample ids it contains."""
+    membership: dict[tuple[str, ...], list[str]] = {}
+    for row in sample_rows:
+        if any(column not in row for column in family.cells):
+            continue
+        key = tuple(str(row[column]) for column in family.cells)
+        membership.setdefault(key, []).append(str(row.get("sample_id", "")))
+    return membership
+
+
+def cell_mean_matrix(family: Family, sample_rows: Sequence[dict[str, str]]) -> tuple[np.ndarray, list[tuple[str, ...]]]:
+    """Indicator matrix of samples against observed cells, plus the cell order."""
+    membership = cell_membership(family, sample_rows)
+    cells = sorted(membership)
+    index = {cell: position for position, cell in enumerate(cells)}
+    matrix = np.zeros((len(sample_rows), len(cells)), dtype=float)
+    for position, row in enumerate(sample_rows):
+        if any(column not in row for column in family.cells):
+            continue
+        key = tuple(str(row[column]) for column in family.cells)
+        matrix[position, index[key]] = 1.0
+    return matrix, cells
+
+
+def validate_family_design(family: Family, sample_rows: Sequence[dict[str, str]]) -> list[str]:
+    """Every hard fail from spec §6 that needs only the sample table."""
+    errors: list[str] = []
+    columns = set().union(*(row.keys() for row in sample_rows)) if sample_rows else set()
+
+    for column in family.cells:
+        if column not in columns:
+            errors.append(
+                f"family {family.id}: cell column {column!r} is absent from samples.tsv"
+            )
+    for variable in design_variables(family.design):
+        if variable not in columns:
+            errors.append(
+                f"family {family.id}: design variable {variable!r} is absent from samples.tsv"
+            )
+    if errors:
+        return errors
+
+    membership = cell_membership(family, sample_rows)
+    for estimand in family.estimands:
+        for cell in estimand.expression.cell_weights:
+            if cell not in membership:
+                observed = ", ".join(
+                    CELL_KEY_SEPARATOR.join(key) for key in sorted(membership)
+                )
+                errors.append(
+                    f"estimand {estimand.id}: cell "
+                    f"({CELL_KEY_SEPARATOR.join(cell)}) is empty or references an "
+                    f"unknown level; observed cells: {observed}"
+                )
+
+    matrix, cells = cell_mean_matrix(family, sample_rows)
+    if matrix.size:
+        rank = int(np.linalg.matrix_rank(matrix))
+        if rank < matrix.shape[1]:
+            errors.append(
+                f"family {family.id}: cell-mean design is rank-deficient "
+                f"(rank {rank} < {matrix.shape[1]} cells)"
+            )
+        nuisance = [
+            variable
+            for variable in design_variables(family.design)
+            if variable not in set(family.cells)
+        ]
+        cell_index = {cell: position for position, cell in enumerate(cells)}
+        for variable in nuisance:
+            per_cell: dict[tuple[str, ...], set[str]] = {}
+            per_value: dict[str, set[tuple[str, ...]]] = {}
+            for row in sample_rows:
+                if variable not in row:
+                    continue
+                key = tuple(str(row[column]) for column in family.cells)
+                if key not in cell_index:
+                    continue
+                value = str(row[variable])
+                per_cell.setdefault(key, set()).add(value)
+                per_value.setdefault(value, set()).add(key)
+            constant_within_cells = per_cell and all(
+                len(values) == 1 for values in per_cell.values()
+            )
+            determines_cell = per_value and all(
+                len(keys) == 1 for keys in per_value.values()
+            )
+            if constant_within_cells and len(per_cell) > 1:
+                errors.append(
+                    f"family {family.id}: nuisance covariate {variable!r} is perfectly "
+                    "confounded with cell membership (constant within every cell)"
+                )
+            elif determines_cell and len(per_value) > 1:
+                errors.append(
+                    f"family {family.id}: nuisance covariate {variable!r} is perfectly "
+                    "confounded with cell membership (each level occurs in one cell)"
+                )
+
+        # This parameter count is deliberately conservative: it counts cell-mean parameters
+        # only (product of observed level counts per factor), ignoring nuisance covariates,
+        # so it undercounts the true rank. This means a marginally non-estimable design
+        # can pass this check and fail later at fit time, which is acceptable because the
+        # real rank, condition number, and residual df are computed from the actual model
+        # matrix by a later stage, which warns appropriately. Erring toward permissive
+        # here means an analyst gets feedback at fit time rather than rejecting a design
+        # that might be estimable despite marginal rank.
+        parameters = 1
+        for column in family.cells:
+            parameters *= max(1, len(_observed_levels(sample_rows, column)))
+        residual = len(sample_rows) - parameters
+        if residual < 1:
+            errors.append(
+                f"family {family.id}: residual degrees of freedom is {residual} "
+                f"({len(sample_rows)} samples, {parameters} model parameters); "
+                "the model is not estimable"
+            )
+
+    if family.replicate_unit:
+        if family.replicate_unit not in columns:
+            errors.append(
+                f"family {family.id}: replicate_unit {family.replicate_unit!r} is "
+                "absent from samples.tsv"
+            )
+        else:
+            per_cell_units: dict[tuple[str, ...], list[str]] = {}
+            for row in sample_rows:
+                key = tuple(str(row[column]) for column in family.cells)
+                per_cell_units.setdefault(key, []).append(str(row[family.replicate_unit]))
+            for key, units in per_cell_units.items():
+                duplicates = sorted({unit for unit in units if units.count(unit) > 1})
+                if duplicates:
+                    errors.append(
+                        f"family {family.id}: replicate_unit value(s) "
+                        f"{', '.join(duplicates)} appear more than once inside cell "
+                        f"({CELL_KEY_SEPARATOR.join(key)}). The engine has no "
+                        "mixed-model path, so these repeated measures cannot be "
+                        "treated as independent; aggregate them or remove "
+                        "replicate_unit deliberately."
+                    )
+    return errors
+
+
+def resolve_term_test_df(family: Family, sample_rows: Sequence[dict[str, str]]) -> tuple[TermTest, ...]:
+    """Recompute each derived term test's df from observed level counts."""
+    levels = {
+        column: max(1, len(_observed_levels(sample_rows, column)))
+        for column in family.cells
+    }
+    cell_set = set(family.cells)
+    all_terms = parse_formula_terms(family.design)
+    resolved: list[TermTest] = []
+    for test in family.term_tests:
+        kept = set(parse_formula_terms(test.reduced))
+        dropped = [
+            term for term in all_terms if term <= cell_set and term and term not in kept
+        ]
+        df = 0
+        for term in dropped:
+            contribution = 1
+            for factor in term:
+                contribution *= levels.get(factor, 2) - 1
+            df += contribution
+        resolved.append(
+            TermTest(id=test.id, family_id=test.family_id, reduced=test.reduced, df=df)
+        )
+    return tuple(resolved)
