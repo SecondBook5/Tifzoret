@@ -8,8 +8,8 @@ from pathlib import Path
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "src" / "tifzoret" / "workflow" / "scripts"
 REQUIRED = ("STAGE:", "WHAT:", "WHY:", "HOW:", "INPUTS:", "PRODUCES:", "CALLED BY:", "ENV:")
-# utils.R is a shared library, not a stage; report_assets holds no scripts.
-EXCLUDE = {"utils.R"}
+# utils.R and estimands.R are shared helpers, not stages; report_assets holds no scripts.
+EXCLUDE = {"utils.R", "estimands.R"}
 
 
 def _stage_files():

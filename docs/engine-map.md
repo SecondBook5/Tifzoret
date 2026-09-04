@@ -122,6 +122,15 @@ Publication figure assembly, HTML report, and release provenance.
 | [10_figures/manifest.py](../src/tifzoret/workflow/scripts/10_figures/manifest.py) | Release manifest with SHA-256 checksums | Provides auditable provenance for all workflow outputs; checksums detect tampering or corruption | `release_manifest` (report.smk) | core.yaml |
 | [10_figures/front_door.py](../src/tifzoret/workflow/scripts/10_figures/front_door.py) | Review-facing artifact promotion (front_door/ populated) | Copies reviewer-critical outputs to a flat, documented front_door/ directory; simplifies external access | `front_door_artifacts` (publication.smk) | core.yaml |
 
+## Shared helpers
+
+These scripts are sourced by pipeline stages rather than invoked as stages themselves.
+
+| Helper | What | Why |
+|--------|------|-----|
+| [utils.R](../src/tifzoret/workflow/scripts/utils.R) | Common utilities (plotting theme, color scales, I/O) | Ensures visual consistency and reduces duplication across R stages |
+| [estimands.R](../src/tifzoret/workflow/scripts/estimands.R) | Cell weights → contrast vector mapping | The single authority on what an estimand means numerically; sourced by family_fit.R, estimand.R, term_test.R, de_confirm.R so DESeq2 and edgeR can never disagree on a contrast's sign |
+
 ## How the phases relate
 
 The ten phases form a dependency chain:

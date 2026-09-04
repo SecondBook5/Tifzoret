@@ -18,8 +18,9 @@ EXPECTED = {
 }
 
 
-def test_utils_stays_flat():
+def test_shared_helpers_stay_flat():
     assert (SCRIPTS / "utils.R").is_file()
+    assert (SCRIPTS / "estimands.R").is_file()
 
 
 def test_each_folder_has_exactly_its_scripts():
@@ -30,7 +31,8 @@ def test_each_folder_has_exactly_its_scripts():
 
 def test_no_stage_script_left_flat():
     flat = {p.name for p in SCRIPTS.glob("*") if p.suffix in {".R", ".py"}}
-    assert flat == {"utils.R"}, f"unexpected flat scripts: {flat - {'utils.R'}}"
+    expected_helpers = {"utils.R", "estimands.R"}
+    assert flat == expected_helpers, f"unexpected flat scripts: {flat - expected_helpers}"
 
 
 def test_report_assets_moved_with_report():
