@@ -812,18 +812,22 @@ def main() -> None:
     samples_output = Path(args.samples).resolve()
     annotation_output = Path(args.annotation).resolve()
     contrasts_output = Path(args.contrasts).resolve()
+    families_output = Path(args.families).resolve()
+    estimands_output = Path(args.estimands).resolve()
+    cell_weights_output = Path(args.cell_weights).resolve()
+    term_tests_output = Path(args.term_tests).resolve()
     manifest_output = Path(args.manifest).resolve()
-    for output in (counts_output, samples_output, annotation_output, contrasts_output, manifest_output):
+    for output in (
+        counts_output, samples_output, annotation_output, contrasts_output,
+        families_output, estimands_output, cell_weights_output, term_tests_output,
+        manifest_output,
+    ):
         output.parent.mkdir(parents=True, exist_ok=True)
 
     materialize_samples(project, samples_output)
     materialize_contrasts(project, contrasts_output)
     materialize_estimands(
-        project,
-        Path(args.families).resolve(),
-        Path(args.estimands).resolve(),
-        Path(args.cell_weights).resolve(),
-        Path(args.term_tests).resolve(),
+        project, families_output, estimands_output, cell_weights_output, term_tests_output
     )
     companion_base = project.config_path.parent
     hypotheses_block = project.config.get("hypotheses", {})

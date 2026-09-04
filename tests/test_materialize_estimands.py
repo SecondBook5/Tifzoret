@@ -59,6 +59,10 @@ def test_all_four_artifacts_are_written(tmp_path):
 
 
 def test_families_table_has_the_documented_header(tmp_path):
+    # Literal header assertion: this is a cross-language contract R depends on.
+    # Deriving the expected list from FAMILY_FIELDS would make this a tautology —
+    # both sides would move together, so a renamed or reordered column in Python
+    # would silently break R. The literal pins the contract independently.
     outputs = _run(tmp_path)
     with (outputs / "families.tsv").open(encoding="utf-8") as handle:
         header = handle.readline().strip().split("\t")
@@ -68,11 +72,31 @@ def test_families_table_has_the_documented_header(tmp_path):
     ]
 
 
+def test_estimands_table_has_the_documented_header(tmp_path):
+    # Literal header assertion: this is a cross-language contract R depends on.
+    # Deriving the expected list from ESTIMAND_FIELDS would make this a tautology.
+    outputs = _run(tmp_path)
+    with (outputs / "estimands.tsv").open(encoding="utf-8") as handle:
+        header = handle.readline().strip().split("\t")
+    assert header == ["family_id", "estimand_id", "label", "role", "expression", "atom_kind"]
+
+
 def test_cell_weights_table_has_the_documented_header(tmp_path):
+    # Literal header assertion: this is a cross-language contract R depends on.
+    # Deriving the expected list from CELL_WEIGHT_FIELDS would make this a tautology.
     outputs = _run(tmp_path)
     with (outputs / "estimand_cell_weights.tsv").open(encoding="utf-8") as handle:
         header = handle.readline().strip().split("\t")
     assert header == ["family_id", "estimand_id", "cell_key", "weight"]
+
+
+def test_term_tests_table_has_the_documented_header(tmp_path):
+    # Literal header assertion: this is a cross-language contract R depends on.
+    # Deriving the expected list from TERM_TEST_FIELDS would make this a tautology.
+    outputs = _run(tmp_path)
+    with (outputs / "term_tests.tsv").open(encoding="utf-8") as handle:
+        header = handle.readline().strip().split("\t")
+    assert header == ["family_id", "term_test_id", "reduced", "df"]
 
 
 def test_every_estimand_has_at_least_two_cell_weights(tmp_path):
