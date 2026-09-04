@@ -186,7 +186,7 @@ def test_standard_profile_dag_resolves(tmp_path):
     proc = _dry_run(config_path)
     assert proc.returncode == 0, proc.stderr or proc.stdout
     planned = _planned_rules(proc.stdout)
-    assert {"study_qc", "contrast_de", "contrast_pathways", "report_html"} <= planned, sorted(planned)
+    assert {"study_qc", "family_fit", "family_estimand", "contrast_pathways", "report_html"} <= planned, sorted(planned)
     assert not (PUBLICATION_RULES & planned), sorted(PUBLICATION_RULES & planned)
 
 
