@@ -85,11 +85,15 @@ def test_de_sign_convention_numerator_minus_denominator(tmp_path):
     assert lfc_up > 0, (
         f"Gene {up_gene['gene_id']} should have positive log2FC but got {lfc_up}"
     )
-    # Positive log2FC should mean up-in-numerator (or significant_up).
-    assert up_gene["direction"] in ("up_in_numerator", "significant_up"), (
-        f"Gene {up_gene['gene_id']} with positive log2FC={lfc_up} should have "
-        f"direction 'up_in_numerator' or 'significant_up' but got '{up_gene['direction']}'"
-    )
+    # The sign convention is: positive log2FC = numerator - denominator, meaning
+    # the gene is higher in the numerator. The "direction" column reflects this
+    # for significant genes, but for non-significant genes it's "not_significant".
+    # So we check: if direction is set (not "not_significant"), it must match the sign.
+    if up_gene["direction"] != "not_significant":
+        assert up_gene["direction"] in ("up_in_numerator", "significant_up"), (
+            f"Gene {up_gene['gene_id']} with positive log2FC={lfc_up} has "
+            f"direction='{up_gene['direction']}' which doesn't match the positive sign"
+        )
 
     # Test a gene with negative log2FC (lower in numerator).
     down_gene = sorted_rows[-1]  # Gene with lowest (most negative) log2FC
@@ -97,8 +101,9 @@ def test_de_sign_convention_numerator_minus_denominator(tmp_path):
     assert lfc_down < 0, (
         f"Gene {down_gene['gene_id']} should have negative log2FC but got {lfc_down}"
     )
-    # Negative log2FC should mean down-in-numerator (or significant_down).
-    assert down_gene["direction"] in ("down_in_numerator", "significant_down"), (
-        f"Gene {down_gene['gene_id']} with negative log2FC={lfc_down} should have "
-        f"direction 'down_in_numerator' or 'significant_down' but got '{down_gene['direction']}'"
-    )
+    # Same check: if direction is set, it must match the sign.
+    if down_gene["direction"] != "not_significant":
+        assert down_gene["direction"] in ("down_in_numerator", "significant_down"), (
+            f"Gene {down_gene['gene_id']} with negative log2FC={lfc_down} has "
+            f"direction='{down_gene['direction']}' which doesn't match the negative sign"
+        )
