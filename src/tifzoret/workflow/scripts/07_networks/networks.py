@@ -37,11 +37,17 @@ if str(SOURCE_ROOT) not in sys.path:
     sys.path.insert(0, str(SOURCE_ROOT))
 
 from tifzoret.config import load_project  # noqa: E402
-from tifzoret.workflow.common import read_tsv, write_tsv  # noqa: E402
+from tifzoret.workflow.common import write_tsv  # noqa: E402
 
 
 API = "https://string-db.org/api/tsv"
 STRING_NETWORK_BATCH_SIZE = 900
+
+
+def read_tsv(path: Path) -> list[dict[str, str]]:
+    """Read a tab-delimited file into a list of column-keyed dictionaries."""
+    with path.open(newline="", encoding="utf-8") as handle:
+        return list(csv.DictReader(handle, delimiter="\t"))
 
 
 def sha256_bytes(value: bytes) -> str:

@@ -56,7 +56,7 @@ if str(SOURCE_ROOT) not in sys.path:
     sys.path.insert(0, str(SOURCE_ROOT))
 
 from tifzoret.config import load_project  # noqa: E402
-from tifzoret.workflow.common import read_tsv, write_tsv  # noqa: E402
+from tifzoret.workflow.common import write_tsv  # noqa: E402
 
 # Deterministic layout seed and a cap on how many nodes the network figure draws
 # (all TABLES cover the whole graph; only the drawn view is subset to stay legible).
@@ -66,6 +66,12 @@ DRAW_MAX_NODES = 400
 # positive/redundant, near-white midpoint) -- polarity, so a two-hue diverging ramp.
 CURVATURE_CMAP = "coolwarm"
 NAVY = "#183B56"
+
+
+def read_tsv(path: Path) -> list[dict[str, str]]:
+    """Read a tab-delimited file into a list of column-keyed dictionaries."""
+    with path.open(newline="", encoding="utf-8") as handle:
+        return list(csv.DictReader(handle, delimiter="\t"))
 
 
 def build_graph(edges: list[dict[str, str]]) -> nx.Graph:

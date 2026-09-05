@@ -66,7 +66,7 @@ if str(SOURCE_ROOT) not in sys.path:
     sys.path.insert(0, str(SOURCE_ROOT))
 
 from tifzoret.config import load_project  # noqa: E402
-from tifzoret.workflow.common import read_tsv, write_tsv  # noqa: E402
+from tifzoret.workflow.common import write_tsv  # noqa: E402
 
 # House palette (matches the R theme_publication constants and curvature.py).
 NAVY = "#183B56"
@@ -84,6 +84,12 @@ DEFAULT_TOP_GENES = 40
 DEFAULT_MIN_CONTRASTS = 2
 
 DIRECTION_SIGN = {"up_in_numerator": 1, "down_in_numerator": -1, "not_significant": 0}
+
+
+def read_tsv(path: Path) -> list[dict[str, str]]:
+    """Read a tab-delimited file into a list of column-keyed dictionaries."""
+    with path.open(newline="", encoding="utf-8") as handle:
+        return list(csv.DictReader(handle, delimiter="\t"))
 
 
 def _float(value: str) -> float:
