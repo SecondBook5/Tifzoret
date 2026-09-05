@@ -66,6 +66,7 @@ if str(SOURCE_ROOT) not in sys.path:
     sys.path.insert(0, str(SOURCE_ROOT))
 
 from tifzoret.config import load_project  # noqa: E402
+from tifzoret.workflow.common import read_tsv, write_tsv  # noqa: E402
 
 # House palette (matches the R theme_publication constants and curvature.py).
 NAVY = "#183B56"
@@ -83,23 +84,6 @@ DEFAULT_TOP_GENES = 40
 DEFAULT_MIN_CONTRASTS = 2
 
 DIRECTION_SIGN = {"up_in_numerator": 1, "down_in_numerator": -1, "not_significant": 0}
-
-
-def read_tsv(path: Path) -> list[dict[str, str]]:
-    """Read a tab-delimited file into a list of column-keyed dictionaries."""
-    with path.open(newline="", encoding="utf-8") as handle:
-        return list(csv.DictReader(handle, delimiter="\t"))
-
-
-def write_tsv(path: Path, rows: list[dict[str, Any]], fields: list[str]) -> None:
-    """Write ``rows`` as a tab-delimited file with a ``fields`` header, creating parents."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(
-            handle, fieldnames=fields, delimiter="\t", lineterminator="\n", extrasaction="ignore"
-        )
-        writer.writeheader()
-        writer.writerows(rows)
 
 
 def _float(value: str) -> float:
@@ -341,13 +325,13 @@ def main() -> None:
     membership_rows.sort(
         key=lambda r: (-r["consensus_score"], -r["n_significant"], -_safe(r["mean_abs_log2fc"]), r["gene_symbol"])
     )
-    write_tsv(tables_dir / "consensus_membership.tsv", membership_rows, membership_fields)
+    write_tsv(tables_dir / "consensus_membership.tsv", membership_fields, membership_rows)
 
     # Consensus genes: significant (in a consistent direction) in >= min_contrasts.
     consensus_rows = [
         r for r in membership_rows if r["consensus_score"] >= min_contrasts
     ]
-    write_tsv(tables_dir / "consensus_genes.tsv", consensus_rows, membership_fields)
+    write_tsv(tables_dir / "consensus_genes.tsv", membership_fields, consensus_rows)
 
     # Pairwise contrast overlap (Jaccard of significant sets + sign agreement).
     overlap_rows: list[dict[str, Any]] = []
@@ -373,16 +357,16 @@ def main() -> None:
     overlap_rows.sort(key=lambda r: (-r["jaccard"], r["contrast_a"], r["contrast_b"]))
     write_tsv(
         tables_dir / "contrast_overlap.tsv",
-        overlap_rows,
         ["contrast_a", "contrast_b", "n_a", "n_b", "intersection", "union", "jaccard", "sign_agreement"],
+        overlap_rows,
     )
 
     # UpSet intersection sizes.
     intersections = build_upset(membership_signs, contrast_ids)
     write_tsv(
         tables_dir / "consensus_intersections_displayed.tsv",
-        intersections,
         ["contrasts", "degree", "gene_count"],
+        intersections,
     )
 
     # Figures.

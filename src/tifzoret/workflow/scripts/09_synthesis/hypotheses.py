@@ -29,6 +29,7 @@ if str(SOURCE_ROOT) not in sys.path:
 
 from tifzoret.config import load_project  # noqa: E402
 from tifzoret.figures import normalized_gene_panels  # noqa: E402
+from tifzoret.workflow.common import write_tsv  # noqa: E402
 
 h = getattr(markup, "es" + "ca" + "pe")
 
@@ -39,14 +40,6 @@ def read_tsv(path: str | None) -> list[dict[str, str]]:
         return []
     with Path(path).open(newline="", encoding="utf-8") as handle:
         return list(csv.DictReader(handle, delimiter="\t"))
-
-
-def write_tsv(path: Path, rows: list[dict[str, Any]], fields: list[str]) -> None:
-    """Write ``rows`` to a TSV at ``path`` with the given field order, creating parent directories."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fields, delimiter="\t", lineterminator="\n", extrasaction="ignore")
-        writer.writeheader(); writer.writerows(rows)
 
 
 def number(value: object) -> float | None:
@@ -147,7 +140,7 @@ def main() -> None:
             })
     fields = ["hypothesis_id", "evidence_type", "panel", "group", "item", "effect", "fdr", "direction", "support", "source"]
     outdir = Path(args.outdir).resolve(); tables = outdir / "tables"; tables.mkdir(parents=True, exist_ok=True)
-    write_tsv(tables / "hypothesis_evidence.tsv", evidence, fields)
+    write_tsv(tables / "hypothesis_evidence.tsv", fields, evidence)
     summaries = []
     for claim in claims:
         rows = [row for row in evidence if row["hypothesis_id"] == claim["id"]]
@@ -159,7 +152,7 @@ def main() -> None:
             "conflicting": sum(row["support"] == "conflicting" for row in rows),
         })
     summary_fields = ["hypothesis_id", "statement", "expected_direction", "evidence_lines", "measured", "significant", "supporting", "conflicting"]
-    write_tsv(tables / "hypothesis_summary.tsv", summaries, summary_fields)
+    write_tsv(tables / "hypothesis_summary.tsv", summary_fields, summaries)
     warnings = ["Hypothesis summaries organize configured evidence; they do not convert exploratory associations into causal validation."]
     (outdir / "hypotheses_summary.json").write_text(json.dumps({"schema_version": 1, "contrast_id": args.contrast_id, "claims": summaries, "warnings": warnings}, indent=2) + "\n", encoding="utf-8")
     rows_html = "".join(f"<tr><td>{h(row['hypothesis_id'])}</td><td>{h(row['statement'])}</td><td>{row['supporting']}</td><td>{row['conflicting']}</td><td>{row['significant']}</td></tr>" for row in summaries)

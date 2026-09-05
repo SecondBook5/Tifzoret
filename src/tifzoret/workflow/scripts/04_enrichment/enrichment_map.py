@@ -66,6 +66,7 @@ if str(SOURCE_ROOT) not in sys.path:
     sys.path.insert(0, str(SOURCE_ROOT))
 
 from tifzoret.config import load_project  # noqa: E402
+from tifzoret.workflow.common import read_tsv, write_tsv  # noqa: E402
 
 # House palette (matches theme_publication / curvature.py / consensus.py).
 NAVY = "#183B56"
@@ -87,23 +88,6 @@ DEFAULT_FDR = 0.05
 # labels are thinned so the network stays legible).
 MAX_DRAWN_LABELS = 24
 TINY = 1e-300
-
-
-def read_tsv(path: Path) -> list[dict[str, str]]:
-    """Read a tab-delimited file into a list of column-keyed dictionaries."""
-    with path.open(newline="", encoding="utf-8") as handle:
-        return list(csv.DictReader(handle, delimiter="\t"))
-
-
-def write_tsv(path: Path, rows: list[dict[str, Any]], fields: list[str]) -> None:
-    """Write ``rows`` as a tab-delimited file with a ``fields`` header, creating parents."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(
-            handle, fieldnames=fields, delimiter="\t", lineterminator="\n", extrasaction="ignore"
-        )
-        writer.writeheader()
-        writer.writerows(rows)
 
 
 def _float(value: str, default: float = float("nan")) -> float:
@@ -362,12 +346,12 @@ def main() -> None:
             "cluster_label": f"C{cluster + 1}",
         })
     node_rows.sort(key=lambda r: (r["cluster"], best_p(terms[r["term"]]), r["term"]))
-    write_tsv(tables_dir / "enrichment_map_nodes.tsv", node_rows, node_fields)
+    write_tsv(tables_dir / "enrichment_map_nodes.tsv", node_fields, node_rows)
 
     write_tsv(
         tables_dir / "enrichment_map_edges.tsv",
-        edge_rows,
         ["term_a", "term_b", "label_a", "label_b", "jaccard", "n_shared", "shared_genes"],
+        edge_rows,
     )
 
     # One row per community (theme).
@@ -389,8 +373,8 @@ def main() -> None:
         })
     write_tsv(
         tables_dir / "enrichment_map_clusters.tsv",
-        cluster_rows,
         ["cluster", "cluster_label", "size", "representative_term", "representative_label", "n_up", "n_down", "member_terms"],
+        cluster_rows,
     )
 
     drawn = draw_map(graph, terms, clusters, n_clusters, seed, figures_dir / "enrichment_map")

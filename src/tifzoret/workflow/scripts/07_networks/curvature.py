@@ -56,6 +56,7 @@ if str(SOURCE_ROOT) not in sys.path:
     sys.path.insert(0, str(SOURCE_ROOT))
 
 from tifzoret.config import load_project  # noqa: E402
+from tifzoret.workflow.common import read_tsv, write_tsv  # noqa: E402
 
 # Deterministic layout seed and a cap on how many nodes the network figure draws
 # (all TABLES cover the whole graph; only the drawn view is subset to stay legible).
@@ -65,21 +66,6 @@ DRAW_MAX_NODES = 400
 # positive/redundant, near-white midpoint) -- polarity, so a two-hue diverging ramp.
 CURVATURE_CMAP = "coolwarm"
 NAVY = "#183B56"
-
-
-def read_tsv(path: Path) -> list[dict[str, str]]:
-    """Read a tab-delimited file into a list of column-keyed dictionaries."""
-    with path.open(newline="", encoding="utf-8") as handle:
-        return list(csv.DictReader(handle, delimiter="\t"))
-
-
-def write_tsv(path: Path, rows: list[dict[str, Any]], fields: list[str]) -> None:
-    """Write ``rows`` as a tab-delimited file with a ``fields`` header, creating parent directories."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fields, delimiter="\t", lineterminator="\n", extrasaction="ignore")
-        writer.writeheader()
-        writer.writerows(rows)
 
 
 def build_graph(edges: list[dict[str, str]]) -> nx.Graph:
@@ -263,8 +249,8 @@ def main() -> None:
     edge_records.sort(key=lambda record: (record["curvature"] if not np.isnan(record["curvature"]) else float("inf")))
     write_tsv(
         tables_dir / "edge_curvature.tsv",
-        edge_records,
         ["source", "target", "source_symbol", "target_symbol", "source_module", "target_module", "weight", "curvature", "inter_module"],
+        edge_records,
     )
 
     # Gene-level mean curvature.
@@ -280,7 +266,7 @@ def main() -> None:
     ]
     gene_records.sort(key=lambda record: record["gene_symbol"])
     gene_curvature = {record["gene_id"]: record["mean_curvature"] for record in gene_records}
-    write_tsv(tables_dir / "gene_curvature.tsv", gene_records, ["gene_id", "gene_symbol", "module", "degree", "mean_curvature"])
+    write_tsv(tables_dir / "gene_curvature.tsv", ["gene_id", "gene_symbol", "module", "degree", "mean_curvature"], gene_records)
 
     # Per-module robustness scalar (mean intra-module edge curvature).
     module_members: dict[str, int] = defaultdict(int)
@@ -296,7 +282,7 @@ def main() -> None:
         for module, values in sorted(module_intra.items())
     ]
     module_records.sort(key=lambda record: (record["mean_intra_curvature"] if not np.isnan(record["mean_intra_curvature"]) else float("inf")), reverse=True)
-    write_tsv(tables_dir / "module_curvature.tsv", module_records, ["module", "n_genes", "n_intra_edges", "mean_intra_curvature"])
+    write_tsv(tables_dir / "module_curvature.tsv", ["module", "n_genes", "n_intra_edges", "mean_intra_curvature"], module_records)
 
     # Negative-curvature inter-module bridges (bottleneck genes linking modules).
     bridge_records = [
@@ -305,8 +291,8 @@ def main() -> None:
     ][:top_bridges]
     write_tsv(
         tables_dir / "curvature_bridges.tsv",
-        bridge_records,
         ["source", "target", "source_symbol", "target_symbol", "source_module", "target_module", "weight", "curvature", "inter_module"],
+        bridge_records,
     )
 
     figures_dir.mkdir(parents=True, exist_ok=True)

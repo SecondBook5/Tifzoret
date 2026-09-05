@@ -37,25 +37,11 @@ if str(SOURCE_ROOT) not in sys.path:
     sys.path.insert(0, str(SOURCE_ROOT))
 
 from tifzoret.config import load_project  # noqa: E402
+from tifzoret.workflow.common import read_tsv, write_tsv  # noqa: E402
 
 
 API = "https://string-db.org/api/tsv"
 STRING_NETWORK_BATCH_SIZE = 900
-
-
-def write_tsv(path: Path, rows: list[dict[str, Any]], fields: list[str]) -> None:
-    """Write ``rows`` as a tab-delimited file with a ``fields`` header, creating parent directories."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fields, delimiter="\t", lineterminator="\n", extrasaction="ignore")
-        writer.writeheader()
-        writer.writerows(rows)
-
-
-def read_tsv(path: Path) -> list[dict[str, str]]:
-    """Read a tab-delimited file into a list of column-keyed dictionaries."""
-    with path.open(newline="", encoding="utf-8") as handle:
-        return list(csv.DictReader(handle, delimiter="\t"))
 
 
 def sha256_bytes(value: bytes) -> str:
@@ -344,13 +330,13 @@ def network_for_direction(
     display_graph = graph.subgraph(selected).copy()
     display_nodes = [row for row in node_rows if row["preferredName"] in display_graph]
     display_edges = [row for row in edge_rows if row["source"] in display_graph and row["target"] in display_graph]
-    write_tsv(tables / f"string_{prefix}_input_genes.tsv", input_rows, ["gene_symbol", "direction", "log2_fold_change", "mapped", "string_id", "preferred_name", "connected"])
-    write_tsv(tables / f"string_{prefix}_unmapped_genes.tsv", unmapped, ["gene_symbol", "direction", "log2_fold_change", "mapped", "string_id", "preferred_name", "connected"])
-    write_tsv(tables / f"string_{prefix}_unconnected_genes.tsv", unconnected, ["gene_symbol", "direction", "log2_fold_change", "mapped", "string_id", "preferred_name", "connected"])
-    write_tsv(tables / f"string_{prefix}_nodes.tsv", node_rows, NODE_FIELDS)
-    write_tsv(tables / f"string_{prefix}_edges.tsv", edge_rows, ["source", "target", "combined_score", "neighborhood_score", "fusion_score", "cooccurrence_score", "coexpression_score", "experimental_score", "database_score", "textmining_score"])
-    write_tsv(tables / f"string_{prefix}_nodes_displayed.tsv", display_nodes, NODE_FIELDS)
-    write_tsv(tables / f"string_{prefix}_edges_displayed.tsv", display_edges, ["source", "target", "combined_score", "neighborhood_score", "fusion_score", "cooccurrence_score", "coexpression_score", "experimental_score", "database_score", "textmining_score"])
+    write_tsv(tables / f"string_{prefix}_input_genes.tsv", ["gene_symbol", "direction", "log2_fold_change", "mapped", "string_id", "preferred_name", "connected"], input_rows)
+    write_tsv(tables / f"string_{prefix}_unmapped_genes.tsv", ["gene_symbol", "direction", "log2_fold_change", "mapped", "string_id", "preferred_name", "connected"], unmapped)
+    write_tsv(tables / f"string_{prefix}_unconnected_genes.tsv", ["gene_symbol", "direction", "log2_fold_change", "mapped", "string_id", "preferred_name", "connected"], unconnected)
+    write_tsv(tables / f"string_{prefix}_nodes.tsv", NODE_FIELDS, node_rows)
+    write_tsv(tables / f"string_{prefix}_edges.tsv", ["source", "target", "combined_score", "neighborhood_score", "fusion_score", "cooccurrence_score", "coexpression_score", "experimental_score", "database_score", "textmining_score"], edge_rows)
+    write_tsv(tables / f"string_{prefix}_nodes_displayed.tsv", NODE_FIELDS, display_nodes)
+    write_tsv(tables / f"string_{prefix}_edges_displayed.tsv", ["source", "target", "combined_score", "neighborhood_score", "fusion_score", "cooccurrence_score", "coexpression_score", "experimental_score", "database_score", "textmining_score"], display_edges)
 
     stem = figures / f"string_{prefix}_network"
     if not display_graph.number_of_edges():
@@ -448,8 +434,8 @@ def enrichment_panel(genes: list[str], taxonomy: int, cache_dir: Path, offline: 
             break
     displayed.sort(key=lambda row: (row["category"], row["fdr"]))
     fields = ["category", "term", "description", "gene_count", "background_count", "fdr", "negative_log10_fdr", "input_genes"]
-    write_tsv(tables / "string_enrichment.tsv", normalized, fields)
-    write_tsv(tables / "string_enrichment_displayed.tsv", displayed, fields)
+    write_tsv(tables / "string_enrichment.tsv", fields, normalized)
+    write_tsv(tables / "string_enrichment_displayed.tsv", fields, displayed)
     stem = figures / "string_enrichment"
     if not displayed:
         empty_plot(stem, "STRING enrichment", "No STRING enrichment terms returned")
@@ -637,7 +623,7 @@ def directional_enrichment(
     )) if string_ids else []
     for row in rows:
         row["seed_group"] = seed_group
-    write_tsv(tables / f"string_{seed_group}_enrichment.tsv", rows, ENRICHMENT_FIELDS)
+    write_tsv(tables / f"string_{seed_group}_enrichment.tsv", ENRICHMENT_FIELDS, rows)
     seed_rows = [
         {
             "gene_symbol": symbol,
@@ -646,7 +632,7 @@ def directional_enrichment(
         }
         for symbol in seed_symbols
     ]
-    write_tsv(tables / f"string_{seed_group}_seed_genes.tsv", seed_rows, SEED_FIELDS)
+    write_tsv(tables / f"string_{seed_group}_seed_genes.tsv", SEED_FIELDS, seed_rows)
     return {
         "seed_group": seed_group,
         "seed_genes": len(seed_symbols),
