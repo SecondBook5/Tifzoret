@@ -87,3 +87,46 @@ def test_the_dag_builds_with_a_declared_family(tmp_path):
 def test_readme_stage_count_was_updated():
     text = (ROOT / "docs" / "README.md").read_text(encoding="utf-8")
     assert "35 stages" not in text
+
+
+def _de_patterns_block() -> str:
+    """The literal ``DE_PATTERNS = [...]`` list body from the Snakefile."""
+    text = (WORKFLOW / "Snakefile").read_text(encoding="utf-8")
+    return text.split("DE_PATTERNS = [", 1)[1].split("]", 1)[0]
+
+
+def test_de_patterns_declare_exactly_what_estimand_r_writes():
+    """``family_estimand``'s declared outputs must match what ``estimand.R`` writes.
+
+    ``de.R`` used to ``saveRDS`` a per-contrast DESeqDataSet, so ``DE_PATTERNS``
+    declared ``objects/deseq2.rds``. When ``de.R`` was retired the declaration
+    outlived its writer: ``estimand.R`` reads the *family* fit and persists no
+    object of its own, so every ``family_estimand`` job exited 0 and then died
+    with ``MissingOutputException`` on an empty ``objects/`` directory.
+
+    Asserting the two sides move together catches the omission in either
+    direction -- declaring an object nothing writes, or writing one nothing
+    declares (which Snakemake would not own, and so would not regenerate).
+    """
+    declares_object = "objects/" in _de_patterns_block()
+    writes_object = "saveRDS" in (
+        WORKFLOW / "scripts" / "03_differential" / "estimand.R"
+    ).read_text(encoding="utf-8")
+    assert declares_object == writes_object, (
+        f"DE_PATTERNS declares an objects/ output: {declares_object}; "
+        f"estimand.R calls saveRDS: {writes_object}"
+    )
+
+
+def test_the_canonical_fit_is_the_family_fit():
+    """Only ``family_fit`` persists a DESeqDataSet; consumers read that one.
+
+    One fit per family is the point of the family architecture -- estimands
+    extract from a shared dispersion and covariance -- so a per-estimand copy of
+    the same object would be both redundant and a second source of truth.
+    """
+    assert "saveRDS(dds, file.path(dirs$objects, \"deseq2.rds\"))" in (
+        WORKFLOW / "scripts" / "03_differential" / "family_fit.R"
+    ).read_text(encoding="utf-8")
+    advanced = (WORKFLOW / "rules" / "advanced.smk").read_text(encoding="utf-8")
+    assert 'analysis("de", "objects/deseq2.rds")' not in advanced

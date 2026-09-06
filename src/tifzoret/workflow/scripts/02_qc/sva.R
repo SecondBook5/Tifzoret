@@ -5,7 +5,7 @@
 # │ WHY:       Estimates hidden batch effects; compares DE with/without SVA adjustment
 # │            to quantify sensitivity (exploratory, per-contrast, opt-in)
 # │ HOW:       sva::sva on VST expression; refit DESeq2 design augmented with SVs
-# │ INPUTS:    de/objects/deseq2.rds, qc/objects/vst.rds, contrasts.tsv, config
+# │ INPUTS:    families/<id>/objects/deseq2.rds, qc/objects/vst.rds, contrasts.tsv, config
 # │ PRODUCES:  advanced/sva/{surrogate_variables.tsv, sva_de_sensitivity.tsv}
 # │ CALLED BY: rule contrast_sva (workflow/rules/advanced.smk)
 # │ ENV:       workflow/envs/r.yaml
@@ -39,9 +39,13 @@ if (n_sv > 0L) {
   augmented <- cbind(metadata, estimate$sv); names(augmented)[(ncol(metadata) + 1):ncol(augmented)] <- paste0("SV", seq_len(n_sv))
   design_terms <- paste(c(sub("^~", "", cfg$design$formula), paste0("SV", seq_len(n_sv))), collapse = " + ")
   refit <- dds; SummarizedExperiment::colData(refit) <- S4Vectors::DataFrame(augmented); DESeq2::design(refit) <- stats::as.formula(paste("~", design_terms)); refit <- DESeq2::DESeq(refit, quiet = TRUE)
-  pattern <- paste0("^", factor_name, "_", numerator, "_vs_", denominator, "$")
-  original_name <- grep(pattern, DESeq2::resultsNames(dds), value = TRUE)[1]; refit_name <- grep(pattern, DESeq2::resultsNames(refit), value = TRUE)[1]
-  original <- DESeq2::results(dds, name = original_name); adjusted <- DESeq2::results(refit, name = refit_name)
+  # Resolve the comparison by contrast rather than by coefficient name. The
+  # family fit keeps ONE reference for every estimand it serves, so a coefficient
+  # named "<factor>_<numerator>_vs_<denominator>" need not exist -- only the
+  # retired de.R, which releveled per contrast, could rely on that. This form is
+  # exact under any reference level and carries the requested direction.
+  contrast_spec <- c(factor_name, numerator, denominator)
+  original <- DESeq2::results(dds, contrast = contrast_spec); adjusted <- DESeq2::results(refit, contrast = contrast_spec)
   comparison <- data.frame(gene_id = rownames(original), log2_fold_change_original = original$log2FoldChange, adjusted_p_value_original = original$padj, log2_fold_change_sva = adjusted$log2FoldChange, adjusted_p_value_sva = adjusted$padj)
 }
 readr::write_tsv(sv_table, file.path(dirs$tables, "surrogate_variables.tsv")); readr::write_tsv(comparison, file.path(dirs$tables, "sva_de_sensitivity.tsv"), na = "NA")

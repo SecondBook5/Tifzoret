@@ -387,3 +387,38 @@ def test_named_views_render_primary_canonical_and_suffixed_secondary(tmp_path):
     primary_summary = json.loads((views_dir / "regulators_summary.json").read_text())
     assert occ_summary["method"].endswith("_unsigned_GTRD"), occ_summary["method"]
     assert "_unsigned_" not in primary_summary["method"], primary_summary["method"]
+
+
+@pytest.mark.skipif(shutil.which("Rscript") is None, reason="Rscript not available")
+def test_single_regulator_regulon_keeps_its_name(tmp_path):
+    """A regulon where exactly ONE regulator clears ``min_targets`` must render.
+
+    ``limma::topTable`` returns integer rownames ("1") for a single-row fit but
+    feature names for any larger one. Reading regulator identity back off those
+    rownames therefore worked for every multi-regulator fixture above and silently
+    renamed the only row here -- after which each lookup into the activity matrix
+    by that name died with "subscript out of bounds". The shipped publication
+    template is exactly this case: six regulators, of which only one clears the
+    default ``min_targets = 5``.
+    """
+    import copy
+    import csv
+
+    fixture = _build_fixture(tmp_path)
+    (fixture / "regulon_single.tsv").write_text(
+        "source\ttarget\tmor\n"
+        + "".join(f"SOLO\tGene{index:02d}\t1\n" for index in range(1, 7)),
+        encoding="utf-8",
+    )
+    data = copy.deepcopy(_BASE_YAML)
+    data["resources"]["regulon_edges"] = "regulon_single.tsv"
+    (fixture / "project_single.yaml").write_text(yaml.safe_dump(data, sort_keys=False))
+
+    outdir = tmp_path / "single"
+    _run_regulators(fixture, "project_single.yaml", outdir)
+
+    with (outdir / "tables" / "regulator_differential.tsv").open(
+        newline="", encoding="utf-8"
+    ) as handle:
+        rows = list(csv.DictReader(handle, delimiter="\t"))
+    assert [row["regulator"] for row in rows] == ["SOLO"], rows

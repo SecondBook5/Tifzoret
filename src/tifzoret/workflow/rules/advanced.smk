@@ -1,5 +1,9 @@
 rule contrast_sva:
-    input: dds=analysis("de", "objects/deseq2.rds"), vst=qc("objects/vst.rds"), contrasts=CONTRASTS, config=str(CONFIG_PATH), script=str(WORKFLOW_ROOT / "scripts" / "02_qc" / "sva.R"), utils=UTILS_R
+    # The fit comes from the contrast's family, not from a per-contrast copy --
+    # family_fit.R's is the canonical DESeqDataSet. Note it is NOT releveled per
+    # contrast the way de.R's was, so sva.R resolves its comparison by contrast
+    # rather than by coefficient name.
+    input: dds=lambda wildcards: str(RESULTS / "families" / FAMILY_OF_ESTIMAND[wildcards.contrast_id] / "objects" / "deseq2.rds"), vst=qc("objects/vst.rds"), contrasts=CONTRASTS, config=str(CONFIG_PATH), script=str(WORKFLOW_ROOT / "scripts" / "02_qc" / "sva.R"), utils=UTILS_R
     output: SVA_PATTERNS
     log: analysis("advanced/sva", "logs/sva.log")
     conda: R_ENV

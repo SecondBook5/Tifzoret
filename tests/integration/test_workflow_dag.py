@@ -256,3 +256,37 @@ def test_displayed_data_are_declared_outputs(tmp_path):
         "outputs (untracked side-effects -- deleting them would not reschedule "
         f"their rule):\n  " + "\n  ".join(sorted(undeclared))
     )
+
+
+# Rules only the ``full`` profile pulls in, on top of the publication set. They
+# read the DESeqDataSet and the co-expression graph, so they are the rules most
+# exposed to a change in where the canonical fit lives.
+FULL_PROFILE_RULES = frozenset({
+    "contrast_sva",
+    "contrast_wgcna",
+    "contrast_mediation",
+    "contrast_multilayer",
+})
+
+
+def test_full_profile_dag_resolves(tmp_path):
+    """The ``full`` profile assembles -- the only profile that plans sva/wgcna/
+    mediation/multilayer.
+
+    No template ships ``profile: full``, so before this test the four rules above
+    were unexercised by any dry-run: an input path with no producing rule would
+    have surfaced only when a user turned the profile on. ``contrast_sva`` is the
+    live case -- it consumes the DESeqDataSet, which moved from a per-contrast
+    copy to the family fit -- and a stale path there resolves to a "Missing input
+    files" DAG error, i.e. a non-zero exit here.
+    """
+    config_path = _publication_project(tmp_path)
+    data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    data["analysis"]["profile"] = "full"
+    config_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+    proc = _dry_run(config_path)
+    assert proc.returncode == 0, proc.stderr or proc.stdout
+    planned = _planned_rules(proc.stdout)
+    missing = FULL_PROFILE_RULES - planned
+    assert not missing, f"full-profile rules absent from DAG: {sorted(missing)}"

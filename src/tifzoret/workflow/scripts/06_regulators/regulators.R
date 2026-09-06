@@ -196,9 +196,14 @@ run_regulator_view <- function(regulon, warnings, out, force_unsigned = FALSE, p
   design <- stats::model.matrix(stats::as.formula(formula_text), metadata)
   coefficient <- grep(paste0("^contrast_group", make.names(numerator), "$"), colnames(design), value = TRUE)
   if (length(coefficient) != 1L) stop("Could not resolve regulator model coefficient", call. = FALSE)
-  fit <- limma::eBayes(limma::lmFit(signed_matrix, design))
-  differential <- limma::topTable(fit, coef = coefficient, number = Inf, sort.by = "P") %>%
-    tibble::rownames_to_column("regulator") %>%
+  fit <- limma::lmFit(signed_matrix, design)
+  # Carry the regulator names in limma's genes slot instead of reading them back
+  # off topTable's rownames: for a SINGLE-row fit topTable returns integer
+  # rownames ("1") rather than the feature name, so a one-regulator regulon lost
+  # its only identity and every later lookup into signed_matrix went out of
+  # bounds. The genes slot is row-count independent.
+  fit$genes <- data.frame(regulator = rownames(signed_matrix), stringsAsFactors = FALSE)
+  differential <- limma::topTable(limma::eBayes(fit), coef = coefficient, number = Inf, sort.by = "P") %>%
     mutate(contrast_id = args[["contrast-id"]], numerator = numerator, denominator = denominator, method = final_method)
   readr::write_tsv(differential, out$differential, na = "NA")
 

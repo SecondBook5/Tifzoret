@@ -254,8 +254,12 @@ FAMILY_PATTERNS = [
     family("family_summary.json"),
 ]
 
+# No objects/deseq2.rds here: estimand.R extracts from the family's shared fit
+# and persists nothing of its own, so the canonical DESeqDataSet lives once per
+# family (FAMILY_PATTERNS above). de.R used to save a per-contrast copy; the
+# declaration outlived the writer and every family_estimand job died on an empty
+# objects/ directory. Anything needing the fit reads families/<id>/objects.
 DE_PATTERNS = [
-    analysis("de", "objects/deseq2.rds"),
     analysis("de", "tables/de_results.tsv"),
     analysis("de", "tables/volcano_displayed.tsv"),
     analysis("de", "tables/de_heatmap_displayed.tsv"),
