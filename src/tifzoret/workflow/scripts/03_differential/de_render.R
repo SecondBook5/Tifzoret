@@ -1,6 +1,5 @@
 # Differential expression rendering — figures and displayed tables.
-# Moved from de.R to be shared by both de.R (coefficient contrasts) and
-# estimand.R (cell-based estimands).
+# Shared rendering functions for all estimands (cell-means arithmetic).
 
 # ---------------------------------------------------------------------------
 # Publication "clipped" volcano (opt-in via figures.de.volcano_style: clipped).
@@ -185,7 +184,7 @@ histogram_table <- function(values, bins = 40L) {
 }
 
 # Single entry point for rendering all DE outputs (figures + displayed tables).
-# Called by de.R and estimand.R with their respective result tables.
+# Called by estimand.R with the DE result table.
 render_de_outputs <- function(result_table, cfg, dds, metadata, dirs,
                               numerator, denominator, display_samples,
                               display_group_col, display_subtitle,

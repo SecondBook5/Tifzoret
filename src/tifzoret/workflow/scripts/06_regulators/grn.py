@@ -51,20 +51,13 @@ if str(SOURCE_ROOT) not in sys.path:
 
 from tifzoret.config import load_project  # noqa: E402
 from tifzoret.figures import normalized_gene_panels  # noqa: E402
+from tifzoret.workflow.common import write_tsv  # noqa: E402
 
 
 def read_tsv(path: Path) -> list[dict[str, str]]:
     """Read a tab-delimited file into a list of column-keyed dictionaries."""
     with path.open(newline="", encoding="utf-8") as handle:
         return list(csv.DictReader(handle, delimiter="\t"))
-
-
-def write_tsv(path: Path, rows: list[dict[str, Any]], fields: list[str]) -> None:
-    """Write ``rows`` as a tab-delimited file with a ``fields`` header, creating parent directories."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fields, delimiter="\t", lineterminator="\n", extrasaction="ignore")
-        writer.writeheader(); writer.writerows(rows)
 
 
 def numeric(value: object, default: float) -> float:
@@ -394,13 +387,13 @@ def main() -> None:
             "diffusion_probability": probs.get(node, ""),
             "degree": undirected.degree(node),
         })
-    write_tsv(tables / "grn_nodes_displayed.tsv", node_rows, [
+    write_tsv(tables / "grn_nodes_displayed.tsv", [
         "node", "node_type", "program", "community", "value", "padj",
         "log2_fold_change", "adjusted_p_value", "activity_logfc", "diffusion_probability", "degree",
-    ])
-    write_tsv(tables / "grn_edges_displayed.tsv", edge_rows, [
+    ], node_rows)
+    write_tsv(tables / "grn_edges_displayed.tsv", [
         "source", "target", "mode_of_regulation", "likelihood", "regulation", "target_log2fc", "target_padj", "weight",
-    ])
+    ], edge_rows)
 
     # Program separation test. Prefer the exact target-overlap statistic used by
     # the reference radial subtitle; otherwise the label-shuffle modularity test.
@@ -417,7 +410,7 @@ def main() -> None:
             permutations.append(program_modularity(undirected, dict(zip(nodes, shuffled))))
         p_value = (1 + sum(value >= observed for value in permutations)) / (len(permutations) + 1)
         separation = [{"observed_program_modularity": observed, "permutation_p_value": p_value, "permutations": len(permutations), "communities": len(community_members)}]
-    write_tsv(tables / "grn_program_separation_test.tsv", separation, list(separation[0]))
+    write_tsv(tables / "grn_program_separation_test.tsv", list(separation[0]), separation)
 
     ordered_programs = []
     if used_diffusion:
@@ -435,7 +428,7 @@ def main() -> None:
         "targets": sum(row["program"] == program and row["node_type"] == "target" for row in node_rows),
     } for program in ordered_programs]
     sector_rows = [row for row in sector_rows if row["nodes"] > 0]
-    write_tsv(tables / "grn_sector_summary.tsv", sector_rows, ["program", "color", "target_count", "nodes", "regulators", "targets"])
+    write_tsv(tables / "grn_sector_summary.tsv", ["program", "color", "target_count", "nodes", "regulators", "targets"], sector_rows)
 
     # Rectangular breadth-preserving matplotlib view (auditable secondary).
     regulators = [node for node in graph if node in top_regulators]
