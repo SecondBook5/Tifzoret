@@ -10,18 +10,19 @@ This template demonstrates a **2×2 factorial design** with treatment and genoty
 
 ## Estimands
 
-The `project.yaml` defines a single family with four estimands:
+The `project.yaml` defines a single family with five estimands:
 
 1. **main_treatment** - Treatment effect averaged over both genotypes
 2. **main_genotype** - Genotype effect averaged over both treatment conditions
 3. **interaction** - Treatment × Genotype interaction (does treatment work differently in mutant?)
 4. **simple_treated** - Simple effect of genotype in treated samples only
+5. **simple_control** - Simple effect of genotype in control samples only
 
 ## Interpretation
 
 - **Main effects** answer: "Does treatment matter (ignoring genotype)?" and "Does genotype matter (ignoring treatment)?"
 - **Interaction** answers: "Does the treatment effect depend on genotype?" A significant interaction means the treatment works differently in WT vs. mutant
-- **Simple effect** examines genotype differences only in the treated condition
+- **Simple effects** examine genotype differences within one treatment condition. Their difference IS the interaction estimand, making the decomposition auditable. The two simple effects are also the arms the opt-in `factorial` module renders
 
 ## Data
 

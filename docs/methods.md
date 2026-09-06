@@ -51,18 +51,9 @@ and FDR-significant genes are split into a five-class scheme
 (`significant_up`, `significant_down`, `padj_only`, `lfc_only`,
 `not_significant`) by the configured FDR and |log2FC| thresholds.
 
-Three contrast types are first-class:
-
-- **pairwise** — a named two-level `factor_numerator_vs_denominator` coefficient
-  (the historical behavior, reproduced exactly);
-- **coefficient** — an interaction/difference-in-differences coefficient from a
-  factorial design (relevel + refit + shrink), which displays all design groups
-  colored by `figures.group` rather than the two-level factor;
-- **omnibus** — a DESeq2 likelihood-ratio test of a multi-level factor.
-
-Any pairwise contrast can be independently confirmed with an edgeR
+Any pairwise estimand can be independently confirmed with an edgeR
 quasi-likelihood fit whose fold changes are reported next to the DESeq2 result.
-When several pairwise contrasts are declared, a cross-contrast **consensus** step
+When several pairwise estimands are declared, a cross-contrast **consensus** step
 tabulates each gene's per-contrast significance and signed direction, reports the
 genes that agree in direction across a configurable number of contrasts, and
 renders an UpSet-style intersection plot with a signed-direction heatmap. An

@@ -111,9 +111,9 @@ Available module flags (see [`configuration.md`](configuration.md) for the full 
 **Conditional stages:** Some stages activate automatically when their trigger data is present:
 - `study_batch` — runs only if `analysis.batch` is set and `samples.tsv` has that column
 - `contrast_de_confirm` — runs only if `analysis.modules.de_confirm: true`
-- `contrast_omnibus` — runs only for contrasts with `type: omnibus` in `contrasts.tsv`
 - `contrast_spia` — runs only if `analysis.modules.spia: true` and KEGG is available
 - `study_deconvolution` — runs only if `resources.deconvolution_signature` or `resources.deconvolution_preset` is provided
+- `family_term_test` — runs automatically for every family; derives nested likelihood-ratio tests from the design (replaces the retired `omnibus` contrast type)
 
 If the trigger isn't present, Snakemake skips the stage without error.
 

@@ -222,15 +222,22 @@ VARIANCE_PARTITION_OUTPUTS = [
 ]
 
 # Factorial interaction views (factorial module, study-level; reads the QC
-# symbol-keyed VST expression and the two configured signed-contrast DE tables).
+# symbol-keyed VST expression plus three estimands from ONE family).
 # Opt-in, off in every profile; requires qc + de and a settings.factorial block
-# naming the two crossed factors and the two effect contrasts (enforced in
-# load_project). effect_x/effect_y select which contrasts' DE tables the rule
-# consumes; the disabled sentinel keeps the static path well-formed when off.
+# naming the family, its two arm estimands and its interaction estimand (enforced
+# in load_project). The keys read here are exactly the keys load_project
+# validates -- they disagreed before (this read effect_x/effect_y while
+# load_project demanded family/arms/interaction), which made the module
+# unreachable: a valid config produced the disabled sentinel and a DAG error.
+# The sentinels keep the static paths well-formed when the module is off.
 FACTORIAL_SETTINGS = (CONFIG.get("analysis", {}).get("settings", {}) or {}).get("factorial", {}) or {}
-FACTORIAL_EFFECT_X = FACTORIAL_SETTINGS.get("effect_x") or "__factorial_disabled__"
-FACTORIAL_EFFECT_Y = FACTORIAL_SETTINGS.get("effect_y") or "__factorial_disabled__"
+FACTORIAL_FAMILY = FACTORIAL_SETTINGS.get("family") or "__factorial_disabled__"
+_FACTORIAL_ARMS = list(FACTORIAL_SETTINGS.get("arms") or [])
+FACTORIAL_ARM_A = (_FACTORIAL_ARMS[0] if len(_FACTORIAL_ARMS) > 0 else "__factorial_disabled__")
+FACTORIAL_ARM_B = (_FACTORIAL_ARMS[1] if len(_FACTORIAL_ARMS) > 1 else "__factorial_disabled__")
+FACTORIAL_INTERACTION = FACTORIAL_SETTINGS.get("interaction") or "__factorial_disabled__"
 FACTORIAL_OUTPUTS = [
+    factorial("tables/interaction_synthesis.tsv"),
     factorial("tables/effect_vs_effect_displayed.tsv"),
     factorial("tables/interaction_profile_displayed.tsv"),
     factorial("tables/group_expression_displayed.tsv"),

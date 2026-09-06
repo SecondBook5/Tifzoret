@@ -35,6 +35,13 @@ analysis:
         - id: simple_treated
           expression: "(treated,mutant) - (treated,wt)"
           label: "Genotype effect in treated samples only"
+        # The two simple effects are the interaction's arms: their difference IS
+        # the interaction estimand above. Declaring both makes that decomposition
+        # auditable, and gives the opt-in `factorial` module the two arms it
+        # renders against each other.
+        - id: simple_control
+          expression: "(control,mutant) - (control,wt)"
+          label: "Genotype effect in control samples only"
   profile: standard
 resources:
   cache: ~/.cache/tifzoret/resources

@@ -38,7 +38,14 @@ if (n_sv > 0L) {
   sv_table <- cbind(sv_table, as.data.frame(estimate$sv)); names(sv_table)[-1] <- paste0("SV", seq_len(n_sv))
   augmented <- cbind(metadata, estimate$sv); names(augmented)[(ncol(metadata) + 1):ncol(augmented)] <- paste0("SV", seq_len(n_sv))
   design_terms <- paste(c(sub("^~", "", cfg$design$formula), paste0("SV", seq_len(n_sv))), collapse = " + ")
-  refit <- dds; SummarizedExperiment::colData(refit) <- S4Vectors::DataFrame(augmented); DESeq2::design(refit) <- stats::as.formula(paste("~", design_terms)); refit <- DESeq2::DESeq(refit, quiet = TRUE)
+  refit <- dds; SummarizedExperiment::colData(refit) <- S4Vectors::DataFrame(augmented); DESeq2::design(refit) <- stats::as.formula(paste("~", design_terms))
+  # Share the engine's dispersion fallback rather than calling DESeq() bare. The
+  # SV-augmented refit hits the same parametric-trend failure the canonical fit
+  # guards against ("all gene-wise dispersion estimates are within 2 orders of
+  # magnitude..."), and because this is an exploratory sensitivity module, an
+  # unguarded refit aborted the ENTIRE workflow on data the main DE path handled
+  # fine.
+  refit <- fit_deseq_with_dispersion_fallback(refit)$dds
   # Resolve the comparison by contrast rather than by coefficient name. The
   # family fit keeps ONE reference for every estimand it serves, so a coefficient
   # named "<factor>_<numerator>_vs_<denominator>" need not exist -- only the

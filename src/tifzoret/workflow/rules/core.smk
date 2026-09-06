@@ -187,15 +187,25 @@ rule study_variance_partition:
         "--outdir {RESULTS}/variance_partition > {log:q} 2>&1"
 
 rule study_factorial:
+    # All three estimands come from the SAME family, which is what makes the
+    # interaction SE covariance-aware; contrast_matrix + coefficient_covariance
+    # are what make that SE re-derivable from published files.
     input:
         vst_expression=qc("tables/vst_expression.tsv"),
         samples=SAMPLES,
-        de_x=analysis("de", "tables/de_results.tsv").format(contrast_id=FACTORIAL_EFFECT_X),
-        de_y=analysis("de", "tables/de_results.tsv").format(contrast_id=FACTORIAL_EFFECT_Y),
+        de_arm_a=analysis("de", "tables/de_results.tsv").format(contrast_id=FACTORIAL_ARM_A),
+        de_arm_b=analysis("de", "tables/de_results.tsv").format(contrast_id=FACTORIAL_ARM_B),
+        de_interaction=analysis("de", "tables/de_results.tsv").format(contrast_id=FACTORIAL_INTERACTION),
+        contrast_matrix=str(RESULTS / "families" / FACTORIAL_FAMILY / "tables" / "contrast_matrix.tsv"),
+        covariance=str(RESULTS / "families" / FACTORIAL_FAMILY / "tables" / "coefficient_covariance.tsv"),
         config=str(CONFIG_PATH),
         script=str(WORKFLOW_ROOT / "scripts" / "03_differential" / "factorial.R"),
         utils=UTILS_R
+    params:
+        arms=f"{FACTORIAL_ARM_A},{FACTORIAL_ARM_B}",
+        interaction=FACTORIAL_INTERACTION
     output:
+        synthesis=factorial("tables/interaction_synthesis.tsv"),
         effect=factorial("tables/effect_vs_effect_displayed.tsv"),
         profile=factorial("tables/interaction_profile_displayed.tsv"),
         expression=factorial("tables/group_expression_displayed.tsv"),
@@ -213,7 +223,10 @@ rule study_factorial:
     shell:
         "Rscript --vanilla {input.script} --project-config {input.config:q} "
         "--vst-expression {input.vst_expression:q} --samples {input.samples:q} "
-        "--de-x {input.de_x:q} --de-y {input.de_y:q} "
+        "--de-arm-a {input.de_arm_a:q} --de-arm-b {input.de_arm_b:q} "
+        "--de-interaction {input.de_interaction:q} "
+        "--contrast-matrix {input.contrast_matrix:q} --covariance {input.covariance:q} "
+        "--arms {params.arms:q} --interaction {params.interaction:q} "
         "--outdir {RESULTS}/factorial > {log:q} 2>&1"
 
 rule family_fit:

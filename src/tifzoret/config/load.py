@@ -470,6 +470,25 @@ def load_project(config_path: str | Path) -> ResolvedProject:
     # The enrichment map clusters enriched terms from the pathways stage outputs.
     if modules["enrichment_map"] and not modules["pathways"]:
         errors.append("modules.enrichment_map requires modules.pathways")
+    # The multilayer network fuses three upstream layers, so it consumes their
+    # tables directly (see rule contrast_multilayer): the regulators GRN edges,
+    # the WGCNA hubs, and BOTH STRING edge tables from networks. Without these
+    # checks a config that turns multilayer on and any producer off still
+    # validates, and Snakemake then runs the disabled producer anyway to satisfy
+    # multilayer's inputs -- unconfigured, because its own requirement checks were
+    # skipped -- which surfaces as an opaque mid-run rule failure instead of a
+    # config error. Note this makes multilayer transitively require
+    # providers.string and species.taxonomy_id through networks.
+    if modules["multilayer"]:
+        for producer, reason in (
+            ("regulators", "the GRN edge table"),
+            ("wgcna", "the co-expression hub table"),
+            ("networks", "both STRING edge tables"),
+        ):
+            if not modules[producer]:
+                errors.append(
+                    f"modules.multilayer requires modules.{producer} because it fuses {reason}"
+                )
     # The factorial views synthesize interaction views from a family's fitted
     # estimands (spec §F): it requires qc (VST expression), de (family path), and
     # references a family with arm and interaction estimands.

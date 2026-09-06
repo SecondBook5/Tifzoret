@@ -73,21 +73,9 @@ readr::write_tsv(
 # ---------------------------------------------------------------------------
 dds <- DESeq2::DESeqDataSetFromMatrix(
   countData = counts[keep, , drop = FALSE], colData = metadata, design = design_formula)
-dispersion_fit <- "parametric"
-dds <- tryCatch(
-  DESeq2::DESeq(dds, fitType = "parametric", quiet = TRUE),
-  error = function(error) {
-    if (!grepl("all gene-wise dispersion estimates are within", conditionMessage(error), fixed = TRUE)) {
-      stop(error)
-    }
-    message("Parametric dispersion trend unavailable; using gene-wise dispersion estimates.")
-    dispersion_fit <<- "gene-wise"
-    fallback <- DESeq2::estimateSizeFactors(dds)
-    fallback <- DESeq2::estimateDispersionsGeneEst(fallback, quiet = TRUE)
-    DESeq2::dispersions(fallback) <- S4Vectors::mcols(fallback)$dispGeneEst
-    DESeq2::nbinomWaldTest(fallback, quiet = TRUE)
-  }
-)
+fitted <- fit_deseq_with_dispersion_fallback(dds)
+dds <- fitted$dds
+dispersion_fit <- fitted$dispersion_fit
 saveRDS(dds, file.path(dirs$objects, "deseq2.rds"))
 coefficient_names <- DESeq2::resultsNames(dds)
 

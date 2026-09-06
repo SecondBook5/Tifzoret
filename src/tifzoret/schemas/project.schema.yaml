@@ -352,6 +352,17 @@ properties:
               # The interaction estimand_id whose statistic ranks genes for the
               # profile/expression views (covariance-aware difference-of-differences).
               interaction: {type: string, minLength: 1}
+              # The two crossed sample columns behind the arms. The
+              # interaction-profile view plots one line per level of the first
+              # across levels of the second, so without them that view -- one of
+              # the module's three -- can only render a placeholder. Also the
+              # fallback grouping when figures.group is absent.
+              factors:
+                type: array
+                minItems: 2
+                maxItems: 2
+                uniqueItems: true
+                items: {type: string, minLength: 1}
               # Explicit genes shown in the profile/expression views. Omit to
               # auto-select by the interaction statistic.
               genes:

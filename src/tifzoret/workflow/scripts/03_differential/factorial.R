@@ -5,8 +5,11 @@
 # │ WHY:       Makes interaction (difference-of-differences) legible: genes whose
 # │            response to one factor depends on the level of the other
 # │ HOW:       Three views: LFC_x vs LFC_y scatter, group-mean profiles, per-sample expression
-# │ INPUTS:    qc/vst_expression.tsv, samples.tsv, de/{effect_x, effect_y}_results.tsv, config
-# │ PRODUCES:  factorial/figures/{effect_vs_effect, interaction_profile, group_expression}.png
+# │ INPUTS:    qc/tables/vst_expression.tsv, samples.tsv, the two arm estimands' and the
+# │            interaction estimand's de_results.tsv, families/<id>/tables/{contrast_matrix,
+# │            coefficient_covariance}.tsv, config
+# │ PRODUCES:  factorial/figures/{effect_vs_effect, interaction_profile, group_expression}.png,
+# │            factorial/tables/{*_displayed, interaction_synthesis}.tsv
 # │ CALLED BY: rule study_factorial (workflow/rules/core.smk)
 # │ ENV:       workflow/envs/r.yaml
 # └─────────────────────────────────────────────────────────────────
@@ -15,8 +18,8 @@
 # INTERACTION legible, rather than reading it off a single pairwise contrast.
 # A 2x2 study (two two-level factors, e.g. genotype x tumor) asks "does the
 # effect of one factor depend on the level of the other?" -- a difference of
-# differences. This module renders that question three ways from the two
-# configured signed-contrast "arms" (effect_x, effect_y) and the QC
+# differences. This module renders that question three ways from the family's two
+# configured "arm" estimands, its interaction estimand, and the QC
 # variance-stabilized expression:
 #
 #   1. effect_vs_effect  -- each gene's log2 fold-change in arm X against arm Y,
@@ -28,24 +31,28 @@
 #   3. group_expression -- per-sample expression of those genes across every
 #      crossed group, with group means, as the raw distribution behind (2).
 #
-# Study-level and display-only: it adds no statistics. It reuses the two arms'
-# DESeq2 fold-changes exactly as computed; the "interaction" it highlights is the
-# descriptive difference of those two shrunken effects, NOT a refit interaction
-# coefficient (that is the coefficient-contrast DE table, rendered elsewhere).
+# Study-level and display-only: it adds no statistics of its own. All three
+# estimands -- both arms and the interaction -- come from ONE family fit, so the
+# interaction this module highlights is the family's formal difference-of-
+# differences estimand, whose SE is covariance-aware:
+#
+#   Var(c_b'B - c_a'B) = c_a' S c_a + c_b' S c_b - 2 c_a' S c_b
+#
+# The cross term is the whole point. Differencing two INDEPENDENTLY fitted
+# contrasts and adding their variances (the sqrt(se_a^2 + se_b^2) that this
+# module used to compute from two separate DE tables) drops it, and since arms
+# sharing a fit are correlated that answer is simply wrong -- anti-conservative
+# when the covariance is negative, needlessly conservative when positive. The
+# naive value is still written alongside the correct one so the gap is auditable
+# per gene (see tables/interaction_synthesis.tsv).
 
 script_arg <- grep("^--file=", commandArgs(FALSE), value = TRUE)[1]
 script_path <- normalizePath(sub("^--file=", "", script_arg), mustWork = TRUE)
 source(file.path(dirname(script_path), "..", "utils.R"), local = FALSE)
 
-# Backward compatibility: support both old (--de-x/--de-y) and new (--family-dir/--arms/--interaction) interfaces
-all_args <- commandArgs(trailingOnly = TRUE)
-using_new_interface <- any(grepl("^--family-dir", all_args))
-
-if (using_new_interface) {
-  args <- parse_cli(c("project-config", "vst-expression", "samples", "family-dir", "arms", "interaction", "outdir"))
-} else {
-  args <- parse_cli(c("project-config", "vst-expression", "samples", "de-x", "de-y", "outdir"))
-}
+args <- parse_cli(c("project-config", "vst-expression", "samples",
+                    "de-arm-a", "de-arm-b", "de-interaction",
+                    "contrast-matrix", "covariance", "arms", "interaction", "outdir"))
 
 cfg <- read_project(args[["project-config"]])
 dirs <- ensure_output_dirs(args$outdir)
@@ -55,21 +62,12 @@ if (is.null(settings)) {
   stop("factorial module requires analysis.settings.factorial", call. = FALSE)
 }
 
-if (using_new_interface) {
-  # New interface: family-based
-  arm_ids <- strsplit(args$arms, ",", fixed = TRUE)[[1]]
-  if (length(arm_ids) != 2L) {
-    stop("factorial requires exactly two arm estimand IDs, got: ", paste(arm_ids, collapse = ", "), call. = FALSE)
-  }
-  interaction_id <- args$interaction
-} else {
-  # Old interface: direct DE tables (backward compatibility)
-  arm_ids <- c(settings$effect_x, settings$effect_y)
-  if (is.null(arm_ids[1]) || is.null(arm_ids[2])) {
-    stop("factorial with old interface requires analysis.settings.factorial.effect_x/effect_y", call. = FALSE)
-  }
-  interaction_id <- NULL
+arm_ids <- trimws(strsplit(args$arms, ",", fixed = TRUE)[[1]])
+if (length(arm_ids) != 2L) {
+  stop("factorial requires exactly two arm estimand IDs, got: ",
+       paste(arm_ids, collapse = ", "), call. = FALSE)
 }
+interaction_id <- args$interaction
 
 explicit_genes <- if (is.null(settings$genes)) character(0) else as.character(unlist(settings$genes, use.names = FALSE))
 top_genes <- if (is.null(settings$top_genes)) 16L else as.integer(settings$top_genes)
@@ -98,91 +96,90 @@ if (!nrow(samples)) stop("no samples overlap the VST expression columns", call. 
 # Grouping column for the four-group view: the study's configured figures.group
 group_col <- cfg$figures$group
 if (is.null(group_col) || !group_col %in% colnames(samples)) {
-  if (using_new_interface) {
-    stop("factorial requires figures.group in project config for the interaction profile view", call. = FALSE)
+  # Fall back to the crossed factors when figures.group is absent or does not
+  # name a real sample column: the four-group views need SOME grouping, and the
+  # cross of the two configured factors is exactly the grouping they describe.
+  factors <- if (!is.null(settings$factors)) as.character(unlist(settings$factors, use.names = FALSE)) else NULL
+  if (!is.null(factors) && length(factors) == 2L && all(factors %in% colnames(samples))) {
+    group_col <- ".factorial_group"
+    samples[[group_col]] <- paste(samples[[factors[1]]], samples[[factors[2]]], sep = "_")
+    warnings <- c(warnings, "figures.group absent; grouping by the crossed factors")
   } else {
-    # Old interface: create grouping from factors if present
-    factors <- if (!is.null(settings$factors)) as.character(unlist(settings$factors, use.names = FALSE)) else NULL
-    if (!is.null(factors) && length(factors) == 2L) {
-      group_col <- ".factorial_group"
-      samples[[group_col]] <- paste(samples[[factors[1]]], samples[[factors[2]]], sep = "_")
-      warnings <- c(warnings, "figures.group absent; grouping by the crossed factors")
-    } else {
-      stop("factorial requires figures.group or settings.factorial.factors", call. = FALSE)
-    }
+    stop("factorial requires figures.group or settings.factorial.factors naming two sample columns", call. = FALSE)
   }
 }
 
-if (using_new_interface) {
-  # New interface: read from family directory
-  family_de_path <- file.path(args[["family-dir"]], "tables", "de_results.tsv")
-  if (!file.exists(family_de_path)) {
-    stop("family de_results.tsv not found: ", family_de_path, call. = FALSE)
-  }
-  family_de <- readr::read_tsv(family_de_path, show_col_types = FALSE, progress = FALSE)
-
-  read_estimand <- function(de_table, estimand_id) {
-    rows <- de_table[de_table$estimand_id == estimand_id, , drop = FALSE]
-    if (!nrow(rows)) stop("estimand not found in de_results.tsv: ", estimand_id, call. = FALSE)
-    num_col <- function(name) if (name %in% names(rows)) suppressWarnings(as.numeric(rows[[name]])) else NA_real_
-    tibble::tibble(
-      gene_id = as.character(rows$gene_id),
-      gene_symbol = as.character(rows$gene_symbol),
-      lfc = num_col("log2_fold_change"),
-      se = num_col("lfc_se"),
-      base_mean = num_col("base_mean"),
-      statistic = num_col("statistic"),
-      padj = num_col("adjusted_p_value")
-    ) %>%
-      dplyr::filter(!is.na(gene_symbol), gene_symbol != "") %>%
-      dplyr::distinct(gene_symbol, .keep_all = TRUE)
-  }
-  de_arm_a <- read_estimand(family_de, arm_ids[1])
-  de_arm_b <- read_estimand(family_de, arm_ids[2])
-  de_interaction <- read_estimand(family_de, interaction_id)
-
-  # Read coefficient covariance for the synthesis table
-  covariance_path <- file.path(args[["family-dir"]], "tables", "coefficient_covariance.tsv")
-  if (!file.exists(covariance_path)) {
-    stop("coefficient_covariance.tsv not found: ", covariance_path, call. = FALSE)
-  }
-  covariance <- readr::read_tsv(covariance_path, show_col_types = FALSE, progress = FALSE)
-} else {
-  # Old interface: read from direct DE table files
-  read_de <- function(path) {
-    de <- readr::read_tsv(normalizePath(path, mustWork = TRUE), show_col_types = FALSE, progress = FALSE)
-    if (!"gene_symbol" %in% names(de)) stop("DE table lacks gene_symbol: ", path, call. = FALSE)
-    num_col <- function(name) if (name %in% names(de)) suppressWarnings(as.numeric(de[[name]])) else NA_real_
-    tibble::tibble(
-      gene_id = if ("gene_id" %in% names(de)) as.character(de$gene_id) else as.character(de$gene_symbol),
-      gene_symbol = as.character(de$gene_symbol),
-      lfc = num_col("log2_fold_change"),
-      se = num_col("lfc_se"),
-      base_mean = num_col("base_mean"),
-      statistic = NA_real_,  # Not available in old interface
-      padj = num_col("adjusted_p_value")
-    ) %>%
-      dplyr::filter(!is.na(gene_symbol), gene_symbol != "") %>%
-      dplyr::distinct(gene_symbol, .keep_all = TRUE)
-  }
-  de_arm_a <- read_de(args[["de-x"]])
-  de_arm_b <- read_de(args[["de-y"]])
-  # Synthesize interaction from arm difference (naive, no covariance)
-  de_interaction <- dplyr::inner_join(
-    dplyr::select(de_arm_a, gene_symbol, lfc_a = lfc, se_a = se),
-    dplyr::select(de_arm_b, gene_symbol, lfc_b = lfc, se_b = se),
-    by = "gene_symbol"
+# One reader for all three estimands. Each is a family_estimand output, so they
+# share a schema and -- critically -- a fit: the interaction's lfc_se already
+# carries the cross-covariance term, computed once by estimand.R from the
+# family's Sigma. Nothing is recomputed here.
+read_estimand <- function(path, estimand_id) {
+  de <- readr::read_tsv(normalizePath(path, mustWork = TRUE),
+                        show_col_types = FALSE, progress = FALSE)
+  if (!"gene_symbol" %in% names(de)) stop("DE table lacks gene_symbol: ", path, call. = FALSE)
+  num_col <- function(name) if (name %in% names(de)) suppressWarnings(as.numeric(de[[name]])) else NA_real_
+  tibble::tibble(
+    gene_id = if ("gene_id" %in% names(de)) as.character(de$gene_id) else as.character(de$gene_symbol),
+    gene_symbol = as.character(de$gene_symbol),
+    lfc = num_col("log2_fold_change"),
+    se = num_col("lfc_se"),
+    base_mean = num_col("base_mean"),
+    statistic = num_col("statistic"),
+    padj = num_col("adjusted_p_value")
   ) %>%
-    dplyr::mutate(
-      gene_id = gene_symbol,
-      lfc = lfc_b - lfc_a,
-      se = sqrt(dplyr::coalesce(se_a, 0)^2 + dplyr::coalesce(se_b, 0)^2),
-      statistic = ifelse(se > 0, (lfc_b - lfc_a) / se, NA_real_),
-      base_mean = NA_real_,
-      padj = NA_real_
-    ) %>%
-    dplyr::select(gene_id, gene_symbol, lfc, se, base_mean, statistic, padj)
-  covariance <- NULL
+    dplyr::filter(!is.na(gene_symbol), gene_symbol != "") %>%
+    dplyr::distinct(gene_symbol, .keep_all = TRUE)
+}
+de_arm_a <- read_estimand(args[["de-arm-a"]], arm_ids[1])
+de_arm_b <- read_estimand(args[["de-arm-b"]], arm_ids[2])
+de_interaction <- read_estimand(args[["de-interaction"]], interaction_id)
+
+# ---------------------------------------------------------------------------
+# The cross-covariance term, Cov(c_a'B, c_b'B) = c_a' S c_b, assembled from the
+# two files the family fit already publishes: contrast_matrix.tsv (one row per
+# estimand, one column per model coefficient -- the c vectors) and
+# coefficient_covariance.tsv (long-form S per gene). Recomputing it here from
+# published files rather than reading a stored scalar is deliberate: it means the
+# synthesis table can be re-derived, and therefore audited, from the engine's own
+# outputs (spec §11 test 3).
+#
+# family_fit.R exports S only for the top `covariance_genes` by base mean
+# (default 2000), so cov_arm_a_arm_b is NA outside that set. That is a
+# presentation limit on this audit column only -- interaction_se itself is exact
+# for every gene, because estimand.R computes it during the fit.
+# ---------------------------------------------------------------------------
+contrast_matrix <- readr::read_tsv(normalizePath(args[["contrast-matrix"]], mustWork = TRUE),
+                                   show_col_types = FALSE, progress = FALSE)
+covariance <- readr::read_tsv(normalizePath(args$covariance, mustWork = TRUE),
+                              show_col_types = FALSE, progress = FALSE)
+
+contrast_vector <- function(estimand_id) {
+  row <- contrast_matrix[contrast_matrix$estimand_id == estimand_id, , drop = FALSE]
+  if (!nrow(row)) stop("estimand absent from contrast_matrix.tsv: ", estimand_id, call. = FALSE)
+  # Everything after the provenance columns is a coefficient weight.
+  provenance <- c("estimand_id", "label", "role", "atom_kind", "expression", "cell_weights")
+  weights <- row[1, setdiff(names(row), provenance), drop = FALSE]
+  stats::setNames(as.numeric(unlist(weights, use.names = FALSE)), names(weights))
+}
+c_a <- contrast_vector(arm_ids[1])
+c_b <- contrast_vector(arm_ids[2])
+
+cross_covariance <- if (nrow(covariance)) {
+  shared <- intersect(names(c_a), unique(covariance$coefficient_row))
+  if (!length(shared)) {
+    warnings <- c(warnings, "contrast_matrix and coefficient_covariance share no coefficient names; cov_arm_a_arm_b omitted")
+    NULL
+  } else {
+    # c_a[row] * S[row, col] * c_b[col], summed per gene.
+    covariance %>%
+      dplyr::filter(.data$coefficient_row %in% shared, .data$coefficient_col %in% shared) %>%
+      dplyr::mutate(term = c_a[.data$coefficient_row] * .data$covariance * c_b[.data$coefficient_col]) %>%
+      dplyr::group_by(.data$gene_id) %>%
+      dplyr::summarise(cov_arm_a_arm_b = sum(.data$term), .groups = "drop")
+  }
+} else {
+  warnings <- c(warnings, "coefficient_covariance.tsv is empty; cov_arm_a_arm_b omitted")
+  NULL
 }
 
 # ---------------------------------------------------------------------------
@@ -205,7 +202,9 @@ merged <- dplyr::inner_join(
   dplyr::mutate(
     delta = lfc_b - lfc_a,
     base_mean = dplyr::coalesce(base_mean_a, base_mean_b),
-    # Naive SE (ignoring covariance) for comparison
+    # The naive independent-sum SE is kept ONLY as an audit baseline, never used
+    # to rank or classify: publishing it beside the family's covariance-aware
+    # interaction_se is what lets a reader see how much the cross term mattered.
     se_naive = sqrt(dplyr::coalesce(se_a, 0)^2 + dplyr::coalesce(se_b, 0)^2),
     interaction_z_naive = ifelse(se_naive > 0, delta / se_naive, NA_real_),
     category = dplyr::case_when(
@@ -260,20 +259,25 @@ if (length(selected)) {
 # and cross-covariance terms (making the difference-of-differences auditable).
 # Only created for new interface (old interface doesn't have covariance data).
 # ---------------------------------------------------------------------------
-if (using_new_interface) {
-  synthesis <- merged %>%
-    dplyr::select(gene_id = gene_id_a, gene_symbol, base_mean,
-                  arm_a_lfc = lfc_a, arm_a_se = se_a,
-                  arm_b_lfc = lfc_b, arm_b_se = se_b,
-                  interaction_lfc, interaction_se) %>%
-    dplyr::arrange(gene_id)
-
-  # TODO: Add cross-covariance terms from coefficient_covariance.tsv
-  # This requires mapping gene_id to coefficient names, which depends on the
-  # family's contrast matrix structure. For now, omit cov columns.
-
-  readr::write_tsv(synthesis, file.path(dirs$tables, "interaction_synthesis.tsv"), na = "NA")
+synthesis <- merged %>%
+  dplyr::select(gene_id = gene_id_a, gene_symbol, base_mean,
+                arm_a_lfc = lfc_a, arm_a_se = se_a,
+                arm_b_lfc = lfc_b, arm_b_se = se_b,
+                interaction_lfc, interaction_se, se_naive)
+synthesis <- if (is.null(cross_covariance)) {
+  dplyr::mutate(synthesis, cov_arm_a_arm_b = NA_real_)
+} else {
+  dplyr::left_join(synthesis, cross_covariance, by = "gene_id")
 }
+# The identity a reader can check by hand, row by row:
+#   interaction_se^2 == arm_a_se^2 + arm_b_se^2 - 2 * cov_arm_a_arm_b
+#              (i.e.)  se_naive^2 - 2 * cov_arm_a_arm_b
+# When cov_arm_a_arm_b is non-zero, interaction_se != se_naive -- and that gap is
+# the covariance-aware correction, not a discrepancy.
+synthesis <- synthesis %>%
+  dplyr::mutate(se_reconstructed = sqrt(pmax(se_naive^2 - 2 * .data$cov_arm_a_arm_b, 0))) %>%
+  dplyr::arrange(gene_id)
+readr::write_tsv(synthesis, file.path(dirs$tables, "interaction_synthesis.tsv"), na = "NA")
 
 # ---------------------------------------------------------------------------
 # Palettes. Use the study palette (figures.palette) for groups. Factors are
@@ -375,10 +379,18 @@ category_palette <- c(
 # ---------------------------------------------------------------------------
 # Write the effect-vs-effect displayed table (all genes) and render the scatter.
 # ---------------------------------------------------------------------------
+# interaction_z is the family's covariance-aware statistic -- the same quantity
+# the rows are sorted by, and the same one gene selection ranks on. It previously
+# reported interaction_z_naive here while sorting by the covariance-aware value,
+# so the published Source Data column disagreed with its own row order and
+# understated the formal test. Both are now emitted, named for what they are.
 effect_table <- merged %>%
   dplyr::arrange(dplyr::desc(abs(interaction_statistic))) %>%
   dplyr::transmute(gene_symbol, base_mean, lfc_a, se_a, padj_a, lfc_b, se_b, padj_b,
-                   delta, interaction_z = interaction_z_naive, category = as.character(category))
+                   delta, interaction_lfc, interaction_se, interaction_padj,
+                   interaction_z = interaction_statistic,
+                   interaction_z_naive, se_naive,
+                   category = as.character(category))
 readr::write_tsv(effect_table, file.path(dirs$tables, "effect_vs_effect_displayed.tsv"))
 
 if (nrow(merged)) {
@@ -564,22 +576,13 @@ summary_base <- list(
   warnings = warnings
 )
 
-if (using_new_interface) {
-  summary <- c(summary_base, list(
-    method = "formal interaction estimand from a shared family fit (covariance-aware)",
-    family_dir = args[["family-dir"]],
-    arm_a = arm_ids[1],
-    arm_b = arm_ids[2],
-    interaction = interaction_id,
-    factors = if (!is.null(factors)) as.list(factors) else NULL
-  ))
-} else {
-  summary <- c(summary_base, list(
-    method = "descriptive difference of two shrunken DESeq2 effects (no refit)",
-    effect_x = arm_ids[1],
-    effect_y = arm_ids[2],
-    factors = if (!is.null(factors)) as.list(factors) else NULL
-  ))
-}
+summary <- c(summary_base, list(
+  method = "formal interaction estimand from a shared family fit (covariance-aware)",
+  arm_a = arm_ids[1],
+  arm_b = arm_ids[2],
+  interaction = interaction_id,
+  covariance_genes = if (is.null(cross_covariance)) 0L else nrow(cross_covariance),
+  factors = if (!is.null(factors)) as.list(factors) else NULL
+))
 
 write_json_file(summary, file.path(args$outdir, "factorial_summary.json"))

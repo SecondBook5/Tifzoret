@@ -205,6 +205,44 @@ resolve_contrast <- function(contrast_row, global_design) {
   )
 }
 
+# Fit a DESeqDataSet, degrading to gene-wise dispersions when the parametric
+# trend cannot be fitted.
+#
+# DESeq()'s parametric dispersion-trend fit fails HARD -- it errors, it does not
+# warn -- when every gene-wise estimate sits within two orders of magnitude of
+# the minimum. That happens whenever biological variability is tight and uniform:
+# synthetic fixtures, small templates, tightly controlled designs. DESeq2's own
+# error text prescribes the remedy (use the gene-wise estimates as final), which
+# is exactly what the fallback below does.
+#
+# Any script that fits or REFITS a model needs this, not just the canonical fit:
+# sva.R refits the design augmented with surrogate variables and aborted the
+# whole workflow on this error until it shared this path. Only that one DESeq2
+# message is caught -- every other error still propagates, so a genuinely broken
+# fit is never silently downgraded.
+#
+# Returns a list of the fitted object and which trend was used, so callers can
+# report it (the choice changes downstream transform selection: see estimand.R,
+# which prefers log2 over VST under a gene-wise fit).
+fit_deseq_with_dispersion_fallback <- function(dds) {
+  tryCatch(
+    list(dds = DESeq2::DESeq(dds, fitType = "parametric", quiet = TRUE),
+         dispersion_fit = "parametric"),
+    error = function(error) {
+      if (!grepl("all gene-wise dispersion estimates are within",
+                 conditionMessage(error), fixed = TRUE)) {
+        stop(error)
+      }
+      message("Parametric dispersion trend unavailable; using gene-wise dispersion estimates.")
+      fallback <- DESeq2::estimateSizeFactors(dds)
+      fallback <- DESeq2::estimateDispersionsGeneEst(fallback, quiet = TRUE)
+      DESeq2::dispersions(fallback) <- S4Vectors::mcols(fallback)$dispGeneEst
+      list(dds = DESeq2::nbinomWaldTest(fallback, quiet = TRUE),
+           dispersion_fit = "gene-wise")
+    }
+  )
+}
+
 ensure_output_dirs <- function(outdir) {
   dirs <- file.path(outdir, c("figures", "tables", "objects", "logs"))
   invisible(lapply(dirs, dir.create, recursive = TRUE, showWarnings = FALSE))

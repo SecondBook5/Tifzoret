@@ -67,3 +67,42 @@ jobs:
           test -s "$pub_dir/results/publication_demo/all/contrasts/treated_vs_control/analyses/composition/tables/cell_state_scores.tsv"
           test -s "$pub_dir/results/publication_demo/all/contrasts/treated_vs_control/analyses/regulators/regulators_summary.json"
           test -s "$pub_dir/results/publication_demo/all/contrasts/treated_vs_control/analyses/publication/tables/program_definitions.tsv"
+      - name: Run full-profile acceptance workflow
+        shell: bash -el {0}
+        run: |
+          full_dir="$(mktemp -d)"
+          tifzoret init "$full_dir" --input publication
+          # The full profile adds sva, wgcna, mediation and multilayer on top of the
+          # publication set. Three of those four run entirely offline and are what this step
+          # covers; they are exactly the stages no acceptance run previously executed.
+          #
+          # networks and multilayer are excluded deliberately, not because they fail:
+          # networks.py calls the live STRING API (it raises in offline mode without a warmed
+          # cache), and multilayer consumes networks' edge tables, so including either would
+          # make this job depend on a third-party service and go flaky. They keep their
+          # existing offline dry-run coverage in tests/integration/test_workflow_dag.py.
+          # Disabling networks REQUIRES disabling multilayer -- load_project now enforces
+          # that, since multilayer fuses networks' output.
+          python3 - "$full_dir/project.yaml" <<'PY'
+          import sys, yaml
+          path = sys.argv[1]
+          data = yaml.safe_load(open(path, encoding="utf-8"))
+          data["analysis"]["profile"] = "full"
+          data["analysis"]["modules"] = {"networks": False, "multilayer": False}
+          open(path, "w", encoding="utf-8").write(yaml.safe_dump(data, sort_keys=False))
+          PY
+          tifzoret validate "$full_dir/project.yaml"
+          tifzoret run "$full_dir/project.yaml" --cores 2 --no-conda
+          test -s "$full_dir/results/publication_demo/all/REPORT.html"
+          test -s "$full_dir/results/publication_demo/all/manifest.json"
+          contrast_dir="$full_dir/results/publication_demo/all/contrasts/treated_vs_control/analyses/advanced"
+          # sva: the stage commit d88633a repointed at the family fit, and the stage whose
+          # SV-augmented refit needed the shared dispersion fallback. Non-empty sensitivity
+          # table means the refit-and-compare branch actually ran, not just the empty-output path.
+          test -s "$contrast_dir/sva/tables/surrogate_variables.tsv"
+          test -s "$contrast_dir/sva/tables/sva_de_sensitivity.tsv"
+          test "$(tail -n +2 "$contrast_dir/sva/tables/sva_de_sensitivity.tsv" | wc -l)" -gt 0
+          test -s "$contrast_dir/wgcna/tables/wgcna_hubs.tsv"
+          test -s "$contrast_dir/wgcna/wgcna_summary.json"
+          test -s "$contrast_dir/mediation/tables/mediation_results.tsv"
+          test -s "$contrast_dir/mediation/mediation_summary.json"
