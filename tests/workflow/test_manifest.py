@@ -302,3 +302,29 @@ def test_strict_mode_succeeds_without_warnings(tmp_path):
     (results / "qc" / "qc_summary.json").write_text(json.dumps({"warnings": []}), encoding="utf-8")
     proc = _run_manifest(config_path, results)
     assert proc.returncode == 0, proc.stderr
+
+
+def _git(cwd: Path, *args: str) -> None:
+    subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True)
+
+
+def test_repository_revision_records_head_and_dirtiness_in_a_checkout(tmp_path):
+    module = _load_manifest_module()
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.email", "t@example.org")
+    _git(tmp_path, "config", "user.name", "t")
+    (tmp_path / "a.txt").write_text("x", encoding="utf-8")
+    _git(tmp_path, "add", "a.txt")
+    _git(tmp_path, "commit", "-q", "-m", "first")
+    head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=tmp_path, capture_output=True, text=True).stdout.strip()
+    assert module.repository_revision(tmp_path) == {"revision": head, "dirty": False}
+    (tmp_path / "a.txt").write_text("changed", encoding="utf-8")
+    assert module.repository_revision(tmp_path) == {"revision": head, "dirty": True}
+
+
+def test_repository_revision_is_unavailable_outside_a_checkout(tmp_path):
+    """An engine installed from a wheel or an archive has no git history. The manifest must say the revision is
+    unavailable and the tree state unknown, not record git's error message as a revision and call the tree dirty."""
+    module = _load_manifest_module()
+    record = module.repository_revision(tmp_path)
+    assert record == {"revision": "unavailable", "dirty": None}, record

@@ -125,13 +125,28 @@ def analysis_r_version(results: Path) -> str:
 
 
 def repository_revision(start: Path) -> dict[str, object]:
-    """Return the git HEAD revision at ``start`` and whether its working tree is dirty."""
-    revision = command_output(["git", "-C", str(start), "rev-parse", "HEAD"])
-    status = command_output(["git", "-C", str(start), "status", "--porcelain"])
-    return {
-        "revision": revision,
-        "dirty": status not in {"", "unavailable"},
-    }
+    """Return the git HEAD revision at ``start`` and whether its working tree is dirty.
+
+    Outside a git checkout (an engine installed from a wheel or a source archive has no history) neither is known:
+    the revision is ``"unavailable"`` and ``dirty`` is ``None``. A git error message is never recorded as a
+    revision, and never counted as uncommitted changes.
+    """
+
+    def git(*args: str) -> str | None:
+        try:
+            result = subprocess.run(
+                ["git", "-C", str(start), *args],
+                text=True, encoding="utf-8", errors="replace", capture_output=True, check=False,
+            )
+        except OSError:
+            return None
+        return result.stdout.strip() if result.returncode == 0 else None
+
+    revision = git("rev-parse", "HEAD")
+    if not revision:
+        return {"revision": "unavailable", "dirty": None}
+    status = git("status", "--porcelain")
+    return {"revision": revision, "dirty": None if status is None else bool(status)}
 
 
 # A stage ``warnings`` entry is one of two things, distinguished by severity:
