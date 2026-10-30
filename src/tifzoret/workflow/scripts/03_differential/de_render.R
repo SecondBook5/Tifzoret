@@ -386,7 +386,7 @@ render_de_outputs <- function(result_table, cfg, dds, metadata, dirs,
     ) %>%
       ggplot(aes(sample_id, 1, fill = condition)) +
       geom_tile() +
-      scale_fill_manual(values = display_palette, drop = FALSE) +
+      scale_fill_manual(values = display_palette, drop = FALSE, labels = cond_display) +
       theme_void() +
       theme(legend.position = "top", plot.margin = margin(0, 55, 0, 35))
     heatmap_subtitle <- paste0(display_subtitle, "; row z-scores clipped at ±", cfg$figures$de$z_limit)

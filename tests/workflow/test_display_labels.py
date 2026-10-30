@@ -40,3 +40,5 @@ def test_sample_axes_do_not_bypass_the_display_labels():
     assert "scale_x_discrete(labels = stats::setNames(" in de_render
     assert "sample_display_labels(column_order, metadata[column_order, display_group_col])" in de_render
     assert "aes(label = sample_display_labels(sample_id, .data[[display_group_col]]))" in de_render
+    # the condition key of the heatmap strip uses the shared condition casing ("Control", not "control")
+    assert "scale_fill_manual(values = display_palette, drop = FALSE, labels = cond_display)" in de_render
