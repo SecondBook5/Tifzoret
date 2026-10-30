@@ -37,7 +37,7 @@ The synthetic counts include:
 
 ```bash
 # Initialize a project from this template
-tifzoret init --input factorial my_factorial_study
+tifzoret init my_factorial_study --input factorial
 
 # Validate configuration
 tifzoret validate my_factorial_study/project.yaml
@@ -49,4 +49,4 @@ tifzoret dry-run my_factorial_study/project.yaml
 tifzoret run my_factorial_study/project.yaml
 ```
 
-Results will include DE tables for all four estimands plus term tests for the two main effects, the interaction, and any-effect omnibus test.
+Results will include DE tables, pathways and ontology for all five estimands plus term tests for the two main effects, the interaction, and any-effect omnibus test. Modules that compare exactly two groups (hypotheses, composition, regulators, networks, publication) do not run for a multi-factor family.

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -39,8 +40,8 @@ def _copy_tree(source, destination: Path) -> None:
 def command_init(args: argparse.Namespace) -> int:
     """Scaffold a new project directory from an input-boundary template.
 
-    ``--input`` chooses the template (``counts``, ``bam``, ``nfcore-rnaseq``,
-    ``archive``, or ``publication``). The destination must not already contain
+    ``--input`` chooses the template (``counts``, ``rsem``, ``bam``, ``nfcore-rnaseq``,
+    ``archive``, ``publication``, or ``factorial``, a 2x2 design with interaction estimands). The destination must not already contain
     files. Returns 0.
     """
     destination = Path(args.directory).expanduser().resolve()
@@ -48,10 +49,12 @@ def command_init(args: argparse.Namespace) -> int:
         raise ProjectValidationError(f"Destination is not empty: {destination}")
     template_name = {
         "counts": "minimal",
+        "rsem": "rsem",
         "bam": "bam",
         "nfcore-rnaseq": "nfcore_rnaseq",
         "archive": "archive",
         "publication": "publication",
+        "factorial": "factorial",
     }[args.input]
     template = resources.files("tifzoret").joinpath(f"templates/{template_name}")
     _copy_tree(template, destination)
@@ -98,8 +101,13 @@ def _snakemake(
     ]
     if not args.no_conda:
         command.append("--use-conda")
+        if getattr(args, "conda_prefix", None):
+            command.extend(["--conda-prefix", str(Path(args.conda_prefix).expanduser())])
     if dry_run:
         command.append("--dry-run")
+    if getattr(args, "unlock", False) and not dry_run:
+        # An interrupted run leaves a lock that blocks the next one; clear it, then run normally.
+        subprocess.run([*command, "--unlock", *targets], cwd=project.config_path.parent, check=False)
     command.extend(targets)
     return subprocess.run(command, cwd=project.config_path.parent, check=False).returncode
 
@@ -280,7 +288,7 @@ def build_parser() -> argparse.ArgumentParser:
     init_parser.add_argument("directory")
     init_parser.add_argument(
         "--input",
-        choices=("counts", "bam", "nfcore-rnaseq", "archive", "publication"),
+        choices=("counts", "rsem", "bam", "nfcore-rnaseq", "archive", "publication", "factorial"),
         default="counts",
         help="source boundary for the scaffold (default: counts)",
     )
@@ -310,6 +318,10 @@ def build_parser() -> argparse.ArgumentParser:
     prepare_parser.add_argument("--cores", type=int, default=1)
     prepare_parser.add_argument("--snakemake", default="snakemake")
     prepare_parser.add_argument("--no-conda", action="store_true")
+    prepare_parser.add_argument("--conda-prefix", default=os.environ.get("TIFZORET_CONDA_PREFIX"),
+        help="reuse (or build) conda environments under this directory; default $TIFZORET_CONDA_PREFIX")
+    prepare_parser.add_argument("--unlock", action="store_true",
+        help="clear a stale Snakemake lock left by an interrupted run, then continue")
     prepare_parser.set_defaults(handler=command_prepare)
 
     report_parser = commands.add_parser("report", help="build the navigable HTML report")
@@ -317,6 +329,10 @@ def build_parser() -> argparse.ArgumentParser:
     report_parser.add_argument("--cores", type=int, default=1)
     report_parser.add_argument("--snakemake", default="snakemake")
     report_parser.add_argument("--no-conda", action="store_true")
+    report_parser.add_argument("--conda-prefix", default=os.environ.get("TIFZORET_CONDA_PREFIX"),
+        help="reuse (or build) conda environments under this directory; default $TIFZORET_CONDA_PREFIX")
+    report_parser.add_argument("--unlock", action="store_true",
+        help="clear a stale Snakemake lock left by an interrupted run, then continue")
     report_parser.set_defaults(handler=command_report)
 
     assemble_parser = commands.add_parser("assemble", help="assemble configured publication figures")
@@ -324,6 +340,10 @@ def build_parser() -> argparse.ArgumentParser:
     assemble_parser.add_argument("--cores", type=int, default=1)
     assemble_parser.add_argument("--snakemake", default="snakemake")
     assemble_parser.add_argument("--no-conda", action="store_true")
+    assemble_parser.add_argument("--conda-prefix", default=os.environ.get("TIFZORET_CONDA_PREFIX"),
+        help="reuse (or build) conda environments under this directory; default $TIFZORET_CONDA_PREFIX")
+    assemble_parser.add_argument("--unlock", action="store_true",
+        help="clear a stale Snakemake lock left by an interrupted run, then continue")
     assemble_parser.set_defaults(handler=command_assemble)
 
     figures_parser = commands.add_parser(
@@ -349,6 +369,10 @@ def build_parser() -> argparse.ArgumentParser:
     figures_build.add_argument("--cores", type=int, default=1)
     figures_build.add_argument("--snakemake", default="snakemake")
     figures_build.add_argument("--no-conda", action="store_true")
+    figures_build.add_argument("--conda-prefix", default=os.environ.get("TIFZORET_CONDA_PREFIX"),
+        help="reuse (or build) conda environments under this directory; default $TIFZORET_CONDA_PREFIX")
+    figures_build.add_argument("--unlock", action="store_true",
+        help="clear a stale Snakemake lock left by an interrupted run, then continue")
     figures_build.set_defaults(handler=command_figures_build)
     figures_gallery = figure_commands.add_parser(
         "gallery", help="create an HTML/contact-sheet review of all built variants"
@@ -383,6 +407,10 @@ def build_parser() -> argparse.ArgumentParser:
         run_parser.add_argument("--cores", type=int, default=1)
         run_parser.add_argument("--snakemake", default="snakemake")
         run_parser.add_argument("--no-conda", action="store_true")
+        run_parser.add_argument("--conda-prefix", default=os.environ.get("TIFZORET_CONDA_PREFIX"),
+            help="reuse (or build) conda environments under this directory; default $TIFZORET_CONDA_PREFIX")
+        run_parser.add_argument("--unlock", action="store_true",
+            help="clear a stale Snakemake lock left by an interrupted run, then continue")
         run_parser.set_defaults(handler=lambda args, dry_run=dry_run: _snakemake(args, dry_run))
     return parser
 

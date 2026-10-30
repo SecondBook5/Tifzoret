@@ -67,6 +67,7 @@ class ResolvedProject:
     gtf: Path | None = None
     source_root: Path | None = None
     bam_paths: tuple[Path, ...] = ()
+    rsem_paths: tuple[Path, ...] = ()
     archive: Path | None = None
     analysis_set: str = "all"
     modules: tuple[str, ...] = ()
@@ -117,6 +118,8 @@ class ResolvedProject:
         """The primary input files for this boundary (counts+annotation, archive+GTF, or BAMs+GTF)."""
         if self.source_kind == "counts":
             return tuple(path for path in (self.counts, self.annotation) if path is not None)
+        if self.source_kind == "rsem":
+            return (*self.rsem_paths, *((self.annotation,) if self.annotation else ()))
         if self.source_kind == "archive":
             return tuple(path for path in (self.archive, self.gtf) if path is not None)
         return (*self.bam_paths, *((self.gtf,) if self.gtf is not None else ()))

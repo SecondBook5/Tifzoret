@@ -7,7 +7,7 @@ with their estimands and term tests. Also generates TSV rows for staging.
 from __future__ import annotations
 
 import re
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from itertools import combinations
 
 from .parser import (
@@ -246,7 +246,9 @@ def derive_term_tests(design: str, cells: Sequence[str], family_id: str) -> list
 
     return tests
 def desugar_contrast_rows(
-    global_design: str, contrast_rows: Sequence[dict[str, str]]
+    global_design: str,
+    contrast_rows: Sequence[dict[str, str]],
+    defaults: Mapping[str, str] | None = None,
 ) -> tuple[list[Family], list[str]]:
     """Translate every ``contrasts.tsv`` row into a family plus an estimand.
 
@@ -256,8 +258,17 @@ def desugar_contrast_rows(
     therefore one fit — because a cell-mean expression does not depend on the
     reference level, so the per-contrast releveling that forced separate fits is
     no longer needed.
+
+    ``defaults`` carries the project-level ``analysis.settings.de`` knobs
+    (``shrinkage``, ``filter``). A contrasts.tsv comparison has no family block
+    of its own, so this is the only place a project can choose its estimator and
+    gene filter; without it the best-practice defaults apply.
     """
     errors: list[str] = []
+    family_defaults = {
+        key: str(value) for key, value in (defaults or {}).items()
+        if key in ("shrinkage", "filter") and value is not None
+    }
     # Group by exact design string, not by family_id, to prevent collisions
     grouped: dict[str, dict] = {}
     design_order: list[str] = []  # Track first appearance order for stable IDs
@@ -281,6 +292,7 @@ def desugar_contrast_rows(
                 "term_tests": [],
                 "reference_levels": {},
                 "_declared": False,
+                **family_defaults,
             },
         )
         factor = str(row.get("factor", "")).strip()
@@ -455,7 +467,11 @@ def compile_project_families(
         analysis.get("families") or {}, known_ids=contrast_ids
     )
     errors.extend(declared_errors)
-    desugared, desugar_errors = desugar_contrast_rows(global_design, contrast_rows)
+    desugared, desugar_errors = desugar_contrast_rows(
+        global_design,
+        contrast_rows,
+        defaults=((analysis.get("settings") or {}).get("de") or {}),
+    )
     errors.extend(desugar_errors)
 
     resolved: list[Family] = []
@@ -604,13 +620,21 @@ def synthesized_contrast_rows(families: Sequence[Family], existing_ids: set[str]
         for estimand in family.estimands:
             if estimand.id in existing_ids:
                 continue
+            # Export genuine one-factor unit differences as native pairwise rows.
+            # General cell contrasts retain their estimand identity and are not
+            # coerced into an invalid pairwise comparison for downstream modules.
+            weights = estimand.expression.cell_weights
+            positive = [cell for cell, weight in weights.items() if weight == 1.0]
+            negative = [cell for cell, weight in weights.items() if weight == -1.0]
+            pairwise = (len(family.cells) == 1 and len(weights) == 2
+                        and len(positive) == 1 and len(negative) == 1)
             rows.append(
                 {
                     "contrast_id": estimand.id,
-                    "factor": "",
-                    "numerator": estimand.label,
-                    "denominator": "",
-                    "type": "estimand",
+                    "factor": family.cells[0] if pairwise else "",
+                    "numerator": positive[0][0] if pairwise else estimand.label,
+                    "denominator": negative[0][0] if pairwise else "",
+                    "type": "pairwise" if pairwise else "estimand",
                     "family": family.id,
                     "role": estimand.role,
                 }

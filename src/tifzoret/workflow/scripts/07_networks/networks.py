@@ -146,6 +146,11 @@ def fetch_induced_network(
                     "species": taxonomy,
                     "required_score": required_score,
                     "network_type": "functional",
+                    # The STRING endpoint otherwise adds interaction partners
+                    # for very small queries. This module is explicitly an
+                    # induced network of the submitted DE seed set, so outside
+                    # proteins must never enter the edge table.
+                    "add_nodes": 0,
                 },
                 cache_dir,
                 offline,

@@ -170,3 +170,25 @@ def test_a_level_containing_a_single_quote_roundtrips():
 
     # The expression should have the correct cell weights with the original level string
     assert estimand.expression.cell_weights == {("it's",): 1.0, ("plain",): -1.0}
+
+
+def test_project_de_settings_become_the_desugared_family_defaults():
+    # analysis.settings.de.{filter,shrinkage} are the project-level knobs; a plain
+    # contrasts.tsv comparison has no family block of its own, so they must reach it.
+    families, errors = desugar_contrast_rows(
+        "~ condition", [_row()], defaults={"filter": "total_count", "shrinkage": "ashr"}
+    )
+    assert errors == []
+    assert families[0].filter == "total_count"
+    assert families[0].shrinkage == "ashr"
+
+
+def test_desugared_families_keep_the_best_practice_defaults_without_settings():
+    families, _ = desugar_contrast_rows("~ condition", [_row()])
+    assert families[0].filter == "design_aware"
+    assert families[0].shrinkage == "apeglm"
+
+
+def test_an_unknown_project_filter_is_rejected_not_ignored():
+    _, errors = desugar_contrast_rows("~ condition", [_row()], defaults={"filter": "flat"})
+    assert any("filter" in error and "flat" in error for error in errors)

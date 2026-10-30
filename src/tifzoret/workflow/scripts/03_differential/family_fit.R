@@ -71,8 +71,8 @@ readr::write_tsv(
 # outlier filtering/replacement behaves consistently; estimand.R reuses THIS
 # object's dispersions and replaced counts.
 # ---------------------------------------------------------------------------
-dds <- DESeq2::DESeqDataSetFromMatrix(
-  countData = counts[keep, , drop = FALSE], colData = metadata, design = design_formula)
+dds <- make_deseq_dataset(cfg, normalizePath(args$counts, mustWork = TRUE),
+                          counts[keep, , drop = FALSE], metadata, design_formula)
 fitted <- fit_deseq_with_dispersion_fallback(dds)
 dds <- fitted$dds
 dispersion_fit <- fitted$dispersion_fit

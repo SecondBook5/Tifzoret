@@ -57,13 +57,28 @@ ABUNDANCE_OUTPUTS = (
         "fpkm": str(INPUTS / "fpkm.tsv"),
         "gene_lengths": str(INPUTS / "gene_lengths.tsv"),
     }
-    if PROJECT.source_kind != "counts"
+    if PROJECT.source_kind not in {"counts", "rsem"}
     else {}
 )
 ABUNDANCE_ARGS = " ".join(
     f"--{name.replace('_', '-')} {shlex.quote(value)}"
     for name, value in ABUNDANCE_OUTPUTS.items()
 )
+# RSEM carries a typed quantification bundle in addition to integer counts.
+RSEM_OUTPUTS = ({
+    "tximport": str(INPUTS / "tximport.rds"),
+    "expected_counts": str(INPUTS / "rsem_expected_counts.tsv"),
+    "effective_lengths": str(INPUTS / "rsem_effective_lengths.tsv"),
+    "rsem_tpm": str(INPUTS / "rsem_tpm.tsv"),
+    "model_lengths": str(INPUTS / "rsem_model_lengths.tsv"),
+    "length_adjustments": str(INPUTS / "rsem_length_adjustments.tsv"),
+    "rsem_universe": str(INPUTS / "rsem_gene_universe.tsv"),
+    "rsem_receipt": str(INPUTS / "rsem_import_receipt.json"),
+} if PROJECT.source_kind == "rsem" else {})
+# Only length-aware runs depend on the quantification bundle downstream.
+QUANTIFICATION_INPUTS = {"tximport": RSEM_OUTPUTS["tximport"]} if RSEM_OUTPUTS else {}
+# Pass the bundle destination without altering existing boundary invocations.
+RSEM_ARGS = "--tximport " + shlex.quote(RSEM_OUTPUTS["tximport"]) if RSEM_OUTPUTS else ""
 CUSTOM_GMT = str(PROJECT.gmt)
 RESOURCE_CACHE = RESULTS / ".cache" / "resources"
 GMT = str(RESOURCE_CACHE / "gene_sets.gmt")
@@ -81,8 +96,8 @@ MODULES = {
     )
 }
 
-with open(SOURCE_CONTRASTS, newline="") as handle:
-    CONTRAST_ROWS = list(csv.DictReader(handle, delimiter="\t"))
+# Use the validated resolved contrasts, including explicit-family synthesized rows.
+CONTRAST_ROWS = list(PROJECT.contrast_rows)
 CONTRAST_IDS = [row["contrast_id"] for row in CONTRAST_ROWS]
 # Every contrast row now desugars into a family (config/estimands.py), so the DE
 # path expands over estimands rather than over contrast types. PAIRWISE_CONTRAST_IDS
@@ -509,7 +524,7 @@ if MODULES["spia"]:
 if MODULES["pathways"]:
     FINAL_OUTPUTS.extend(expand(PATHWAY_PATTERNS, contrast_id=SIGNED_CONTRAST_IDS))
 if MODULES["ontology"]:
-    FINAL_OUTPUTS.extend(expand(ONTOLOGY_PATTERNS, contrast_id=PAIRWISE_CONTRAST_IDS))
+    FINAL_OUTPUTS.extend(expand(ONTOLOGY_PATTERNS, contrast_id=SIGNED_CONTRAST_IDS))
 if MODULES["enrichment_map"]:
     FINAL_OUTPUTS.extend(expand(ENRICHMENT_MAP_PATTERNS, contrast_id=PAIRWISE_CONTRAST_IDS))
 if MODULES["composition"]:

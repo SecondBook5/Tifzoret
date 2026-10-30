@@ -11,7 +11,8 @@ rule materialize_inputs:
         samples=SOURCE_SAMPLES,
         contrasts=SOURCE_CONTRASTS,
         config=str(CONFIG_PATH),
-        script=str(WORKFLOW_ROOT / "scripts" / "01_inputs" / "materialize_inputs.py")
+        script=str(WORKFLOW_ROOT / "scripts" / "01_inputs" / "materialize_inputs.py"),
+        rsem_script=str(WORKFLOW_ROOT / "scripts" / "01_inputs" / "import_rsem.R") if RSEM_OUTPUTS else []
     output:
         counts=COUNTS,
         samples=SAMPLES,
@@ -23,23 +24,25 @@ rule materialize_inputs:
         term_tests=TERM_TESTS,
         manifest=INPUT_MANIFEST,
         **COMPANION_OUTPUTS,
-        **ABUNDANCE_OUTPUTS
+        **ABUNDANCE_OUTPUTS,
+        **RSEM_OUTPUTS
     log:
         str(INPUTS / "materialize.log")
     params:
         companion=COMPANION_ARGS,
-        abundance=ABUNDANCE_ARGS
+        abundance=ABUNDANCE_ARGS,
+        rsem=RSEM_ARGS
     threads:
         CONFIG.get("counting", {}).get("threads", 1)
     conda:
-        CORE_ENV
+        str(WORKFLOW_ROOT / "envs" / "rsem.yaml") if RSEM_OUTPUTS else CORE_ENV
     shell:
         "python {input.script} --project-config {input.config:q} --counts {output.counts:q} "
         "--samples {output.samples:q} --annotation {output.annotation:q} "
         "--contrasts {output.contrasts:q} "
         "--families {output.families:q} --estimands {output.estimands:q} "
         "--cell-weights {output.cell_weights:q} --term-tests {output.term_tests:q} "
-        "{params.companion} {params.abundance} "
+        "{params.companion} {params.abundance} {params.rsem} "
         "--manifest {output.manifest:q} --threads {threads} > {log:q} 2>&1"
 
 rule study_qc:
@@ -49,7 +52,8 @@ rule study_qc:
         annotation=ANNOTATION,
         config=str(CONFIG_PATH),
         script=str(WORKFLOW_ROOT / "scripts" / "02_qc" / "qc.R"),
-        utils=UTILS_R
+        utils=UTILS_R,
+        **QUANTIFICATION_INPUTS
     output:
         vst=qc("objects/vst.rds"),
         expression=qc("tables/vst_expression.tsv"),
@@ -239,7 +243,8 @@ rule family_fit:
         config=str(CONFIG_PATH),
         script=str(WORKFLOW_ROOT / "scripts" / "03_differential" / "family_fit.R"),
         utils=UTILS_R,
-        estimands_r=ESTIMANDS_R
+        estimands_r=ESTIMANDS_R,
+        **QUANTIFICATION_INPUTS
     output:
         dds=family("objects/deseq2.rds"),
         covariance=family("tables/coefficient_covariance.tsv"),

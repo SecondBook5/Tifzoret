@@ -76,10 +76,17 @@ orgdb <- get(orgdb_package, asNamespace(orgdb_package))
 
 de <- readr::read_tsv(normalizePath(args$de, mustWork = TRUE), show_col_types = FALSE, progress = FALSE) %>% as.data.frame()
 
-# Map the DE table's Ensembl gene ids to Entrez (SPIA/KEGG identifiers). Genes
-# that fail to map are dropped from both the DE set and the measured universe.
-entrez <- suppressWarnings(AnnotationDbi::mapIds(orgdb, keys = de$gene_id, column = "ENTREZID", keytype = "ENSEMBL", multiVals = "first"))
-de$entrez <- unname(entrez[de$gene_id])
+# Map the DE table's Ensembl gene ids to Entrez (SPIA/KEGG identifiers). GENCODE
+# count matrices commonly retain the Ensembl version suffix (for example,
+# ENSG00000141510.11), whereas org.*.eg.db keys are versionless. Normalize only
+# for lookup and retain the original gene_id in every exported table.
+lookup_gene_id <- sub("\\.[0-9]+$", "", de$gene_id)
+valid_gene_ids <- intersect(unique(lookup_gene_id), AnnotationDbi::keys(orgdb, keytype = "ENSEMBL"))
+if (length(valid_gene_ids) == 0L) write_skip("no DE genes could be mapped to Entrez ids; skipped SPIA")
+entrez <- suppressWarnings(AnnotationDbi::mapIds(
+  orgdb, keys = valid_gene_ids, column = "ENTREZID", keytype = "ENSEMBL", multiVals = "first"
+))
+de$entrez <- unname(entrez[lookup_gene_id])
 de <- de[!is.na(de$entrez) & de$entrez != "", , drop = FALSE]
 de <- de[!duplicated(de$entrez), , drop = FALSE]
 if (nrow(de) == 0L) write_skip("no DE genes could be mapped to Entrez ids; skipped SPIA")

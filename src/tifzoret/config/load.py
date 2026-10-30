@@ -12,6 +12,8 @@ import yaml
 from jsonschema import Draft202012Validator
 
 from .types import ProjectValidationError, ResolvedProject
+from .contigs import contig_mismatch_message
+from .rsem import validate_rsem_files
 from .types import _resolve, _read_tsv
 from .normalize import normalize_config, resolve_modules
 from .validate import _schema, _validate_document, _load_schema_document
@@ -190,6 +192,7 @@ def load_project(config_path: str | Path) -> ResolvedProject:
     gtf_path: Path | None = None
     source_root: Path | None = None
     bam_paths: tuple[Path, ...] = ()
+    rsem_paths: tuple[Path, ...] = ()
     archive_path: Path | None = None
     gene_ids: list[str] = []
 
@@ -242,6 +245,30 @@ def load_project(config_path: str | Path) -> ResolvedProject:
                     f"annotation.tsv is missing {len(missing_annotation)} count gene_id values "
                     f"(first: {missing_annotation[:5]})"
                 )
+    elif kind == "rsem":
+        # Resolve annotation and validate the estimated-count boundary independently.
+        annotation_path = _resolve(base, inputs["annotation"])
+        # Collect validation errors without transforming any source values.
+        try:
+            rsem_paths, gene_ids = validate_rsem_files(base, samples)
+            # Require a complete and unique annotation universe.
+            annotation_header, annotations = _read_tsv(annotation_path)
+            annotation_ids = [row.get("gene_id", "") for row in annotations]
+            if not {"gene_id", "gene_symbol"}.issubset(annotation_header):
+                errors.append("annotation.tsv requires gene_id and gene_symbol columns")
+            if len(annotation_ids) != len(set(annotation_ids)) or any(not key for key in annotation_ids):
+                errors.append("annotation gene_id values must be unique and non-empty")
+            if set(gene_ids) - set(annotation_ids):
+                errors.append("annotation.tsv must cover every RSEM gene_id")
+            # Validate the optional exclusion expression before execution.
+            if inputs.get("exclude_gene_regex"):
+                re.compile(inputs["exclude_gene_regex"])
+        except (ProjectValidationError, OSError, re.error) as error:
+            errors.append(str(error))
+        # Avoid silently running count-only optional analyses on this new boundary.
+        for module in ("deconvolution", "de_confirm"):
+            if config["analysis"].get("modules", {}).get(module, False):
+                errors.append(f"rsem inputs do not yet support {module}; a length-aware adapter is required")
     elif kind in {"bam", "nfcore_rnaseq"}:
         gtf_path = _resolve(base, inputs["gtf"])
         if not gtf_path.is_file():
@@ -273,6 +300,11 @@ def load_project(config_path: str | Path) -> ResolvedProject:
             samples=samples,
             errors=errors,
         )
+        # Catch a chr-prefix (or other reference) mismatch now, not after hours of counting.
+        if gtf_path.is_file() and bam_paths and bam_paths[0].is_file():
+            mismatch = contig_mismatch_message(bam_paths[0], gtf_path)
+            if mismatch:
+                errors.append(mismatch)
     else:
         archive_path = _resolve(base, inputs["archive"])
         gtf_path = _resolve(base, inputs["gtf"])
@@ -301,7 +333,7 @@ def load_project(config_path: str | Path) -> ResolvedProject:
     required_contrast = {"contrast_id", "factor", "numerator", "denominator"}
     if not required_contrast.issubset(contrast_header):
         errors.append("contrasts.tsv requires contrast_id, factor, numerator, and denominator columns")
-    if not contrasts:
+    if not contrasts and not config["analysis"].get("families"):
         errors.append("contrasts.tsv contains no contrasts")
     contrast_ids = [row.get("contrast_id", "").strip() for row in contrasts]
     if len(contrast_ids) != len(set(contrast_ids)):
@@ -678,8 +710,19 @@ def load_project(config_path: str | Path) -> ResolvedProject:
         errors.extend(document_errors)
         if recipe_config is not None:
             recipe_path = canonical_inputs / "figure_recipe.yaml"
+    # Compiled estimand layer. Runs after the samples/contrasts cross-checks so
+    # the gate reports design problems against an already-validated sample table,
+    # and before claim/recipe validation so those can reference family estimands.
+    compiled_families, family_errors = compile_project_families(config, samples, contrasts)
+    errors.extend(family_errors)
+    existing_contrast_ids = {str(row.get("contrast_id", "")).strip() for row in contrasts}
+    contrasts = list(contrasts) + synthesized_contrast_rows(
+        compiled_families, existing_contrast_ids
+    )
+
+    resolved_contrast_ids = [str(row.get("contrast_id", "")).strip() for row in contrasts]
     if hypothesis_config is not None:
-        known_contrasts = set(contrast_ids)
+        known_contrasts = set(resolved_contrast_ids)
         known_gene_panels = set((panel_config or {}).get("gene_panels", {})) | set(
             (panel_config or {}).get("programs", {})
         )
@@ -714,7 +757,7 @@ def load_project(config_path: str | Path) -> ResolvedProject:
             if panel not in known_gene_panels:
                 errors.append(f"gsea_programs references unknown gene panel {panel!r}")
         for effect_id, effect in panel_config.get("expected_effects", {}).items():
-            if effect["contrast"] not in set(contrast_ids):
+            if effect["contrast"] not in set(resolved_contrast_ids):
                 errors.append(f"expected_effects {effect_id!r}: unknown contrast {effect['contrast']!r}")
             if effect["target_type"] == "program" and effect["target"] not in known_gene_panels:
                 errors.append(f"expected_effects {effect_id!r}: unknown program {effect['target']!r}")
@@ -727,7 +770,7 @@ def load_project(config_path: str | Path) -> ResolvedProject:
                 errors.append(f"figure set {figure_set!r} contains duplicate panel ids")
         from ..figures import validate_recipe_contract
 
-        errors.extend(validate_recipe_contract(recipe_config, (name for name, enabled in modules.items() if enabled), contrast_ids))
+        errors.extend(validate_recipe_contract(recipe_config, (name for name, enabled in modules.items() if enabled), resolved_contrast_ids))
     valid_gmt_lines = 0
     with gmt_path.open(encoding="utf-8") as handle:
         for line_number, line in enumerate(handle, start=1):
@@ -740,17 +783,11 @@ def load_project(config_path: str | Path) -> ResolvedProject:
                 )
             else:
                 valid_gmt_lines += 1
-    if valid_gmt_lines == 0:
+    if (valid_gmt_lines == 0
+            and any(modules.get(name, False) for name in ("pathways", "ontology", "hypotheses"))
+            and not any(config["resources"].get("providers", {}).get(name, False)
+                        for name in ("go", "msigdb", "kegg", "reactome"))):
         errors.append("GMT file contains no valid gene sets")
-
-    # Compiled estimand layer. Runs after the samples/contrasts cross-checks so
-    # the gate reports design problems against an already-validated sample table.
-    compiled_families, family_errors = compile_project_families(config, samples, contrasts)
-    errors.extend(family_errors)
-    existing_contrast_ids = {str(row.get("contrast_id", "")).strip() for row in contrasts}
-    contrasts = list(contrasts) + synthesized_contrast_rows(
-        compiled_families, existing_contrast_ids
-    )
 
     if errors:
         raise ProjectValidationError("\n".join(errors))
@@ -767,6 +804,7 @@ def load_project(config_path: str | Path) -> ResolvedProject:
         gtf=gtf_path,
         source_root=source_root,
         bam_paths=bam_paths,
+        rsem_paths=rsem_paths,
         archive=archive_path,
         analysis_set=str(inputs.get("analysis_set", "all")),
         modules=tuple(sorted(name for name, enabled in modules.items() if enabled)),

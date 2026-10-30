@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -100,3 +101,62 @@ def test_verify_uses_project_result_as_candidate(tmp_path):
         "--output", str(output),
     ]) == 0
     assert output.is_file()
+
+
+def _run_cli_capturing_snakemake(monkeypatch, tmp_path, *extra):
+    """Run `tifzoret dry-run|run` against the minimal template and return each Snakemake command."""
+    from tifzoret import cli
+
+    destination = tmp_path / "study"
+    assert cli.main(["init", str(destination), "--input", "counts"]) == 0
+    calls: list[list[str]] = []
+
+    def fake_run(command, **kwargs):
+        calls.append([str(part) for part in command])
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(cli.subprocess, "run", fake_run)
+    monkeypatch.delenv("TIFZORET_CONDA_PREFIX", raising=False)
+    assert cli.main([*extra[:1], str(destination / "project.yaml"), "--snakemake", "snakemake", *extra[1:]]) == 0
+    return calls
+
+
+def test_conda_prefix_is_passed_through_to_snakemake(monkeypatch, tmp_path):
+    prefix = tmp_path / "shared-envs"
+    (command,) = _run_cli_capturing_snakemake(monkeypatch, tmp_path, "dry-run", "--conda-prefix", str(prefix))
+    assert "--use-conda" in command
+    assert command[command.index("--conda-prefix") + 1] == str(prefix)
+
+
+def test_conda_prefix_defaults_to_the_environment_variable(monkeypatch, tmp_path):
+    from tifzoret import cli
+
+    prefix = tmp_path / "from-env"
+    monkeypatch.setenv("TIFZORET_CONDA_PREFIX", str(prefix))
+    args = cli.build_parser().parse_args(["dry-run", "project.yaml"])
+    assert args.conda_prefix == str(prefix)
+
+
+def test_no_conda_ignores_the_prefix(monkeypatch, tmp_path):
+    (command,) = _run_cli_capturing_snakemake(
+        monkeypatch, tmp_path, "dry-run", "--no-conda", "--conda-prefix", str(tmp_path / "x")
+    )
+    assert "--use-conda" not in command and "--conda-prefix" not in command
+
+
+def test_unlock_clears_a_stale_lock_before_the_real_run(monkeypatch, tmp_path):
+    unlock, run = _run_cli_capturing_snakemake(monkeypatch, tmp_path, "run", "--unlock")
+    assert "--unlock" in unlock and "--unlock" not in run
+    assert unlock[-1] == run[-1]  # same target
+
+
+def test_unlock_is_skipped_for_a_dry_run(monkeypatch, tmp_path):
+    calls = _run_cli_capturing_snakemake(monkeypatch, tmp_path, "dry-run", "--unlock")
+    assert len(calls) == 1 and "--unlock" not in calls[0]
+
+
+def test_init_offers_the_factorial_template_and_it_validates(tmp_path):
+    destination = tmp_path / "factorial_study"
+    assert main(["init", str(destination), "--input", "factorial"]) == 0
+    assert (destination / "project.yaml").is_file()
+    assert main(["validate", str(destination / "project.yaml")]) == 0

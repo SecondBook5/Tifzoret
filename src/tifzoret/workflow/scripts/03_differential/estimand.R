@@ -103,17 +103,33 @@ reparameterize <- function(cells, cell_keys) {
   NULL
 }
 
+# Names for labels and figure axes: the two levels for a plain "level a minus level b"
+# comparison, the estimand's own label for anything else.
+pair <- pairwise_levels(family$cells, weights)
+numerator_label <- if (is.null(pair)) spec$label else pair$numerator
+denominator_label <- if (is.null(pair)) "" else pair$denominator
+
 requested <- family$shrinkage
 shrinkage_applied <- "none"
 reparameterized <- FALSE
 identity_gap_abs <- 0
 identity_gap_relative <- 0
 shrunk_lfc <- raw$log2FoldChange
+shrunk_se <- rep(NA_real_, nrow(raw))  # the shrinkage estimator's own posterior SD
 
 if (identical(requested, "apeglm")) {
-  attempt <- if (identical(spec$atom_kind, "coef")) {
-    single <- single_coefficient(contrast_vector)
-    if (is.null(single)) NULL else list(dds = dds, coefficient = single$name, sign = single$sign)
+  # An estimand that already IS one coefficient of the canonical fit (a pairwise
+  # comparison against the reference level, or a coef(...) term) is shrunk in place:
+  # that is exact by construction. Only an estimand with no such coefficient needs a
+  # releveled refit. The refit is not interchangeable with the canonical fit -- a gene
+  # with zero counts in a group has no unique MLE, so a refit can move it by a fraction
+  # of a log2 unit, the identity assertion below then fails, and the whole table would
+  # silently fall back to ashr.
+  single <- single_coefficient(contrast_vector)
+  attempt <- if (!is.null(single)) {
+    list(dds = dds, coefficient = single$name, sign = single$sign)
+  } else if (identical(spec$atom_kind, "coef")) {
+    NULL
   } else {
     reparameterize(family$cells, names(weights))
   }
@@ -138,8 +154,9 @@ if (identical(requested, "apeglm")) {
       shrunk <- DESeq2::lfcShrink(
         attempt$dds, coef = attempt$coefficient, type = "apeglm", quiet = TRUE)
       shrunk_lfc <- attempt$sign * shrunk$log2FoldChange
+      shrunk_se <- shrunk$lfcSE
       shrinkage_applied <- "apeglm"
-      reparameterized <- TRUE
+      reparameterized <- is.null(single)
     } else {
       requested <- "ashr"
     }
@@ -152,10 +169,17 @@ if (identical(requested, "ashr") && !identical(shrinkage_applied, "apeglm")) {
     shrunk <- DESeq2::lfcShrink(
       dds, contrast = as.numeric(contrast_vector), type = "ashr", quiet = TRUE)
     shrunk_lfc <- shrunk$log2FoldChange
+    shrunk_se <- shrunk$lfcSE
     shrinkage_applied <- "ashr"
   } else {
     tz_degrade(cfg, "ashr unavailable; reporting the unshrunken MLE effect")
   }
+}
+shrinkage_outside <- if (identical(shrinkage_applied, "none")) {
+  rep(FALSE, length(shrunk_lfc))
+} else {
+  shrinkage_outside_ci(shrunk_lfc, raw$log2FoldChange, raw$lfcSE,
+                       eligible = !is.na(raw$padj) & raw$padj < fdr)
 }
 shrinkage_label <- if (identical(shrinkage_applied, "none")) {
   "no shrinkage (raw MLE)"
@@ -174,12 +198,14 @@ result_table <- data.frame(
   log2_fold_change_raw = raw$log2FoldChange,
   log2_fold_change = shrunk_lfc,
   lfc_se = raw$lfcSE,
+  lfc_se_shrunken = shrunk_se,
   statistic = raw$stat,
   p_value = raw$pvalue,
   adjusted_p_value = raw$padj,
   ci_low = raw$log2FoldChange - stats::qnorm(0.975) * raw$lfcSE,
   ci_high = raw$log2FoldChange + stats::qnorm(0.975) * raw$lfcSE,
   shrinkage = shrinkage_applied,
+  shrinkage_outside_ci = shrinkage_outside,
   family_id = family$family_id,
   estimand_id = spec$estimand_id,
   estimand_role = spec$role,
@@ -200,8 +226,8 @@ result_table <- data.frame(
     significance_class = classify_significance(
       adjusted_p_value, log2_fold_change, fdr, cfg$figures$de$abs_log2fc),
     contrast_id = spec$estimand_id,
-    numerator = spec$label,
-    denominator = ""
+    numerator = numerator_label,
+    denominator = denominator_label
   ) %>%
   arrange(adjusted_p_value, desc(abs(log2_fold_change)))
 readr::write_tsv(result_table, file.path(dirs$tables, "de_results.tsv"), na = "NA")
@@ -210,10 +236,15 @@ display_samples <- display_samples_for_cells(metadata, family$cells, names(weigh
 display_group_col <- if (length(family$cells)) family$cells[[1]] else cfg$figures$group
 rendered <- render_de_outputs(
   result_table, cfg, dds, metadata, dirs,
-  numerator = spec$label, denominator = "",
+  numerator = numerator_label, denominator = denominator_label,
   display_samples = display_samples,
   display_group_col = display_group_col,
-  display_subtitle = sprintf("Samples in the %d referenced design cell(s)", length(weights)),
+  display_subtitle = if (is.null(pair)) {
+    sprintf("Samples in the %d referenced design cell(s)", length(weights))
+  } else {
+    sprintf("%s (n=%d) and %s (n=%d)", pair$numerator, sum(display_samples & metadata[[display_group_col]] == pair$numerator),
+            pair$denominator, sum(display_samples & metadata[[display_group_col]] == pair$denominator))
+  },
   shrinkage_label = shrinkage_label, effect_axis = effect_axis,
   dispersion_fit = dispersion_fit, contrast_id = spec$estimand_id
 )
@@ -237,7 +268,14 @@ write_json_file(
     samples = ncol(dds),
     genes_tested = nrow(result_table),
     significant_up = sum(result_table$direction == "up_in_numerator"),
-    significant_down = sum(result_table$direction == "down_in_numerator")
+    significant_down = sum(result_table$direction == "down_in_numerator"),
+    shrinkage_outside_ci_significant = sum(shrinkage_outside),
+    warnings = if (any(shrinkage_outside)) list(sprintf(
+      paste0("%d FDR-significant genes have a displayed (%s) effect outside their unshrunk 95%% interval, ",
+             "so the shrinkage optimiser did not converge for them; effect-size thresholds and ",
+             "the direction classes derived from the displayed effect are not reliable for ",
+             "these genes (column shrinkage_outside_ci in de_results.tsv)."),
+      sum(shrinkage_outside), shrinkage_applied)) else list()
   ),
   file.path(args$outdir, "de_summary.json")
 )

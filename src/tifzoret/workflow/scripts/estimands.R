@@ -222,3 +222,20 @@ compile_contrast_vector <- function(spec, weights, metadata, design_formula,
   vector[abs(vector) < 1e-12] <- 0
   stats::setNames(vector, coefficient_names)
 }
+
+# Design matrix and contrast for testing per-sample scores (e.g. GSVA) on an estimand.
+# Uses the family's own fitted model: the design is model.matrix() of the family design
+# on the fit's colData, and the contrast is the vector the DE job compiles from the same
+# cell weights, so scores and genes answer exactly the same question. Columns are named
+# by resultsNames() (positionally aligned, see align_to_coefficients).
+estimand_score_contrast <- function(dds, family, spec, weights) {
+  metadata <- as.data.frame(SummarizedExperiment::colData(dds))
+  design_formula <- stats::as.formula(family$design)
+  coefficient_names <- DESeq2::resultsNames(dds)
+  contrast <- compile_contrast_vector(
+    c(family, spec), weights, metadata, design_formula, coefficient_names)
+  design <- align_to_coefficients(
+    stats::model.matrix(design_formula, data = metadata), coefficient_names)
+  rownames(design) <- rownames(metadata)
+  list(design = design, contrast = contrast)
+}

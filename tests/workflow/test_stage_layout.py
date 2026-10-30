@@ -4,7 +4,7 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parents[2] / "src" / "tifzoret" / "workflow" / "scripts"
 
 EXPECTED = {
-    "01_inputs": {"materialize_inputs.py", "resources.R", "export_symbol_map.R"},
+    "01_inputs": {"materialize_inputs.py", "resources.R", "export_symbol_map.R", "import_rsem.R"},
     "02_qc": {"qc.R", "batch.R", "sva.R", "variancepartition.R"},
     "03_differential": {"de_confirm.R", "factorial.R", "family_fit.R", "estimand.R", "term_test.R", "de_render.R"},
     "04_enrichment": {"pathways.R", "ontology.R", "spia.R", "enrichment_map.py"},

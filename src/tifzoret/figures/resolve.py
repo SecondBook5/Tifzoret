@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Iterable
 
@@ -11,17 +12,25 @@ if TYPE_CHECKING:
     from ..config import ResolvedProject
 
 
+def _under_results(project: "ResolvedProject", value: str) -> Path:
+    """Resolve a static-panel path against the results root, lexically.
+
+    A committed panel is addressed with ``..`` out of the results root. The kernel
+    refuses to walk ``..`` through a directory that does not exist, and on a fresh
+    clone the results root does not exist yet, so the path is normalised without
+    touching the filesystem before it is checked as a workflow input.
+    """
+    path = Path(value).expanduser()
+    return path if path.is_absolute() else Path(os.path.normpath(project.result_root / path))
+
+
 def resolve_panel(project: "ResolvedProject", panel: dict[str, Any]) -> ResolvedPanel:
     """Resolve a recipe panel to figure and displayed-data artifact paths."""
     constructor_id = panel.get("constructor")
     if not constructor_id:
-        source = Path(panel["source"]).expanduser()
-        source = source if source.is_absolute() else project.result_root / source
+        source = _under_results(project, panel["source"])
         source = source.with_suffix("") if source.suffix.lower() in {".pdf", ".png"} else source
-        displayed = []
-        for value in panel.get("displayed_data", []):
-            path = Path(value).expanduser()
-            displayed.append(path if path.is_absolute() else project.result_root / path)
+        displayed = [_under_results(project, value) for value in panel.get("displayed_data", [])]
         return ResolvedPanel(None, panel.get("variant"), panel.get("contrast"), panel.get("title", "Legacy source panel"), source, tuple(displayed), None)
 
     constructor = PANEL_REGISTRY[constructor_id]

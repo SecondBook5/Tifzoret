@@ -488,6 +488,67 @@ def _collect_tables(root: Path) -> list[dict]:
     return groups
 
 
+# Display labels for the default per-analysis figures promoted by front_door.py.
+_DEFAULT_FIGURE_LABELS = {
+    "de_overview": "DE overview",
+    "ora_bidirectional": "Over-representation (up and down)",
+    "gsva_heatmap": "GSVA pathway heatmap",
+    "gsea_curves": "GSEA curves",
+    "pca_correlation": "PCA and sample correlation",
+}
+
+
+_DEFAULT_FIGURE_GROUPS = {
+    "de_overview": "de",
+    "ora_bidirectional": "enrichment",
+    "gsva_heatmap": "enrichment",
+    "gsea_curves": "enrichment",
+    "pca_correlation": "qc",
+}
+
+
+def _default_figure_panels(root: Path) -> list[dict]:
+    """Panel-style entries for the non-assembled figures in ``figures/index.json``.
+
+    Index ids are ``<scope>__<figure>`` where scope is ``qc`` or a contrast id. Entries
+    without a PNG artifact are skipped. They are not marked ``selected``: no figure set
+    uses them."""
+    index_path = root / "figures" / "index.json"
+    if not index_path.is_file():
+        return []
+    try:
+        entries = json.loads(index_path.read_text(encoding="utf-8")).get("figures", [])
+    except json.JSONDecodeError:
+        return []
+    panels: list[dict] = []
+    for entry in entries:
+        entry_id = str(entry.get("id", ""))
+        if entry_id.endswith("__assembled"):
+            continue
+        png = next((a["path"] for a in entry.get("artifacts", []) if a["path"].endswith(".png")), None)
+        pdf = next((a["path"] for a in entry.get("artifacts", []) if a["path"].endswith(".pdf")), None)
+        image = _data_uri(root / png) if png else None
+        if image is None:
+            continue
+        scope, _, figure = entry_id.partition("__")
+        label = _DEFAULT_FIGURE_LABELS.get(figure) or _humanize(figure or scope)
+        panels.append({
+            "label": label,
+            "constructor": figure or scope,
+            "constructor_label": label,
+            "variant_label": None,
+            "group": _DEFAULT_FIGURE_GROUPS.get(figure) or _panel_group(figure),
+            "description": "Default figure from this analysis; no publication figure recipe was configured.",
+            "contrast": None if scope == "qc" else scope,
+            "selected": False,
+            "available": True,
+            "png": image,
+            "png_href": png,
+            "pdf_href": pdf,
+        })
+    return panels
+
+
 def _collect_figures(root: Path, recipe: dict | None) -> dict:
     """Build the assembled deliverables and the full panel catalog from the run's
     gallery + figure index, embedding a display PNG and linking full PNG/PDF."""
@@ -540,6 +601,10 @@ def _collect_figures(root: Path, recipe: dict | None) -> dict:
                 "png_href": _rel(panel.get("source_png", ""), root),
                 "pdf_href": _rel(panel.get("source_pdf", ""), root),
             })
+    if not assembled and not panels:
+        # No publication recipe or gallery: show the default per-analysis figures the
+        # front door already promoted into figures/index.json, so the report is not empty.
+        panels = _default_figure_panels(root)
     return {"assembled": assembled, "panels": panels}
 
 

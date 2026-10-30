@@ -4,6 +4,12 @@ rule contrast_de_confirm:
         samples=SAMPLES,
         annotation=ANNOTATION,
         contrasts=CONTRASTS,
+        families=FAMILIES,
+        estimands=ESTIMANDS,
+        cell_weights=CELL_WEIGHTS,
+        family_summary=lambda wildcards: str(
+            RESULTS / "families" / FAMILY_OF_ESTIMAND[wildcards.contrast_id] / "family_summary.json"
+        ),
         de=analysis("de", "tables/de_results.tsv"),
         config=str(CONFIG_PATH),
         script=str(WORKFLOW_ROOT / "scripts" / "03_differential" / "de_confirm.R"),
@@ -16,12 +22,18 @@ rule contrast_de_confirm:
         summary=analysis("de_confirm", "de_confirm_summary.json")
     log:
         analysis("de_confirm", "logs/de_confirm.log")
+    params:
+        family_dir=lambda wildcards: str(
+            RESULTS / "families" / FAMILY_OF_ESTIMAND[wildcards.contrast_id]
+        )
     conda:
         R_ENV
     shell:
         "Rscript --vanilla {input.script} --project-config {input.config:q} "
         "--counts {input.counts:q} --samples {input.samples:q} --annotation {input.annotation:q} "
-        "--contrasts {input.contrasts:q} --contrast-id {wildcards.contrast_id:q} --de {input.de:q} "
+        "--families {input.families:q} --estimands {input.estimands:q} "
+        "--cell-weights {input.cell_weights:q} --family-dir {params.family_dir:q} "
+        "--estimand-id {wildcards.contrast_id:q} --de {input.de:q} "
         "--outdir {RESULTS}/contrasts/{wildcards.contrast_id}/analyses/de_confirm > {log:q} 2>&1"
 
 rule contrast_spia:
@@ -52,6 +64,12 @@ rule contrast_pathways:
         panels=str(PROJECT.hypothesis_panels) if PROJECT.hypothesis_panels else [],
         config=str(CONFIG_PATH),
         contrasts=CONTRASTS,
+        families=FAMILIES,
+        estimands=ESTIMANDS,
+        cell_weights=CELL_WEIGHTS,
+        family_summary=lambda wildcards: str(
+            RESULTS / "families" / FAMILY_OF_ESTIMAND[wildcards.contrast_id] / "family_summary.json"
+        ),
         script=str(WORKFLOW_ROOT / "scripts" / "04_enrichment" / "pathways.R"),
         utils=UTILS_R
     output:
@@ -72,13 +90,18 @@ rule contrast_pathways:
     log:
         analysis("pathways", "logs/pathways.log")
     params:
-        panels_option=("--panels " + shlex.quote(str(PROJECT.hypothesis_panels))) if PROJECT.hypothesis_panels else ""
+        panels_option=("--panels " + shlex.quote(str(PROJECT.hypothesis_panels))) if PROJECT.hypothesis_panels else "",
+        family_dir=lambda wildcards: str(
+            RESULTS / "families" / FAMILY_OF_ESTIMAND[wildcards.contrast_id]
+        )
     conda:
         R_ENV
     shell:
         "Rscript --vanilla {input.script} --project-config {input.config:q} "
         "--samples {input.samples:q} --annotation {input.annotation:q} "
         "--contrasts {input.contrasts:q} --gmt {input.gmt:q} --resource-table {input.resources:q} {params.panels_option} "
+        "--families {input.families:q} --estimands {input.estimands:q} "
+        "--cell-weights {input.cell_weights:q} --family-dir {params.family_dir:q} "
         "--contrast-id {wildcards.contrast_id:q} --vst {input.vst:q} --de {input.de:q} "
         "--outdir {RESULTS}/contrasts/{wildcards.contrast_id}/analyses/pathways > {log:q} 2>&1"
 
@@ -86,6 +109,7 @@ rule contrast_ontology:
     input:
         ora=analysis("pathways", "tables/ora.tsv"),
         resources=RESOURCE_TABLE,
+        contrasts=CONTRASTS,
         config=str(CONFIG_PATH),
         script=str(WORKFLOW_ROOT / "scripts" / "04_enrichment" / "ontology.R"),
         utils=UTILS_R
@@ -104,7 +128,7 @@ rule contrast_ontology:
         R_ENV
     shell:
         "Rscript --vanilla {input.script} --project-config {input.config:q} --ora {input.ora:q} "
-        "--resource-table {input.resources:q} --contrast-id {wildcards.contrast_id:q} "
+        "--resource-table {input.resources:q} --contrasts {input.contrasts:q} --contrast-id {wildcards.contrast_id:q} "
         "--outdir {RESULTS}/contrasts/{wildcards.contrast_id}/analyses/ontology > {log:q} 2>&1"
 
 rule contrast_enrichment_map:

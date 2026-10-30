@@ -1,0 +1,10 @@
+# Dedicated input-boundary runtime; no downstream analysis packages are required.
+name: tifzoret-rsem
+channels: [conda-forge, bioconda]
+dependencies:
+  - python=3.12
+  - pyyaml=6.0
+  - jsonschema=4.23
+  - r-base=4.5.3
+  - bioconductor-tximport=1.38.2
+  - r-jsonlite=2.0.0

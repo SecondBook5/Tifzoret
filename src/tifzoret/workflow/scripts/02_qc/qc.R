@@ -39,9 +39,18 @@ metadata[[display_group]] <- factor(metadata[[display_group]], levels = observed
 
 design_formula <- stats::as.formula(cfg$design$formula)
 for (field in all.vars(design_formula)) metadata[[field]] <- factor(metadata[[field]])
-dds <- DESeq2::DESeqDataSetFromMatrix(countData = counts, colData = metadata, design = design_formula)
+# Genes with almost no reads carry no information: they are constant after the
+# transform, they tie in the ranks that ssGSEA/GSVA take over this matrix, and they
+# dilute every principal component. The transform sees only genes with at least
+# qc_min_total_count reads summed over all samples (the same flat floor the
+# total_count differential-expression filter applies). Library metrics below stay
+# on the unfiltered matrix: they describe the sequencing, not the transcriptome.
+qc_min_total_count <- 10L
+expressed <- rowSums(counts) >= qc_min_total_count
+if (sum(expressed) < 2L) stop("Fewer than two genes reach ", qc_min_total_count, " reads; nothing to transform.", call. = FALSE)
+dds <- make_deseq_dataset(cfg, cfg$.counts, counts[expressed, , drop = FALSE], metadata, design_formula)
 dds <- DESeq2::estimateSizeFactors(dds)
-vst <- DESeq2::varianceStabilizingTransformation(dds, blind = TRUE)
+vst <- blind_vst(dds)
 saveRDS(vst, file.path(dirs$objects, "vst.rds"))
 
 vst_matrix <- SummarizedExperiment::assay(vst)
@@ -190,9 +199,12 @@ annotation_plot <- metadata %>%
   scale_fill_manual(values = palette, drop = FALSE) +
   theme_void() +
   theme(legend.position = "none", plot.margin = margin(0, 6, 0, 38))
+# Replicate libraries often correlate above 0.99, where two decimals print "1.00" in nearly every
+# cell and hide the structure the colour scale shows; use three decimals when the range is narrow.
+correlation_digits <- if ((1 - min(correlation)) < 0.05) 3L else 2L
 correlation_plot <- ggplot(correlation_long, aes(sample_id, sample_id_y, fill = pearson_r)) +
   geom_tile(colour = "white", linewidth = 0.55) +
-  geom_text(aes(label = sprintf("%.2f", pearson_r)), size = 2.2, colour = NAVY) +
+  geom_text(aes(label = sprintf(paste0("%.", correlation_digits, "f"), pearson_r)), size = 2.2, colour = NAVY) +
   scale_fill_gradientn(
     colours = c("#3E6488", "#E8EEF2", "#F3B2A9", "#B52A2E"),
     limits = c(min(correlation), 1),
@@ -430,6 +442,9 @@ write_json_file(
     design = cfg$design$formula,
     samples = ncol(counts),
     genes = nrow(counts),
+    genes_in_vst = sum(expressed),
+    genes_excluded_low_count = sum(!expressed),
+    qc_min_total_count = qc_min_total_count,
     mitochondrial_genes = sum(mitochondrial),
     median_library_size = stats::median(library_sizes),
     median_detected_genes = stats::median(library_metrics$detected_genes),

@@ -72,6 +72,7 @@ properties:
   inputs:
     oneOf:
       - {$ref: "#/$defs/countInputs"}
+      - {$ref: "#/$defs/rsemInputs"}
       - {$ref: "#/$defs/bamInputs"}
       - {$ref: "#/$defs/nfcoreInputs"}
       - {$ref: "#/$defs/archiveInputs"}
@@ -271,9 +272,16 @@ properties:
             additionalProperties: false
             properties:
               # lfcShrink estimator for the reported log2 fold-changes. Omit for
-              # apeglm (the validated default). ashr/normal are alternative
-              # shrinkage priors; none reports the raw MLE (no shrinkage).
-              shrinkage: {type: string, enum: [apeglm, ashr, normal, none]}
+              # apeglm (the validated default). ashr is an alternative shrinkage
+              # prior; none reports the raw MLE (no shrinkage). Applies to every
+              # comparison listed in contrasts.tsv; declared families set their own.
+              shrinkage: {type: string, enum: [apeglm, ashr, none]}
+              # Low-expression gene filter shared by DESeq2, edgeR, pathways and
+              # ORA. Omit for design_aware (edgeR::filterByExpr on the design);
+              # total_count keeps genes with >= 10 reads summed over all samples;
+              # none tests every gene. Applies to every comparison listed in
+              # contrasts.tsv; declared families set their own.
+              filter: {type: string, enum: [design_aware, total_count, none]}
               # Confirmatory second DE engine run by the de_confirm module.
               confirm_method: {type: string, enum: [edger]}
           deconvolution:
@@ -685,6 +693,20 @@ $defs:
       samples: {type: string, minLength: 1}
       annotation: {type: string, minLength: 1}
       analysis_set: {type: string, minLength: 1}
+  rsemInputs:
+    type: object
+    additionalProperties: false
+    required: [kind, samples, annotation]
+    properties:
+      kind: {const: rsem}
+      samples: {type: string, minLength: 1}
+      annotation: {type: string, minLength: 1}
+      analysis_set: {type: string, minLength: 1}
+      counts_from_abundance: {type: string, enum: ["no"], default: "no"}
+      min_total_count: {type: integer, minimum: 0, default: 0}
+      count_threshold_operator: {type: string, enum: [gt, ge], default: ge}
+      exclude_gene_regex: {type: [string, "null"]}
+      zero_length_policy: {type: string, enum: [error, one], default: error}
   bamInputs:
     type: object
     additionalProperties: false

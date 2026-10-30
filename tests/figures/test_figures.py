@@ -133,3 +133,25 @@ def test_gallery_and_assembly_stage_auditable_panel_artifacts(tmp_path):
         assert (panel_dir / "panel.pdf").is_file()
         assert (panel_dir / "panel.png").is_file()
         assert (panel_dir / "panel.json").is_file()
+
+
+def test_a_static_panel_path_climbing_out_of_a_missing_results_root_resolves(tmp_path):
+    # A committed source panel is addressed relative to the results root with `..`.
+    # On a fresh clone that root does not exist yet, and the kernel refuses to walk
+    # `..` through a missing directory, so the path must be normalised lexically
+    # before Snakemake checks it as an input.
+    from types import SimpleNamespace
+
+    root = tmp_path / "results" / "study" / "primary"
+    project = SimpleNamespace(result_root=root)
+    resolved = resolve_panel(
+        project,
+        {
+            "id": "D",
+            "source": "../../../paper/panel/figure_d",
+            "displayed_data": ["../../../paper/panel/figure_d.tsv"],
+        },
+    )
+    assert ".." not in resolved.source.parts
+    assert resolved.source == tmp_path / "paper" / "panel" / "figure_d"
+    assert resolved.displayed_data == (tmp_path / "paper" / "panel" / "figure_d.tsv",)

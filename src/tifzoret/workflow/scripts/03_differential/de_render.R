@@ -16,6 +16,17 @@
 # labelled. Ported from the validated old pipeline (workflow/stages/de/*.R).
 
 # Symmetric display cap: max(min_cap, quantile(|values|, prob)). Display only.
+# "numerator vs denominator" text for titles and axes. A weighted estimand (an interaction, a main
+# effect, a composite) has no single denominator level, so name just its label instead of leaving a
+# dangling "versus" or "−".
+comparison_text <- function(numerator, denominator, joiner = " vs ") {
+  if (is.null(denominator) || length(denominator) == 0L || is.na(denominator) || !nzchar(denominator)) {
+    as.character(numerator)
+  } else {
+    paste0(numerator, joiner, denominator)
+  }
+}
+
 volcano_display_cap <- function(values, min_cap, prob = 0.995) {
   finite <- values[is.finite(values)]
   if (!length(finite)) return(as.numeric(min_cap))
@@ -120,7 +131,7 @@ build_clipped_volcano <- function(result_table, cfg, numerator, denominator, pri
   labeled_points <- visible %>% filter(gene_id %in% label_ids)
   displayed <- visible %>% mutate(label = ifelse(gene_id %in% label_ids, gene_symbol, NA_character_))
   subtitle <- paste0(
-    numerator, " vs ", denominator,
+    comparison_text(numerator, denominator),
     " · ", n_fdr_sig, " genes at FDR < ", formatC(fdr, format = "f", digits = 2),
     " · ", n_strict, " also |log2FC| ≥ ", formatC(lfc, format = "f", digits = 1)
   )
@@ -152,6 +163,10 @@ build_clipped_volcano <- function(result_table, cfg, numerator, denominator, pri
       label.padding = grid::unit(0.14, "lines"), label.r = grid::unit(0.10, "lines"), label.size = 0.18,
       segment.alpha = 0.78, segment.size = 0.32, segment.colour = "#4B5563",
       max.overlaps = Inf, force = 3.2, force_pull = 0.7, min.segment.length = 0,
+      # Keep every label inside the drawn panel: unbounded repulsion pushed the labels of
+      # the genes at the top edge off the canvas, where the clip removed them although
+      # they were selected (and listed in volcano_displayed.tsv).
+      xlim = c(-x_cap, x_cap), ylim = c(0, y_cap),
       direction = "both", seed = 42, show.legend = FALSE, inherit.aes = FALSE
     )} +
     scale_colour_manual(
@@ -168,7 +183,7 @@ build_clipped_volcano <- function(result_table, cfg, numerator, denominator, pri
     labs(
       title = paste0(numerator, ": volcano plot"),
       subtitle = subtitle,
-      x = paste0("Shrunken log2 fold change (", numerator, " vs ", denominator, ")"),
+      x = paste0("Shrunken log2 fold change (", comparison_text(numerator, denominator), ")"),
       y = expression(-log[10](raw ~ pvalue))
     ) +
     coord_cartesian(xlim = c(-x_cap, x_cap), ylim = c(0, y_cap)) +
@@ -254,20 +269,24 @@ render_de_outputs <- function(result_table, cfg, dds, metadata, dirs,
         breaks = SIGNIFICANCE_CLASSES,
         drop = FALSE,
         labels = c(
-          significant_up = paste0("Upregulated in ", numerator),
-          significant_down = paste0("Downregulated in ", numerator),
+          # The panel title already names the comparison; repeating a long numerator here pushed the
+          # legend past the panel edge.
+          significant_up = "Upregulated",
+          significant_down = "Downregulated",
           padj_only = sprintf("FDR < %.2g only", cfg$figures$de$fdr),
           lfc_only = sprintf("|log2FC| ≥ %.2g only", cfg$figures$de$abs_log2fc),
           ns = "Not significant"
         )
       ) +
       labs(
-        title = paste0(numerator, " versus ", denominator),
+        title = comparison_text(numerator, denominator, " versus "),
         subtitle = sprintf("DESeq2 with %s; FDR < %.2g and |log2FC| ≥ %.2g", shrinkage_label, cfg$figures$de$fdr, cfg$figures$de$abs_log2fc),
-        x = paste0(effect_axis, " (", numerator, " − ", denominator, ")"),
+        x = paste0(effect_axis, " (", comparison_text(numerator, denominator, " − "), ")"),
         y = expression(-log[10](italic(p))),
         colour = NULL
       ) +
+      # Two rows: five long entries in one row overflowed the panel and clipped the first one.
+      guides(colour = guide_legend(nrow = 2, byrow = TRUE)) +
       theme_publication(9.2) +
       theme(legend.position = "top")
   }
@@ -372,7 +391,7 @@ render_de_outputs <- function(result_table, cfg, dds, metadata, dirs,
   save_plot_pair(combined_heatmap, file.path(dirs$figures, "de_heatmap"), 7.3, max(6.0, 0.18 * nrow(selected_genes) + 2.2))
 
   de_overview <- (volcano_plot | ma_plot) / (pvalue_plot | lfc_plot) +
-    patchwork::plot_annotation(title = paste0("Differential-expression overview: ", numerator, " versus ", denominator))
+    patchwork::plot_annotation(title = paste0("Differential-expression overview: ", comparison_text(numerator, denominator, " versus ")))
   save_plot_pair(de_overview, file.path(dirs$figures, "de_overview"), 12.6, 9.6)
 
   invisible(list(expression_transform = expression_transform))

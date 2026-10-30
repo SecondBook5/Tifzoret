@@ -206,3 +206,36 @@ def test_estimand_r_is_named_in_the_engine_map():
     text = (ROOT / "docs" / "engine-map.md").read_text(encoding="utf-8")
     assert "estimand.R" in text
     assert "de_render.R" in text
+
+
+def test_an_estimand_that_is_already_a_coefficient_is_shrunk_in_place(tmp_path):
+    """A contrast equal to one coefficient of the canonical fit needs no refit.
+
+    ``est_arm_a1`` is ``(a1,b2) - (a1,b1)``: with ``a1``/``b1`` as the reference
+    levels that is exactly the ``factor_b`` coefficient. Shrinking it in place
+    is exact by construction. Re-deriving it through a releveled refit is not: the
+    MLE of a gene with zero counts in a group is not unique, so a refit can move it
+    by a fraction of a log2 unit, the identity assertion then fails, and a real study
+    silently gets ashr in place of the apeglm it asked for.
+    """
+    require_r("DESeq2", "apeglm")
+    outdir, _ = _extract(tmp_path, "est_arm_a1")
+    summary = json.loads((outdir / "de_summary.json").read_text(encoding="utf-8"))
+    assert summary["shrinkage_applied"] == "apeglm"
+    assert summary["reparameterized"] is False
+    assert summary["identity_max_abs_difference"] < 1e-9
+
+
+def test_the_shrunken_effects_posterior_se_is_exported_beside_the_unshrunk_se(tmp_path):
+    """A forest of shrunken effects needs the shrinkage estimator's own SE.
+
+    ``lfc_se`` is the unshrunk Wald SE (inference). Pairing the shrunken effect with it,
+    as an interval, draws a CI around a number it did not produce; ``lfc_se_shrunken`` is
+    the posterior SD that apeglm/ashr return with the shrunken effect.
+    """
+    require_r("DESeq2", "apeglm")
+    outdir, _ = _extract(tmp_path, "est_arm_a1")
+    rows = read_tsv_rows(outdir / "tables" / "de_results.tsv")
+    assert "lfc_se_shrunken" in rows[0]
+    finite = [float(r["lfc_se_shrunken"]) for r in rows if r["lfc_se_shrunken"] not in ("NA", "")]
+    assert finite and all(v > 0 for v in finite)

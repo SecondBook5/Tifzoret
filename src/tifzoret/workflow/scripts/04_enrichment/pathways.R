@@ -14,6 +14,7 @@
 script_arg <- grep("^--file=", commandArgs(FALSE), value = TRUE)[1]
 script_path <- normalizePath(sub("^--file=", "", script_arg), mustWork = TRUE)
 source(file.path(dirname(script_path), "..", "utils.R"), local = FALSE)
+source(file.path(dirname(script_path), "..", "estimands.R"), local = FALSE)
 
 suppressPackageStartupMessages({
   library(fgsea)
@@ -29,36 +30,6 @@ read_gmt <- function(path) {
   sets <- lapply(fields, function(row) unique(row[-c(1, 2)]))
   names(sets) <- vapply(fields, `[[`, character(1), 1L)
   sets
-}
-
-run_ora <- function(gene_sets, selected, universe, direction) {
-  selected <- unique(intersect(selected, universe))
-  universe <- unique(universe)
-  rows <- lapply(names(gene_sets), function(name) {
-    members <- unique(intersect(gene_sets[[name]], universe))
-    overlap <- intersect(selected, members)
-    n_selected <- length(selected)
-    n_members <- length(members)
-    count <- length(overlap)
-    p_value <- if (n_selected == 0L || n_members == 0L) 1 else stats::phyper(
-      count - 1L, n_members, length(universe) - n_members, n_selected,
-      lower.tail = FALSE
-    )
-    data.frame(
-      pathway = name,
-      direction = direction,
-      count = count,
-      selected_genes = n_selected,
-      pathway_genes = n_members,
-      universe_genes = length(universe),
-      gene_ratio = if (n_selected) count / n_selected else 0,
-      fold_enrichment = if (n_selected && n_members) (count / n_selected) / (n_members / length(universe)) else 0,
-      p_value = p_value,
-      overlap_genes = paste(overlap, collapse = ";"),
-      stringsAsFactors = FALSE
-    )
-  })
-  dplyr::bind_rows(rows)
 }
 
 running_enrichment <- function(ranks, genes) {
@@ -135,12 +106,26 @@ build_curve <- function(curve_table, pathway_row, numerator = "numerator", denom
     theme_publication(8) +
     theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(),
           plot.margin = margin(5, 5, 0, 5), panel.grid.major.x = element_blank())
+  # Hit lines cluster at one end of the ranked list, so labels placed at their own rank collide.
+  # Step them inward from the cluster instead, alternating two heights, with a leader line each.
+  hits_at_start <- mean(hits$rank) < n_genes / 2
+  label_layout <- gene_labs %>% arrange(if (hits_at_start) rank else desc(rank))
+  label_step <- 0.095 * n_genes
+  label_index <- seq_len(nrow(label_layout)) - 1L
+  label_layout <- label_layout %>% mutate(
+    label_x = if (hits_at_start) min(rank) + label_index * label_step else max(rank) - label_index * label_step,
+    label_y = 0.62 + (label_index %% 2L) * 0.32
+  )
+  label_hjust <- if (hits_at_start) 0 else 1
   hits_plot <- ggplot(hits, aes(rank, 0, colour = leading_edge)) +
     geom_segment(aes(xend = rank, y = -0.42, yend = 0.42), linewidth = 0.38) +
-    ggrepel::geom_text_repel(
-      data = gene_labs, aes(label = gene_symbol), y = 0.48, size = 1.9,
-      direction = "x", angle = 45, hjust = 0, vjust = 0, min.segment.length = 0,
-      segment.colour = "#AAB3BA", max.overlaps = Inf, seed = 42
+    geom_segment(
+      data = label_layout, aes(x = rank, xend = label_x, y = 0.42, yend = label_y - 0.06),
+      colour = "#AAB3BA", linewidth = 0.3, inherit.aes = FALSE
+    ) +
+    geom_text(
+      data = label_layout, aes(x = label_x, y = label_y, label = gene_symbol),
+      colour = line_col, size = 2.25, hjust = label_hjust, vjust = 0, inherit.aes = FALSE
     ) +
     scale_colour_manual(values = c(`FALSE` = "#111111", `TRUE` = line_col)) +
     scale_x_continuous(limits = c(1, n_genes), expand = c(0, 0)) +
@@ -192,10 +177,21 @@ metadata <- readr::read_tsv(cfg$.samples, show_col_types = FALSE, progress = FAL
 contrasts <- readr::read_tsv(cfg$.contrasts, show_col_types = FALSE, progress = FALSE)
 contrast <- contrasts[contrasts$contrast_id == args[["contrast-id"]], , drop = FALSE]
 if (nrow(contrast) != 1L) stop("Could not resolve contrast: ", args[["contrast-id"]], call. = FALSE)
-resolved <- resolve_contrast(contrast, cfg$design$formula)
+resolved <- resolve_contrast(contrast, cfg$design$formula, allow_estimand = TRUE)
 factor_name <- resolved$factor_name
 numerator <- resolved$numerator
 denominator <- resolved$denominator
+if (identical(resolved$type, "estimand")) {
+  # A weighted cell contrast has no single numerator/denominator level; name the two
+  # signs so labels and curve annotations still read sensibly.
+  numerator <- contrast$numerator[[1]]
+  denominator <- "opposite sign"
+  estimand_args <- parse_cli(c("families", "estimands", "cell-weights", "family-dir"))
+  estimand_spec <- read_estimand_spec(estimand_args$estimands, args[["contrast-id"]])
+  estimand_family <- read_family_spec(estimand_args$families, estimand_spec$family_id)
+  estimand_weights <- read_cell_weights(estimand_args[["cell-weights"]], args[["contrast-id"]])
+  estimand_dds <- readRDS(file.path(estimand_args[["family-dir"]], "objects", "deseq2.rds"))
+}
 
 vst <- readRDS(args$vst)
 expression <- SummarizedExperiment::assay(vst)
@@ -221,6 +217,8 @@ gene_set_sources <- setNames(resource_catalog$provider, resource_catalog$term)
 
 gene_sets <- read_gmt(cfg$.gmt)
 gene_sets <- lapply(gene_sets, intersect, y = rownames(expression))
+# Every annotated gene of every collection, before the size window (the ORA background).
+annotation_sets <- gene_sets
 gene_sets <- gene_sets[lengths(gene_sets) >= cfg$gene_sets$min_size & lengths(gene_sets) <= cfg$gene_sets$max_size]
 
 configured_curve_ids <- character()
@@ -293,18 +291,27 @@ fgsea_table <- suppressWarnings(fgsea::fgseaMultilevel(
   arrange(padj, desc(abs(NES)))
 readr::write_tsv(fgsea_table, file.path(dirs$tables, "fgsea.tsv"), na = "NA")
 
+# Over-representation: foreground from the unshrunk effect, background per collection
+# (see ora_foreground / run_ora in utils.R).
 universe <- unique(de$gene_symbol[!is.na(de$gene_symbol) & de$gene_symbol != ""])
-up_genes <- de$gene_symbol[de$direction == "up_in_numerator"]
-down_genes <- de$gene_symbol[de$direction == "down_in_numerator"]
+foreground <- ora_foreground(de, cfg$figures$de$fdr, cfg$figures$de$abs_log2fc)
+ora_set_source <- stats::setNames(
+  source_gene_set(union(names(annotation_sets), names(gene_sets))),
+  union(names(annotation_sets), names(gene_sets)))
 ora_table <- bind_rows(
-  run_ora(gene_sets, up_genes, universe, "up_in_numerator"),
-  run_ora(gene_sets, down_genes, universe, "down_in_numerator")
+  run_ora(gene_sets, foreground$up, universe, "up_in_numerator", ora_set_source, annotation_sets),
+  run_ora(gene_sets, foreground$down, universe, "down_in_numerator", ora_set_source, annotation_sets)
 ) %>%
+  mutate(gene_set_source = source_gene_set(pathway)) %>%
+  # One multiple-testing family per collection and direction: the hypotheses a reader
+  # weighs together are the terms of one ontology, so a Hallmark set's adjusted P must
+  # not depend on how many GO terms were tested beside it.
+  group_by(direction, gene_set_source) %>%
+  mutate(adjusted_p_value = p.adjust(p_value, method = "BH")) %>%
+  ungroup() %>%
   mutate(
-    adjusted_p_value = p.adjust(p_value, method = "BH"),
     negative_log10_adjusted_p = -log10(pmax(adjusted_p_value, .Machine$double.xmin)),
     pathway_label = label_gene_set(pathway),
-    gene_set_source = source_gene_set(pathway),
     contrast_id = args[["contrast-id"]]
   ) %>%
   arrange(direction, adjusted_p_value, desc(fold_enrichment))
@@ -355,7 +362,8 @@ save_plot_pair(ora_plot, file.path(dirs$figures, "ora_bidirectional"), 8.1, max(
 gsva_method <- if (is.null(cfg$figures$pathways$gsva_method)) "ssgsea" else cfg$figures$pathways$gsva_method
 gsva_set_ids <- cfg$figures$pathways$gsva_sets
 if (!is.null(gsva_set_ids)) {
-  gsva_input_sets <- gene_sets[intersect(as.character(gsva_set_ids), names(gene_sets))]
+  # gsva_sets chooses what is drawn; scoring and multiplicity cover the whole collection.
+  gsva_input_sets <- gene_sets[gsva_family_sets(gene_sets, as.character(gsva_set_ids))]
 } else {
   gsva_input_sets <- gene_sets[setdiff(names(gene_sets), configured_curve_ids)]
 }
@@ -379,6 +387,18 @@ if (identical(resolved$type, "pairwise")) {
   if (length(gsva_coefficient) != 1L) {
     stop("Could not resolve GSVA coefficient; available: ", paste(colnames(gsva_design), collapse = ", "), call. = FALSE)
   }
+} else if (identical(resolved$type, "estimand")) {
+  # Weighted cell contrast: reuse the family's design and the DE job's contrast vector.
+  score_contrast <- estimand_score_contrast(
+    estimand_dds, estimand_family, estimand_spec, estimand_weights)
+  fit_samples <- rownames(score_contrast$design)
+  if (!all(fit_samples %in% colnames(gsva_matrix))) {
+    stop("samples in the family fit are absent from the expression matrix: ",
+         paste(setdiff(fit_samples, colnames(gsva_matrix)), collapse = ", "), call. = FALSE)
+  }
+  gsva_design <- score_contrast$design
+  gsva_scores_fit <- gsva_matrix[, fit_samples, drop = FALSE]
+  gsva_coefficient <- 1L
 } else {
   # Interaction / named-coefficient contrast: build the per-row design directly
   # and extract the named coefficient (model.matrix renames ":" to "." so match
@@ -394,13 +414,21 @@ if (identical(resolved$type, "pairwise")) {
   }
   gsva_coefficient <- matched
 }
-gsva_fit <- limma::eBayes(limma::lmFit(gsva_matrix, gsva_design))
+if (identical(resolved$type, "estimand")) {
+  gsva_fit <- limma::lmFit(gsva_scores_fit, gsva_design)
+  gsva_fit <- limma::eBayes(limma::contrasts.fit(gsva_fit, matrix(
+    score_contrast$contrast, ncol = 1L, dimnames = list(colnames(gsva_design), "estimand"))))
+} else {
+  gsva_fit <- limma::eBayes(limma::lmFit(gsva_matrix, gsva_design))
+}
 gsva_diff <- limma::topTable(gsva_fit, coef = gsva_coefficient, number = Inf, sort.by = "P") %>%
   tibble::rownames_to_column("pathway") %>%
   mutate(
     pathway_label = label_gene_set(pathway),
     gene_set_source = source_gene_set(pathway),
     direction = ifelse(logFC >= 0, "up_in_numerator", "down_in_numerator"),
+    # TRUE for the sets drawn in the curated panel; adj.P.Val is over the full family.
+    displayed_in_panel = is.null(gsva_set_ids) | pathway %in% as.character(gsva_set_ids),
     contrast_id = args[["contrast-id"]],
     numerator = numerator,
     denominator = denominator
@@ -469,9 +497,16 @@ if (!is.null(gsva_set_ids)) {
 # labels, the #356D9A/#F8F7F3/#C94F4F ramp anchored at +/-1.5 (row_zscore already
 # clamps there), white hairline cell borders, and a Row z-score scale on the
 # right. Pathway ids stay the matrix rownames; display labels ride on row_labels.
-display_labels <- setNames(make.unique(prettify_gene_set_label(rownames(gsva_z))), rownames(gsva_z))
+# GO ids carry no readable name, so GO rows use the catalog description (first letter
+# capitalised); other collections (Hallmark, Reactome, KEGG, custom) keep the prettified id.
+pretty_ids <- prettify_gene_set_label(rownames(gsva_z))
+is_go_set <- source_gene_set(rownames(gsva_z)) == "go"
+go_labels <- label_gene_set(rownames(gsva_z))[is_go_set]
+pretty_ids[is_go_set] <- paste0(toupper(substr(go_labels, 1, 1)), substring(go_labels, 2))
+display_labels <- setNames(make.unique(pretty_ids), rownames(gsva_z))
 gsva_ordered <- gsva_z[row_order, column_order, drop = FALSE]
-row_labels_display <- unname(display_labels[rownames(gsva_ordered)])
+# Wrap long names so the left-hand labels are not clipped by the figure edge.
+row_labels_display <- stringr::str_wrap(unname(display_labels[rownames(gsva_ordered)]), width = 38)
 column_labels_display <- sample_display_labels(colnames(gsva_ordered), metadata[colnames(gsva_ordered), display_group_col])
 
 gsva_displayed <- as.data.frame(gsva_ordered, check.names = FALSE) %>%

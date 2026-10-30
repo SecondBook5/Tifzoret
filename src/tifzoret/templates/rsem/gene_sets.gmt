@@ -1,0 +1,7 @@
+CONTRACTILE_PROGRAM	Synthetic contractile program	Acta2	Cnn1	Myh11	Tagln	Tpm2	Mylk	Cald1	Des
+EPITHELIAL_PROGRAM	Synthetic epithelial program	Epcam	Krt5	Krt18	Cldn7	Gata3	Foxq1	Sfn	Spint2
+MITOCHONDRIAL_PROGRAM	Synthetic mitochondrial program	Ndufa1	Ndufb2	Ndufs3	Cox4i1	Cox5a	Sdhb	Atp5f1a	Uqcrc1
+IMMUNE_PROGRAM	Synthetic immune program	Lst1	Tyrobp	Fcer1g	Ctss	Aif1	C1qa	C1qb	Spi1
+VALVE_PROGRAM	Synthetic valve program	Foxc2	Gata2	Itga9	Sox18	Gja4	Efnb2	Nfatc1	Klf2
+REMODELING_BRIDGE	Synthetic mixed program	Acta2	Mylk	Epcam	Cldn7	Foxc2	Gata2	Ctss	Aif1
+

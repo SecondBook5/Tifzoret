@@ -21,6 +21,7 @@ from contextlib import contextmanager
 from dataclasses import replace
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -125,8 +126,13 @@ def materialize_samples(project: ResolvedProject, output: Path) -> None:
 
 
 def materialize_contrasts(project: ResolvedProject, output: Path) -> None:
-    """Write the project's resolved contrast rows to ``output`` under the source contrasts header."""
+    """Preserve resolved contrast fields, including synthesized family metadata."""
     header, _ = read_tsv(project.contrasts)
+    # Extend legacy headers so typed contrasts and per-family designs survive staging.
+    for row in project.contrast_rows:
+        for field in row:
+            if field not in header:
+                header.append(field)
     write_tsv(output, header, [dict(row) for row in project.contrast_rows])
 
 
@@ -211,6 +217,72 @@ def materialize_count_matrix(
         "source_samples": header[1:],
         "selected_samples": selected,
     }
+
+
+def materialize_rsem(
+    project: ResolvedProject, counts_output: Path, annotation_output: Path, bundle_output: Path,
+) -> dict[str, object]:
+    """Import validated gene-level RSEM files through tximport in an R process.
+
+    Preserve estimated counts, abundance, effective lengths and import receipts
+    alongside canonical rounded counts. All sources and resulting artifacts are
+    checksummed. Fail if the actual tximport runtime or output contract is absent.
+    No differential-expression model is fitted by this input adapter.
+    """
+    # Require the canonical bundle location expected by shared model constructors.
+    if bundle_output != counts_output.parent / "tximport.rds":
+        raise RuntimeError("RSEM bundle must be tximport.rds beside counts.tsv")
+    # Require an annotation source and resolved gene-level quantification files.
+    if project.annotation is None or not project.rsem_paths:
+        raise RuntimeError("RSEM boundary lacks annotation or quantification files")
+    # Require the actual R runtime rather than an emulated import.
+    rscript = shutil.which("Rscript")
+    # Fail with the precise missing input-boundary dependency.
+    if rscript is None:
+        raise RuntimeError("RSEM import requires Rscript with tximport and jsonlite")
+    # Materialize explicit settings rather than letting R infer study choices.
+    inputs = project.config["inputs"]
+    # Keep default behavior lossless until filtering is explicitly configured.
+    settings = {
+        "counts_from_abundance": inputs.get("counts_from_abundance", "no"),
+        "min_total_count": inputs.get("min_total_count", 0),
+        "count_threshold_operator": inputs.get("count_threshold_operator", "ge"),
+        "exclude_gene_regex": inputs.get("exclude_gene_regex"),
+        "zero_length_policy": inputs.get("zero_length_policy", "error"),
+    }
+    # Ensure the bundle's output directory exists before invoking R.
+    bundle_output.parent.mkdir(parents=True, exist_ok=True)
+    # Keep transient resolved-path manifests outside the repository.
+    with tempfile.TemporaryDirectory(prefix="tifzoret-rsem-") as temporary:
+        # Create the ordered source manifest consumed by tximport.
+        source_manifest = Path(temporary) / "samples.tsv"
+        # Preserve the validated sample-to-file mapping.
+        write_tsv(source_manifest, ["sample_id", "rsem"], [
+            {"sample_id": row["sample_id"], "rsem": str(path)}
+            for row, path in zip(project.sample_rows, project.rsem_paths, strict=True)
+        ])
+        # Serialize import options separately from scientific metadata.
+        options = Path(temporary) / "settings.json"
+        options.write_text(json.dumps(settings), encoding="utf-8")
+        # Run the actual package adapter and propagate import failures.
+        subprocess.run([rscript, "--vanilla", str(Path(__file__).with_name("import_rsem.R")),
+                        str(source_manifest), str(options), str(counts_output), str(bundle_output)], check=True)
+    # Copy the pinned annotation without inventing gene symbols.
+    shutil.copyfile(project.annotation, annotation_output)
+    # List every additional canonical artifact for provenance and verification.
+    artifacts = [bundle_output, *(bundle_output.parent / name for name in (
+        "rsem_expected_counts.tsv", "rsem_effective_lengths.tsv", "rsem_tpm.tsv",
+        "rsem_gene_universe.tsv", "rsem_import_receipt.json",
+        "rsem_model_lengths.tsv", "rsem_length_adjustments.tsv"))]
+    # Require all declared import artifacts before declaring the boundary complete.
+    if any(not path.is_file() for path in artifacts):
+        raise RuntimeError("RSEM import did not produce its complete artifact contract")
+    # Return exact source and output hashes alongside import semantics.
+    return {"kind": "rsem", "settings": settings,
+            "selected_samples": [row["sample_id"] for row in project.sample_rows],
+            "source_files": [{"path": str(path), "bytes": path.stat().st_size, "sha256": sha256(path)}
+                             for path in project.source_files],
+            "quantification_artifacts": [{"path": str(path), "sha256": sha256(path)} for path in artifacts]}
 
 
 def featurecounts_command(
@@ -636,6 +708,65 @@ def bam_record(sample_id: str, path: Path) -> dict[str, object]:
     }
 
 
+def counting_fingerprint(project: ResolvedProject) -> str:
+    """Digest of everything that determines the raw featureCounts result.
+
+    The BAMs (path, size, modification time), the GTF, the counting settings and the featureCounts
+    version. Edits elsewhere in project.yaml (design, contrasts, modules, figures, hypotheses) do not
+    change it, so they never trigger a recount of hours of BAM reading."""
+    def stamp(path: Path) -> dict[str, object]:
+        info = Path(path).stat()
+        return {"path": str(path), "bytes": info.st_size, "mtime_ns": info.st_mtime_ns}
+
+    payload = {
+        "bams": [stamp(path) for path in project.bam_paths],
+        "gtf": stamp(project.gtf),
+        "counting": project.config["counting"],
+        "featureCounts": command_version(["featureCounts", "-v"]),
+    }
+    return hashlib.sha256(json.dumps(payload, sort_keys=True, default=str).encode("utf-8")).hexdigest()
+
+
+def counting_cache_dir(counts_output: Path, project: ResolvedProject) -> Path:
+    """Cache directory for this project's raw featureCounts result, under the run's .cache folder."""
+    return counts_output.parent.parent / ".cache" / "counting" / counting_fingerprint(project)[:24]
+
+
+def load_counting_cache(cache_dir: Path, workdir: Path):
+    """The cached (mode, strand_rates, raw_counts, final_log, dominance), or None on any miss."""
+    table, meta_path = cache_dir / "featurecounts.tsv", cache_dir / "meta.json"
+    if os.environ.get("TIFZORET_RECOUNT") or not (table.is_file() and meta_path.is_file()):
+        return None
+    try:
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        raw_counts = workdir / "featurecounts.tsv"
+        shutil.copyfile(table, raw_counts)
+        return (
+            int(meta["mode"]),
+            {int(key): float(value) for key, value in meta["strand_rates"].items()},
+            raw_counts,
+            str(meta["final_log"]),
+            meta["strand_dominance"],
+        )
+    except (OSError, ValueError, KeyError):
+        return None
+
+
+def save_counting_cache(cache_dir: Path, mode: int, strand_rates: dict[int, float],
+                        raw_counts: Path, final_log: str, dominance: float | None) -> None:
+    """Store the raw featureCounts result so a later run can skip the BAM reading."""
+    staging = cache_dir.with_name(cache_dir.name + ".partial")
+    shutil.rmtree(staging, ignore_errors=True)
+    staging.mkdir(parents=True)
+    shutil.copyfile(raw_counts, staging / "featurecounts.tsv")
+    (staging / "meta.json").write_text(json.dumps({
+        "mode": mode, "strand_rates": {str(key): value for key, value in strand_rates.items()},
+        "final_log": final_log, "strand_dominance": dominance,
+    }), encoding="utf-8")
+    shutil.rmtree(cache_dir, ignore_errors=True)
+    staging.rename(cache_dir)
+
+
 def command_version(command: list[str]) -> str:
     """Run ``command`` and return its first non-empty output line, or ``"unavailable"``."""
     result = subprocess.run(
@@ -673,14 +804,23 @@ def materialize_bams(
         configured = project.config["counting"]["strandedness"]
         strand_rates: dict[int, float] = {}
         strand_dominance: float | None = None
-        if configured == "infer":
-            mode, strand_rates, raw_counts, final_log, strand_dominance = infer_strand_mode(
-                project, temporary
-            )
+        cache_dir = counting_cache_dir(counts_output, project)
+        cached = load_counting_cache(cache_dir, temporary)
+        if cached is not None:
+            mode, strand_rates, raw_counts, final_log, strand_dominance = cached
+            print(f"reusing the cached featureCounts result {cache_dir} "
+                  "(set TIFZORET_RECOUNT=1 to count again)", file=sys.stderr)
         else:
-            mode = STRAND_MODES[configured]
-            raw_counts = temporary / "featurecounts.tsv"
-            final_log = run_featurecounts(project, raw_counts, mode)
+            if configured == "infer":
+                mode, strand_rates, raw_counts, final_log, strand_dominance = infer_strand_mode(
+                    project, temporary
+                )
+            else:
+                mode = STRAND_MODES[configured]
+                raw_counts = temporary / "featurecounts.tsv"
+                final_log = run_featurecounts(project, raw_counts, mode)
+            # Save before parsing so a later parse problem never costs the counting again.
+            save_counting_cache(cache_dir, mode, strand_rates, raw_counts, final_log, strand_dominance)
         gene_ids, canonical, lengths = parse_featurecounts(raw_counts, project, counts_output)
     write_annotation(
         project.gtf, gene_ids, annotation_output, resolution=_symbol_resolution_settings(project)
@@ -769,11 +909,12 @@ def main() -> None:
     parser.add_argument("--tpm")
     parser.add_argument("--fpkm")
     parser.add_argument("--gene-lengths", dest="gene_lengths")
+    parser.add_argument("--tximport")
     parser.add_argument("--threads", type=int)
     args = parser.parse_args()
 
     project = load_project(args.project_config)
-    if args.threads is not None and project.source_kind != "counts":
+    if args.threads is not None and project.source_kind not in {"counts", "rsem"}:
         if args.threads < 1:
             parser.error("--threads must be at least 1")
         project.config["counting"]["threads"] = args.threads
@@ -828,6 +969,12 @@ def main() -> None:
 
     if project.source_kind == "counts":
         provenance = materialize_count_matrix(project, counts_output, annotation_output)
+    elif project.source_kind == "rsem":
+        # Require an explicit bundle output so length-aware data are never dropped.
+        if not args.tximport:
+            parser.error("rsem inputs require --tximport")
+        # Import through the shared length-aware boundary.
+        provenance = materialize_rsem(project, counts_output, annotation_output, Path(args.tximport).resolve())
     elif project.source_kind == "archive":
         provenance = materialize_archive(
             project, counts_output, annotation_output, abundance_outputs

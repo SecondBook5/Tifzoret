@@ -17,6 +17,8 @@ source(file.path(dirname(script_path), "..", "utils.R"), local = FALSE)
 
 args <- parse_cli(c("project-config", "ora", "resource-table", "contrast-id", "outdir"))
 cfg <- read_project(args[["project-config"]])
+# Consume canonical resolved contrasts when the workflow supplies them.
+if (!is.null(args$contrasts)) cfg$.contrasts <- normalizePath(args$contrasts, mustWork = TRUE)
 dirs <- ensure_output_dirs(args$outdir)
 contrasts <- readr::read_tsv(cfg$.contrasts, show_col_types = FALSE, progress = FALSE)
 contrast <- contrasts[contrasts$contrast_id == args[["contrast-id"]], , drop = FALSE]
@@ -90,15 +92,16 @@ if (nrow(displayed)) {
           paste0("Downregulated\nin ", numerator)
         )
       ),
-      # Reference wraps the pathway term at width 31 for the y-axis labels.
-      term_display = str_wrap(as.character(term_label), width = 31),
+      # Wrapped at width 44 (the reference used 31, which left three- and four-line labels
+      # overlapping their neighbours); the figure height below follows the label lines.
+      term_display = str_wrap(as.character(term_label), width = 44),
       # Disambiguate identical terms appearing in both directions.
       term_key = paste(direction, pathway, sep = "::")
     )
   # Order terms within each direction by ascending score (reference term_levels).
   term_levels <- plot_data %>% arrange(direction_facet, score) %>% pull(term_key)
   plot_data <- plot_data %>% mutate(term_key = factor(term_key, levels = term_levels))
-  score_limit <- ceiling(max(plot_data$score))
+  scale_limits <- ora_scale_limits(plot_data$score, plot_data$count)
   ratio_limit <- ceiling(max(plot_data$gene_ratio_pct) / 2) * 2
 
   plot <- ggplot(plot_data, aes(gene_ratio_pct, term_key)) +
@@ -123,8 +126,8 @@ if (nrow(displayed)) {
       option = "magma",
       begin = 0.14,
       end = 0.94,
-      limits = c(4, score_limit),
-      breaks = c(4, 8, 12, 16),
+      limits = scale_limits$score,
+      breaks = scale_limits$score_breaks,
       name = expression(-log[10](FDR)),
       guide = guide_colourbar(
         title.position = "top",
@@ -134,8 +137,8 @@ if (nrow(displayed)) {
     ) +
     scale_size_area(
       max_size = 8.5,
-      limits = c(0, 80),
-      breaks = c(10, 30, 50, 70),
+      limits = scale_limits$count,
+      breaks = scale_limits$count_breaks,
       name = "Genes"
     ) +
     labs(
@@ -176,9 +179,12 @@ if (nrow(displayed)) {
 } else {
   plot <- empty_plot("GO biological process enrichment", "No GO BP terms passed the configured criteria")
 }
-# Fixed panel geometry matches the reference's stacked (ncol = 1) layout,
-# saved by save_pub() at 7.25 x 5.7 in.
-save_plot_pair(plot, file.path(dirs$figures, "ontology_bidirectional"), 7.25, 5.7)
+# Stacked (ncol = 1) layout. Height follows the number of wrapped label lines so labels never
+# overlap; the empty-plot fallback keeps the reference 5.7 in.
+bubble_height <- if (nrow(displayed)) {
+  2.1 + nrow(plot_data) * max(0.25, 0.112 * max(str_count(plot_data$term_display, "\n") + 1L) + 0.07) + 0.5
+} else 5.7
+save_plot_pair(plot, file.path(dirs$figures, "ontology_bidirectional"), 8.2, bubble_height)
 
 # Additive breadth view: when extra GO domains (CC/MF) or Reactome are enabled,
 # summarise the top enriched terms per domain and direction in one faceted bar
@@ -194,10 +200,23 @@ domain_top <- ontology %>%
     score = negative_log10_adjusted_p,
     direction_display = ifelse(direction == "up_in_numerator", paste0("Up in ", numerator), paste0("Down in ", numerator)),
     term_key = paste(ontology, direction, pathway, sep = "::"),
-    term_display = str_wrap(as.character(term_label), width = 34)
+    term_display = as.character(term_label)
   )
-domain_top <- domain_top %>% arrange(ontology, direction, score) %>% mutate(term_key = factor(term_key, levels = unique(term_key)))
-readr::write_tsv(domain_top, file.path(dirs$tables, "ontology_domain_displayed.tsv"))
+# Smallest wrap width (widening the figure with it) that keeps every label within two lines.
+domain_wrap <- 66L
+for (w in c(66L, 80L, 95L, 110L)) {
+  domain_wrap <- w
+  if (!nrow(domain_top) || max(str_count(str_wrap(domain_top$term_display, width = w), "\n") + 1L) <= 2L) break
+}
+domain_top <- domain_top %>%
+  mutate(term_display = str_wrap(term_display, width = domain_wrap)) %>%
+  arrange(ontology, direction, score) %>%
+  mutate(term_key = factor(term_key, levels = unique(term_key)))
+# Wrapped labels contain line breaks, which would split rows in this unquoted TSV; write them flat.
+readr::write_tsv(
+  dplyr::mutate(domain_top, term_display = gsub("\n", " ", term_display, fixed = TRUE)),
+  file.path(dirs$tables, "ontology_domain_displayed.tsv")
+)
 
 direction_colours <- c("up" = "#C0392B", "down" = "#2C6FBB")
 domain_fill <- stats::setNames(
@@ -227,7 +246,12 @@ if (nrow(domain_top)) {
   domains_plot <- empty_plot("Enrichment across ontology domains", "No over-represented terms to display")
 }
 domain_count <- length(unique(domain_top$ontology))
-save_plot_pair(domains_plot, file.path(dirs$figures, "ontology_domains"), 7.4, max(4.4, 1.6 * max(domain_count, 1) + 1.6))
+domain_lines <- if (nrow(domain_top)) max(str_count(domain_top$term_display, "\n") + 1L) else 1L
+save_plot_pair(
+  domains_plot, file.path(dirs$figures, "ontology_domains"),
+  9 + 0.055 * (domain_wrap - 66L),
+  max(4.4, 1.9 + nrow(domain_top) * (0.096 * domain_lines + 0.03) + 0.12 * max(domain_count, 1))
+)
 
 write_json_file(list(
   contrast_id = args[["contrast-id"]],

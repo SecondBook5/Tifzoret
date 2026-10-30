@@ -51,7 +51,7 @@ def test_contrast_rows_are_not_duplicated_by_desugaring(tmp_path):
     assert len(ids) == len(set(ids))
 
 
-def test_a_declared_family_appears_in_contrast_rows_as_an_estimand(tmp_path):
+def test_a_declared_unit_difference_exports_native_pairwise_levels(tmp_path):
     config_path = _project(tmp_path)
     columns = _samples_columns(config_path)
     factor = "condition" if "condition" in columns else columns[1]
@@ -84,10 +84,12 @@ def test_a_declared_family_appears_in_contrast_rows_as_an_estimand(tmp_path):
 
     project = load_project(_write(config_path, mutate))
     row = next(r for r in project.contrast_rows if r["contrast_id"] == "est_declared")
-    assert row["type"] == "estimand"
+    assert row["type"] == "pairwise"
     assert row["family"] == "fam_a"
     assert row["role"] == "primary"
-    assert row["numerator"] == "Declared estimand"
+    assert row["numerator"] == levels[1]
+    assert row["denominator"] == levels[0]
+    assert row["factor"] == factor
 
 
 def test_estimand_rows_and_cell_weights_are_exported(tmp_path):
@@ -229,3 +231,27 @@ def test_an_unknown_analysis_key_is_still_rejected(tmp_path):
 
     with pytest.raises(ProjectValidationError):
         load_project(_write(config_path, mutate))
+
+
+def test_project_de_settings_reach_the_desugared_families(tmp_path):
+    config_path = _write(
+        _project(tmp_path),
+        lambda data: data["analysis"].setdefault("settings", {}).update(
+            {"de": {"filter": "total_count", "shrinkage": "ashr"}}
+        ),
+    )
+    project = load_project(config_path)
+    assert project.families
+    assert {family.filter for family in project.families} == {"total_count"}
+    assert {family.shrinkage for family in project.families} == {"ashr"}
+
+
+def test_a_shrinkage_the_engine_cannot_run_fails_validation(tmp_path):
+    config_path = _write(
+        _project(tmp_path),
+        lambda data: data["analysis"].setdefault("settings", {}).update(
+            {"de": {"shrinkage": "normal"}}
+        ),
+    )
+    with pytest.raises(ProjectValidationError):
+        load_project(config_path)
