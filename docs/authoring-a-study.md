@@ -141,7 +141,7 @@ mutant vs. WT.
 ```bash
 tifzoret init my-factorial --input factorial
 ```
-This creates a complete 2×2 example you can adapt to your design.
+This creates a complete 2×2 example (synthetic counts) you can adapt to your design.
 
 **What you get:**
 - One DESeq2 fit for the whole design (shared dispersions)

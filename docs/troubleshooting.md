@@ -21,6 +21,17 @@ runs — run it first.
 - **Archive error.** BAM member paths are relative to `member_root`; absolute
   paths, symlinks, and `..` traversal are rejected. Repackage with clean
   relative paths.
+- **"BAM and GTF share no chromosome names".** `validate` compares the contig names in the
+  first BAM header with the sequence names in the GTF, because a BAM aligned to UCSC-style names
+  (`chr1`) counted against an Ensembl-style GTF (`1`) assigns no reads. The message says whether
+  they differ only in a `chr` prefix. Use an annotation built for the same reference as the BAMs,
+  or add or remove the prefix in the GTF (for example `awk 'BEGIN{FS=OFS="\t"} !/^#/{$1="chr"$1} 1'`
+  for Ensembl-to-UCSC, keeping `MT` as `chrM`).
+- **A rerun counted again, or did not.** The raw featureCounts result is cached under
+  `<results>/.cache/counting/`, keyed on the BAMs (path, size, modification time), the GTF, the
+  `counting` settings and the featureCounts version. Editing anything else in `project.yaml`
+  (design, contrasts, modules, figures, hypotheses) reuses it and finishes in seconds. Changing
+  any keyed input, or touching a BAM, recounts. Set `TIFZORET_RECOUNT=1` to force a recount.
 - **featureCounts failed.** The stage surfaces featureCounts' own stdout/stderr
   and the strand mode it was running. Confirm the BAMs are coordinate-sorted,
   the annotation GTF matches the alignment genome, and paired-end/strandedness
@@ -54,9 +65,11 @@ runs — run it first.
 - **Shrinkage prior rejected.** `shrinkage` must be one of `apeglm`, `ashr`,
   `normal`, `none`; other values are rejected at validation.
 - **Downstream module skipped for a contrast.** `coefficient`/`omnibus`
-  contrasts are scoped to DE and pathways only. Two-group modules (composition,
-  regulators, networks, hypotheses, publication) expand over pairwise contrasts
-  by design.
+  contrasts and weighted estimands (interactions, main effects, composites) run
+  DE, pathways and ontology. The other two-group modules (composition,
+  regulators, networks, hypotheses, publication, SPIA, enrichment maps, SVA,
+  WGCNA) expand over pairwise contrasts only; a multi-factor family yields no
+  pairwise rows, so they do not run for it.
 
 ## Small-sample and exploratory modules
 

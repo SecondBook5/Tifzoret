@@ -13,7 +13,7 @@ first push to github.com/SecondBook5/Tifzoret, move these onto the badge line ab
 [![Container](https://github.com/SecondBook5/Tifzoret/actions/workflows/container.yml/badge.svg)](https://github.com/SecondBook5/Tifzoret/actions/workflows/container.yml)
 -->
 
-Tifzoret is a configuration-driven, end-to-end downstream bulk RNA-seq workflow. It accepts aligned BAMs, nf-core/rnaseq BAM outputs, ZIP/TAR archives containing BAMs, or validated integer count matrices. FASTQ processing remains upstream in nf-core/rnaseq.
+Tifzoret is a configuration-driven, end-to-end downstream bulk RNA-seq workflow. It accepts aligned BAMs, nf-core/rnaseq BAM outputs, ZIP/TAR archives containing BAMs, validated integer count matrices, or native gene-level RSEM estimates through tximport. FASTQ processing remains upstream in nf-core/rnaseq.
 
 The stable v1 target is mouse. The analysis contracts are species-neutral, and the human provider implementation is already exercised at the schema boundary while parity fixtures are completed.
 
@@ -46,7 +46,7 @@ Cell-state results are relative signature/composition scores, not estimated cell
 
 ## How it works
 
-The CLI compiles `project.yaml` into a Snakemake DAG: any of four input kinds is
+The CLI compiles `project.yaml` into a Snakemake DAG: any of five input kinds is
 normalized to one canonical count boundary, study-scoped QC runs once, and every
 declared contrast fans out through the analysis modules its profile enables
 before the results converge on figure assembly, an HTML report, and a checksummed
@@ -96,7 +96,9 @@ tifzoret figures build my-study/project.yaml --cores 4
 tifzoret figures gallery my-study/project.yaml
 ```
 
-Input scaffolds are available for `counts`, `bam`, `nfcore-rnaseq`, and `archive`.
+Input scaffolds are available for `counts`, `rsem`, `bam`, `nfcore-rnaseq`, and `archive`.
+See [the RSEM boundary](docs/rsem-boundary.md) for preserved effective lengths,
+import filters, runtime requirements, and optional-module restrictions.
 The [CLI reference](docs/cli.md) documents every command and flag.
 
 ## Project contract

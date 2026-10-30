@@ -73,6 +73,7 @@ Rscript workflow/scripts/01_inputs/export_symbol_map.R \
 Every input declares `samples` and may declare `analysis_set`.
 
 - `counts`: add `counts` and `annotation`.
+- `rsem`: add `annotation` and a `rsem` path per sample; see [rsem-boundary.md](rsem-boundary.md).
 - `bam`: add `bam_root`, `gtf`, and a `bam` column in `samples.tsv`.
 - `nfcore_rnaseq`: add `root`, `gtf`, and `bam_pattern`; placeholders are
   resolved from metadata columns.
@@ -129,7 +130,8 @@ analysis:
 
 **Estimand fields:**
 - `id`: Unique identifier (filesystem-safe)
-- `role`: `primary`, `secondary`, or `exploratory` (affects filtering/display)
+- `role`: `primary`. A declared family requires exactly one `primary` estimand;
+  leave `role` out for every other estimand (no other value is accepted)
 - `expression`: Cell-means arithmetic using `(level_a, level_b)` notation
 - `label` (optional): Human-readable description
 
@@ -139,9 +141,20 @@ analysis:
   supported via desugaring
 
 **Knobs (under `analysis.settings.de`):**
-- `gene_filter_threshold`: Minimum gene count (default: 10)
-- `shrinkage`: `apeglm` (default), `ashr`, `normal`, or `none` (apeglm falls
-  back to ashr if reparameterization fails; ashr is not installed by default)
+- `filter`: the low-expression gene filter shared by DESeq2, edgeR, the pathway
+  universe and ORA. `design_aware` (default) is `edgeR::filterByExpr` on the
+  design; `total_count` keeps genes with at least 10 reads summed over all
+  samples; `none` tests every gene.
+- `shrinkage`: `apeglm` (default), `ashr`, or `none`. apeglm is applied in place
+  when the comparison is a single coefficient of the fit (a pairwise contrast
+  against the reference level) and through a releveled refit otherwise; if that
+  refit cannot reproduce the canonical contrast the table falls back to ashr and
+  records it per row in the `shrinkage` column.
+
+Both knobs apply to every comparison in `contrasts.tsv`; a family declared under
+`analysis.families` sets its own. To make a pairwise contrast shrink against its
+denominator, give its `contrasts.tsv` row `reference_levels` (for example
+`condition=control`); without it the reference is the alphabetically first level.
 
 Batch correction, edgeR confirmation, signature-matrix
 deconvolution, Ollivier-Ricci curvature, cross-contrast consensus, SPIA

@@ -82,11 +82,12 @@ condition_any      condition
 
 **What changes in your results:**
 
-1. **Gene filter default:** Moved from 0 to 10 reads. Genes with <10 reads in all
-   samples are now filtered before DE testing. This matches established practice
-   and reduces multiple-testing burden. **Action:** Regenerate goldens with the
-   new filter, or set `analysis.settings.de.gene_filter_threshold: 0` to preserve
-   exact old behavior.
+1. **Gene filter default:** Moved from a flat floor (genes with fewer than 10 reads
+   summed over all samples were dropped) to a design-aware filter
+   (`edgeR::filterByExpr` on the design). The tested gene set and every adjusted P
+   change. **Action:** regenerate goldens with the new filter, or set
+   `analysis.settings.de.filter: total_count` to keep the flat floor and the old
+   numbers.
 
 2. **Covariance-aware standard errors:** Estimands with multiple non-zero
    coefficients (e.g., `(treated,wt) + (treated,mutant) - (control,wt) -

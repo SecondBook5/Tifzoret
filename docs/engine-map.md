@@ -2,6 +2,9 @@
 
 This document is the ordered index — the literal "entry → step 1 → step 2 → … → what curvature means" artifact that maps every analysis stage to its purpose, scientific motivation, and place in the pipeline.
 
+Native gene-level RSEM preparation additionally invokes `01_inputs/import_rsem.R`;
+see [rsem-boundary.md](rsem-boundary.md).
+
 ## Entry point
 
 `tifzoret run project.yaml` invokes [`cli.py:main`](../src/tifzoret/cli.py) (line 387), which validates the configuration, then calls `_snakemake` (line 71) to build and execute the Snakemake invocation. The workflow is defined in [`workflow/Snakefile`](../src/tifzoret/workflow/Snakefile), which `include:`s rule groups from `workflow/rules/*.smk`. Each rule shells out to a stage script via `{input.script}`.
@@ -23,7 +26,7 @@ The input boundary: materializing canonical tables from heterogeneous upstream s
 
 | Stage | What | Why | Rule | Env |
 |-------|------|-----|------|-----|
-| [01_inputs/materialize_inputs.py](../src/tifzoret/workflow/scripts/01_inputs/materialize_inputs.py) | Materialize external sources into canonical input tables | Transforms heterogeneous upstream data (featureCounts, Salmon, nf-core, GEO, archive) into four uniform TSVs (counts, samples, contrasts, annotation); downstream is blind to source | `materialize_inputs` (core.smk) | core.yaml |
+| [01_inputs/materialize_inputs.py](../src/tifzoret/workflow/scripts/01_inputs/materialize_inputs.py) | Materialize external sources into canonical input tables | Transforms supported upstream data (featureCounts, RSEM/tximport, nf-core BAMs, BAM archive) into four uniform TSVs (counts, samples, contrasts, annotation); downstream is blind to source | `materialize_inputs` (core.smk) | core.yaml |
 | [01_inputs/resources.R](../src/tifzoret/workflow/scripts/01_inputs/resources.R) | Fetch and cache gene sets from external knowledge bases | Provides pathway/ontology/regulon annotations for enrichment tests; pinned versions prevent drift | `resolve_resources` (providers.smk) | r.yaml |
 | [01_inputs/export_symbol_map.R](../src/tifzoret/workflow/scripts/01_inputs/export_symbol_map.R) | Generate a frozen gene ID → symbol TSV from annotation contract | Provides a consistent symbol lookup for materialize_inputs.py when annotation.tsv is unavailable at ingestion time | manual helper (not a Snakemake rule) | r.yaml |
 

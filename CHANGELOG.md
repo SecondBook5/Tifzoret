@@ -1,6 +1,26 @@
 # Changelog
 
+## Unreleased audit fixes
+
+- `analysis.settings.de.shrinkage` and the new `analysis.settings.de.filter` now reach the families desugared from `contrasts.tsv`; since the `de.R` retirement nothing read `shrinkage`, and `normal` was accepted by the schema but rejected by the compiler.
+- An estimand that is already a single coefficient of the canonical fit is shrunk in place. Re-deriving it through a releveled refit failed the identity assertion on real data (genes with zero counts in a group have no unique MLE), which silently replaced apeglm with ashr for the whole table.
+- DE summaries and `de_results.tsv` record FDR-significant genes whose displayed (shrunken) effect lies outside their unshrunk 95% interval (`shrinkage_outside_ci`), the signature of an apeglm optimiser failure on zero-count genes, and surface the count as a caveat.
+- The study-wide QC variance-stabilising transform sees only genes with at least 10 reads in total (31,845 of 56,748 genes in a GRCm39 matrix were constant or near-empty), through `blind_vst`, which uses DESeq2's `vst()` when it has 1,000 informative genes and `varianceStabilizingTransformation()` otherwise. PCA variance, sample distance, composition scores and pathway scores change; library metrics do not.
+- A curated GSVA panel (`figures.pathways.gsva_sets`) scores and tests every measured set of the collection it was curated from, so the adjusted P values are over the collection and the listed sets only choose what is drawn. A listed set that is not measured is an error.
+- The GO over-representation plot derives its colour and size scales from the displayed terms; fixed limits silently removed terms with -log10(FDR) below 4 or more than 80 genes.
+- A static source panel addressed with `..` out of the results root now resolves lexically, so a fresh clone no longer fails at DAG build because the results directory does not exist yet.
+- Documentation no longer describes `gene_filter_threshold`, which never existed, and states the real change of filter default.
+
 ## 0.1.0 - unreleased mouse v1
+
+- Pathways and ontology now run for every estimand, not only pairwise rows: the GSVA differential reuses the family's fitted design and the DE job's contrast vector (`estimand_score_contrast`), so interactions, main effects and weighted composites get pathway and ontology results.
+- `condition_palette` falls back to a colour-blind-safe palette (with a warning) for levels the configured palette does not name, instead of returning `NA` colours.
+- `validate` now fails early, in about a second, when BAMs and the GTF use different chromosome names (a `chr` prefix mismatch), instead of after hours of counting.
+- The raw featureCounts result is cached per run (keyed on BAMs, GTF, counting settings, tool version), so editing non-counting config no longer recounts the BAMs; `TIFZORET_RECOUNT=1` forces a recount.
+- Estimand DE figures no longer show a dangling "versus" or "−", and the volcano legend no longer overflows the panel.
+- GSVA heatmaps show GO term names instead of GO ids; ontology figures draw every term and no longer overlap their labels; `ontology_domain_displayed.tsv` no longer splits rows on embedded line breaks.
+- The report shows the per-analysis figures when no publication recipe is configured.
+- Claims and figure recipes may reference estimands declared in `analysis.families` (families are compiled before claim validation).
 
 - Configuration v2, profiles, four input adapters, canonical contracts, and migration command.
 - QC, DE, enrichment, ontology, composition, regulators, STRING/GRN, hypotheses, publication, and systems modules.

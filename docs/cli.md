@@ -34,6 +34,8 @@ Every command that drives the Snakemake workflow (`prepare`, `dry-run`, `run`,
 | `--cores N` | `1` | Cores handed to Snakemake. |
 | `--snakemake PATH` | `snakemake` | Snakemake executable to invoke. |
 | `--no-conda` | off | Skip per-rule conda provisioning and run in the current environment (the single-env `environment.yaml` path). Omit it to use `--use-conda` with the pinned per-rule locks. |
+| `--conda-prefix DIR` | `$TIFZORET_CONDA_PREFIX` | Reuse (or build) the per-rule conda environments under `DIR`, so a new study reuses environments an earlier one already built instead of rebuilding them. Ignored with `--no-conda`. |
+| `--unlock` | off | Clear a stale Snakemake lock left by an interrupted run, then continue. |
 
 These commands always validate the project first, then run Snakemake from the
 configuration file's directory so relative paths resolve exactly as they do
@@ -44,7 +46,7 @@ under `validate`.
 ### `init`
 
 ```text
-tifzoret init <directory> [--input counts|bam|nfcore-rnaseq|archive]
+tifzoret init <directory> [--input counts|rsem|bam|nfcore-rnaseq|archive|publication|factorial]
 ```
 
 Scaffold a new project directory from an input-boundary template (`--input`
@@ -62,7 +64,7 @@ Exits `2` on any contract violation.
 ### `prepare`
 
 ```text
-tifzoret prepare <project> [--cores N] [--snakemake PATH] [--no-conda]
+tifzoret prepare <project> [--cores N] [--snakemake PATH] [--no-conda] [--conda-prefix DIR] [--unlock]
 ```
 
 Run only up to the canonical inputs (counting/annotation) and stop, targeting
@@ -72,7 +74,7 @@ full analysis.
 ### `dry-run`
 
 ```text
-tifzoret dry-run <project> [--cores N] [--snakemake PATH] [--no-conda]
+tifzoret dry-run <project> [--cores N] [--snakemake PATH] [--no-conda] [--conda-prefix DIR] [--unlock]
 ```
 
 Resolve and print the Snakemake DAG without executing any rule.
@@ -80,7 +82,7 @@ Resolve and print the Snakemake DAG without executing any rule.
 ### `run`
 
 ```text
-tifzoret run <project> [--cores N] [--snakemake PATH] [--no-conda]
+tifzoret run <project> [--cores N] [--snakemake PATH] [--no-conda] [--conda-prefix DIR] [--unlock]
 ```
 
 Execute the full analysis for the resolved profile, targeting the release
@@ -89,7 +91,7 @@ Execute the full analysis for the resolved profile, targeting the release
 ### `report`
 
 ```text
-tifzoret report <project> [--cores N] [--snakemake PATH] [--no-conda]
+tifzoret report <project> [--cores N] [--snakemake PATH] [--no-conda] [--conda-prefix DIR] [--unlock]
 ```
 
 Build the navigable `REPORT.html`, running any missing upstream steps.
@@ -97,7 +99,7 @@ Build the navigable `REPORT.html`, running any missing upstream steps.
 ### `assemble`
 
 ```text
-tifzoret assemble <project> [--cores N] [--snakemake PATH] [--no-conda]
+tifzoret assemble <project> [--cores N] [--snakemake PATH] [--no-conda] [--conda-prefix DIR] [--unlock]
 ```
 
 Assemble the configured multi-panel publication figure(s). Requires
@@ -127,7 +129,7 @@ available variants. `--json` emits the machine-readable catalog.
 ### `figures build`
 
 ```text
-tifzoret figures build <project> [--figure-set NAME] [--cores N] [--snakemake PATH] [--no-conda]
+tifzoret figures build <project> [--figure-set NAME] [--cores N] [--snakemake PATH] [--no-conda] [--conda-prefix DIR] [--unlock]
 ```
 
 Render the recipe's panels and assemble its figure set(s). With `--figure-set`

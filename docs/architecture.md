@@ -18,6 +18,7 @@ results through the collection CLI rather than nesting project DAGs.
 Adapters convert supported upstream products into the canonical contract:
 
 - integer counts keyed by `gene_id`;
+- for native RSEM, an aligned tximport bundle retaining estimated counts, abundance and effective lengths;
 - sample metadata keyed by `sample_id`;
 - `gene_id` to `gene_symbol` annotation;
 - named contrasts with explicit numerator and denominator.
@@ -74,3 +75,5 @@ recipes, and golden-reference results — and points at the engine through the
 neutral configuration contract. Analysis code is promoted into the engine only
 after its inputs and outputs are expressed through those neutral contracts, so
 no study biology enters the engine.
+
+Native gene-level RSEM uses the length-aware contract described in [rsem-boundary.md](rsem-boundary.md).

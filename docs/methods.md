@@ -30,6 +30,10 @@ per-gene exon lengths and length-normalized TPM and FPKM matrices alongside the
 integer counts. Validated count-matrix inputs carry no exon lengths and
 therefore no abundance.
 
+Native gene-level RSEM inputs are imported using tximport and retain effective
+lengths through DESeqDataSetFromTximport. Import filtering and package versions
+are recorded separately. See [rsem-boundary.md](rsem-boundary.md).
+
 ## 2. Quality control
 
 QC operates on DESeq2 variance-stabilized (VST) expression and reports library
@@ -72,11 +76,16 @@ rather than the naive independent sum. A **term-test lattice** is automatically
 derived from each family's design, generating nested full-vs-reduced
 likelihood-ratio tests for each factor and interaction. Design validity is
 enforced at configuration time (rank, replication, confounding checks) before
-any compute begins. The eleven downstream two-group modules (composition,
-regulators, networks, hypotheses, publication, pathways, ontology, SPIA,
-enrichment maps, SVA, WGCNA) expand over pairwise estimands that are
-auto-desugared from legacy `contrasts.tsv` rows at config-load time, preserving
-backward compatibility.
+any compute begins. Differential expression, pathways and ontology run for
+**every** estimand, including interactions, main effects and weighted
+composites. For these, the GSVA/ssGSEA differential reuses the family's own
+fitted design and the same contrast vector as the DE job, so the pathway scores
+and the genes answer one question; GSEA and over-representation use the
+estimand's signed DE table. The remaining two-group modules (composition,
+regulators, networks, hypotheses, publication, SPIA, enrichment maps, SVA,
+WGCNA) still expand over pairwise estimands only, which include those
+auto-desugared from legacy `contrasts.tsv` rows at config-load time; they are
+skipped, without error, for estimands of a multi-factor family.
 
 ## 4. Functional enrichment and ontology
 
