@@ -331,12 +331,17 @@ detected_genes_table <- library_metrics %>%
   mutate(sample_id = factor(sample_id, levels = colnames(counts)))
 readr::write_tsv(detected_genes_table, file.path(dirs$tables, "detected_genes_displayed.tsv"))
 detected_genes_median <- stats::median(detected_genes_table$detected_genes)
+detected_genes_labels <- stats::setNames(
+  sample_display_labels(as.character(detected_genes_table$sample_id), detected_genes_table[[group_col]]),
+  as.character(detected_genes_table$sample_id)
+)
 detected_genes_plot <- ggplot(detected_genes_table, aes(sample_id, detected_genes)) +
   geom_hline(yintercept = detected_genes_median, linetype = "22", colour = MID_GREY, linewidth = 0.5) +
   geom_point(aes(fill = .data[[group_col]], colour = .data[[group_col]]), shape = 21, size = 3.8, stroke = 0.9) +
   scale_fill_manual(values = palette, drop = FALSE, labels = cond_display) +
   scale_colour_manual(values = ink_palette, drop = FALSE) +
   scale_y_continuous(labels = scales::label_number(), expand = expansion(mult = 0.12)) +
+  scale_x_discrete(labels = detected_genes_labels) +
   labs(
     title = "Detected genes by sample",
     subtitle = "Genes with a non-zero count in each sample; dashed line marks the median",

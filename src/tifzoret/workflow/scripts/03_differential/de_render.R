@@ -135,6 +135,14 @@ build_clipped_volcano <- function(result_table, cfg, numerator, denominator, pri
     " · ", n_fdr_sig, " genes at FDR < ", formatC(fdr, format = "f", digits = 2),
     " · ", n_strict, " also |log2FC| ≥ ", formatC(lfc, format = "f", digits = 1)
   )
+  # A class whose only genes sit off-scale (drawn as legend-less triangles) or that has no genes at all would
+  # get a blank legend key or none. Give such classes a key through an empty layer, so the legend always shows
+  # the four classes with their colours. When every class has a visible point this adds nothing.
+  legend_classes <- c("significant_up", "significant_down", "padj_only", "lfc_only")
+  legend_only_classes <- setdiff(
+    legend_classes,
+    unique(as.character(dplyr::filter(visible, significance_class != "ns", !y_offscale)$significance_class))
+  )
   plot <- ggplot(visible, aes(log2_fold_change, neg_log10_p_display)) +
     annotate("rect", xmin = -Inf, xmax = -lfc, ymin = 0, ymax = Inf, fill = "#E8EEF6", alpha = 0.28) +
     annotate("rect", xmin = lfc, xmax = Inf, ymin = 0, ymax = Inf, fill = "#F7E8E8", alpha = 0.28) +
@@ -155,6 +163,11 @@ build_clipped_volcano <- function(result_table, cfg, numerator, denominator, pri
       data = labeled_points, aes(colour = significance_class),
       size = point_size + 1.0, alpha = 0.96, stroke = 0.2, na.rm = TRUE, show.legend = FALSE
     ) +
+    {if (length(legend_only_classes)) geom_point(
+      data = data.frame(log2_fold_change = NA_real_, neg_log10_p_display = NA_real_,
+                        significance_class = legend_only_classes),
+      aes(colour = significance_class), size = point_size + 0.1, alpha = 0.82, na.rm = TRUE
+    )} +
     geom_vline(xintercept = c(-lfc, lfc), linetype = "dotted", colour = "#6B7280", linewidth = 0.45) +
     {if (nrow(label_rows)) ggrepel::geom_label_repel(
       data = label_rows, aes(log2_fold_change, neg_log10_p_display, label = gene_symbol),
@@ -171,7 +184,7 @@ build_clipped_volcano <- function(result_table, cfg, numerator, denominator, pri
     )} +
     scale_colour_manual(
       values = SIGNIFICANCE_PALETTE,
-      breaks = c("significant_up", "significant_down", "padj_only", "lfc_only"),
+      breaks = legend_classes,
       labels = c(
         paste0("FDR<", fdr, ", up"),
         paste0("FDR<", fdr, ", down"),
@@ -343,7 +356,7 @@ render_de_outputs <- function(result_table, cfg, dds, metadata, dirs,
   de_pca_plot <- ggplot(de_pca_table, aes(PC1, PC2, colour = .data[[display_group_col]])) +
     {if (nrow(de_pca_ellipses)) geom_path(data = de_pca_ellipses, aes(PC1, PC2, colour = ellipse_group, group = ellipse_group), inherit.aes = FALSE, linewidth = 0.8)} +
     geom_point(size = 3.1) +
-    ggrepel::geom_text_repel(aes(label = sample_id), size = 2.5, show.legend = FALSE, max.overlaps = Inf, seed = 42) +
+    ggrepel::geom_text_repel(aes(label = sample_display_labels(sample_id, .data[[display_group_col]])), size = 2.5, show.legend = FALSE, max.overlaps = Inf, seed = 42) +
     scale_colour_manual(values = display_palette, drop = FALSE) +
     labs(title = "Contrast PCA", subtitle = display_subtitle, x = sprintf("PC1 (%.1f%%)", de_pca_variance[[1]]), y = sprintf("PC2 (%.1f%%)", de_pca_variance[[2]]), colour = NULL) +
     theme_publication(8.8) + theme(legend.position = "top")
@@ -356,6 +369,10 @@ render_de_outputs <- function(result_table, cfg, dds, metadata, dirs,
     column_distance <- stats::as.dist(1 - stats::cor(z, method = "pearson"))
     column_order <- colnames(z)[stats::hclust(column_distance, method = "average")$order]
     heatmap <- tile_heatmap(z, row_order, column_order, legend_title = "Row z-score", base_size = 7.7)
+    # Column labels follow the display convention of the PCA (condition plus replicate number); tables keep the ids.
+    heatmap$plot <- heatmap$plot + scale_x_discrete(labels = stats::setNames(
+      sample_display_labels(column_order, metadata[column_order, display_group_col]), column_order
+    ))
     heatmap_table <- heatmap$table %>%
       mutate(
         condition = as.character(metadata[as.character(sample_id), display_group_col]),
