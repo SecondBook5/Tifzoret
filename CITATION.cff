@@ -4,7 +4,7 @@ message: If you use Tifzoret, cite the software release and the upstream methods
 type: software
 license: MIT
 authors:
-  - given-names: AJ
+  - given-names: "Abraham J."
     family-names: Book
     orcid: https://orcid.org/0009-0004-7058-7510
 # `version:` is kept in step with pyproject.toml; update `date-released:` if the tag is cut on another day.
