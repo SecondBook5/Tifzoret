@@ -10,3 +10,12 @@ authors:
 # `version:` is kept in step with pyproject.toml; update `date-released:` if the tag is cut on another day.
 version: 0.1.1
 date-released: 2026-10-31
+doi: 10.5281/zenodo.23852865
+repository-code: "https://github.com/SecondBook5/Tifzoret"
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.23852865
+    description: "Archived release v0.1.1 (Zenodo)"
+  - type: doi
+    value: 10.5281/zenodo.23852864
+    description: "All versions (Zenodo concept DOI)"
