@@ -5,13 +5,9 @@
 ![Snakemake](https://img.shields.io/badge/snakemake-%E2%89%A58-039475.svg)
 ![Version](https://img.shields.io/badge/version-0.1.1-blue.svg)
 ![Reproducibility](https://img.shields.io/badge/conda%20envs-pinned%20locks-8A2BE2.svg)
-
-<!--
-CI and release badges render only against a live GitHub repository. After the
-first push to github.com/SecondBook5/Tifzoret, move these onto the badge line above:
 [![CI](https://github.com/SecondBook5/Tifzoret/actions/workflows/ci.yml/badge.svg)](https://github.com/SecondBook5/Tifzoret/actions/workflows/ci.yml)
 [![Container](https://github.com/SecondBook5/Tifzoret/actions/workflows/container.yml/badge.svg)](https://github.com/SecondBook5/Tifzoret/actions/workflows/container.yml)
--->
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23852864.svg)](https://doi.org/10.5281/zenodo.23852864)
 
 Tifzoret is a configuration-driven, end-to-end downstream bulk RNA-seq workflow. It accepts aligned BAMs, nf-core/rnaseq BAM outputs, ZIP/TAR archives containing BAMs, validated integer count matrices, or native gene-level RSEM estimates through tximport. FASTQ processing remains upstream in nf-core/rnaseq.
 
@@ -229,8 +225,12 @@ Every rendered constructor declares PDF, PNG, and displayed-data artifacts. The 
 
 ## Citation
 
-If you use Tifzoret, please cite it via [`CITATION.cff`](CITATION.cff). GitHub
-renders this as a "Cite this repository" action once the repository is public.
+If you use Tifzoret, please cite the release you used. Each release is archived at Zenodo:
+
+- v0.1.1: [10.5281/zenodo.23852865](https://doi.org/10.5281/zenodo.23852865)
+- all versions (always the latest): [10.5281/zenodo.23852864](https://doi.org/10.5281/zenodo.23852864)
+
+The same information is in [`CITATION.cff`](CITATION.cff), which GitHub renders as a "Cite this repository" action.
 
 ## License
 
