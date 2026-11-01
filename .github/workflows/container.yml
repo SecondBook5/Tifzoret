@@ -23,7 +23,7 @@ jobs:
           docker run --rm \
             --entrypoint /usr/local/bin/_entrypoint.sh \
             tifzoret:test \
-            bash -lc '
+            bash -c '
               set -euo pipefail
               study_dir="$(mktemp -d)"
               tifzoret init "$study_dir" --input counts

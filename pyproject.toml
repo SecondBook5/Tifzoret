@@ -46,7 +46,7 @@ Issues = "https://github.com/SecondBook5/Tifzoret/issues"
 
 [project.optional-dependencies]
 workflow = ["snakemake>=8,<10", "scipy", "numpy"]
-test = ["pytest>=8", "build>=1.2", "ruff>=0.8"]
+test = ["pytest>=8", "build>=1.2", "ruff==0.8.6"]
 
 [project.scripts]
 tifzoret = "tifzoret.cli:main"
@@ -76,6 +76,10 @@ tifzoret = [
 line-length = 120
 target-version = "py311"
 extend-exclude = ["build", "dist"]
+
+[tool.ruff.lint]
+# The rules ruff 0.8 selects by default, stated so that a newer ruff does not add rules unannounced.
+select = ["E4", "E7", "E9", "F"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -1,6 +1,8 @@
 FROM mambaorg/micromamba:2.3.2
 
 USER root
+# micromamba writes a temporary pip requirements file into the working directory, so the unprivileged user must own it.
+RUN mkdir -p /opt/tifzoret && chown $MAMBA_USER:$MAMBA_USER /opt/tifzoret
 WORKDIR /opt/tifzoret
 COPY --chown=$MAMBA_USER:$MAMBA_USER . /opt/tifzoret
 USER $MAMBA_USER

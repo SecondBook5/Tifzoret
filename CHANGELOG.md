@@ -2,6 +2,7 @@
 
 ## 0.1.1
 
+- Continuous integration: ruff is pinned (`ruff==0.8.6`) and its rule set stated in `pyproject.toml`, so a newer ruff cannot fail the build unannounced; the RSEM tests that run `tximport` through `Rscript` skip when R is absent; the container build gives the unprivileged user the working directory that `micromamba` writes to; the container smoke test runs in a non-login shell so the activated environment stays on `PATH`; the weekly live-provider job points at the test file's current path.
 - Code style: `src/` and `tests/` are `ruff check` clean and `ruff format` formatted, configured in `pyproject.toml` (line length 120) and enforced in CI. One-line `a; b` statements were split onto separate lines (verified by comparing the parsed syntax tree before and after), unused imports and variables were removed, and two lambda assignments became functions; behaviour is unchanged.
 - `analysis.settings.de.shrinkage` and the new `analysis.settings.de.filter` now reach the families desugared from `contrasts.tsv`; since the `de.R` retirement nothing read `shrinkage`, and `normal` was accepted by the schema but rejected by the compiler.
 - An estimand that is already a single coefficient of the canonical fit is shrunk in place. Re-deriving it through a releveled refit failed the identity assertion on real data (genes with zero counts in a group have no unique MLE), which silently replaced apeglm with ashr for the whole table.

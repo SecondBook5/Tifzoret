@@ -19,6 +19,9 @@ TEMPLATE = ROOT / "src/tifzoret/templates/rsem"
 MATERIALIZE = ROOT / "src/tifzoret/workflow/scripts/01_inputs/materialize_inputs.py"
 UTILS = ROOT / "src/tifzoret/workflow/scripts/utils.R"
 
+# The RSEM import builds its tximport object with Rscript, so tests that run it need R.
+requires_r = pytest.mark.skipif(shutil.which("Rscript") is None, reason="the RSEM import needs Rscript")
+
 
 @pytest.fixture
 def study(tmp_path: Path) -> Path:
@@ -184,7 +187,7 @@ def test_gene_level_rsem_rejects_transcript_only_modes(study: Path, mode: str) -
         load_project(study)
 
 
-@pytest.mark.parametrize("policy", ["error", "one"])
+@pytest.mark.parametrize("policy", ["error", pytest.param("one", marks=requires_r)])
 def test_zero_lengths_have_explicit_audited_policy(study: Path, policy: str) -> None:
     """Preserve original lengths and audit corrections rather than deleting genes."""
     cfg = yaml.safe_load(study.read_text())
@@ -220,6 +223,7 @@ def test_zero_lengths_have_explicit_audited_policy(study: Path, policy: str) -> 
     assert model[sample] == "1"
 
 
+@requires_r
 @pytest.mark.parametrize("operator,retained", [("gt", False), ("ge", True)])
 def test_count_threshold_comparator_is_exact(study: Path, operator: str, retained: bool) -> None:
     """A gene on the threshold must follow the declared strict/inclusive rule."""
@@ -275,6 +279,7 @@ def test_provider_backed_study_allows_empty_custom_gmt(study: Path) -> None:
     assert load_project(study).config["resources"]["providers"]["go"] is True
 
 
+@requires_r
 def test_declared_pairwise_labels_survive_materialization(study: Path) -> None:
     """The enrichment seam must retain levels, type and family design."""
     cfg = yaml.safe_load(study.read_text())
