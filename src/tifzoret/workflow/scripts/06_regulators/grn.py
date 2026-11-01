@@ -86,7 +86,7 @@ def program_map(project) -> tuple[dict[str, str], dict[str, str]]:
 
 def grn_curation(project) -> dict[str, Any] | None:
     """Return the GRN curation block from ``analysis.settings.regulators.grn`` (or None)."""
-    settings = ((project.config.get("analysis") or {}).get("settings") or {})
+    settings = (project.config.get("analysis") or {}).get("settings") or {}
     regulators = settings.get("regulators") or {}
     return regulators.get("grn")
 
@@ -104,7 +104,9 @@ def personalized_pagerank(graph: nx.Graph, seeds: list[str], damping: float) -> 
     # High iteration budget / tight tolerance so the power iteration matches the
     # exact solver (igraph PRPACK) the reference figure used closely enough that
     # threshold assignments agree.
-    return nx.pagerank(graph, alpha=damping, personalization=personalization, weight="likelihood", max_iter=2000, tol=1.0e-12)
+    return nx.pagerank(
+        graph, alpha=damping, personalization=personalization, weight="likelihood", max_iter=2000, tol=1.0e-12
+    )
 
 
 def program_modularity(graph: nx.Graph, labels: dict[str, str]) -> float:
@@ -114,20 +116,27 @@ def program_modularity(graph: nx.Graph, labels: dict[str, str]) -> float:
     for node in graph:
         groups[labels.get(node, "Unassigned")].add(node)
     communities = [nodes for nodes in groups.values() if nodes]
-    return nx.community.modularity(graph, communities, weight="weight") if graph.number_of_edges() and len(communities) > 1 else 0.0
+    return (
+        nx.community.modularity(graph, communities, weight="weight")
+        if graph.number_of_edges() and len(communities) > 1
+        else 0.0
+    )
 
 
 def separation_score(jaccard: dict[tuple[str, str], float], group_a: list[str], group_b: list[str]) -> float:
     """Return the target-overlap separation of two groups: mean within-group Jaccard
     minus mean between-group Jaccard."""
+
     def mean_within(group: list[str]) -> float:
         """Mean pairwise Jaccard within ``group`` (NaN if fewer than two members)."""
         pairs = [jaccard[(a, b)] for a, b in combinations(sorted(group), 2)]
         return sum(pairs) / len(pairs) if pairs else math.nan
+
     def mean_between(a: list[str], b: list[str]) -> float:
         """Mean Jaccard over all cross pairs between ``a`` and ``b`` (NaN if either is empty)."""
         pairs = [jaccard[(x, y)] for x in a for y in b]
         return sum(pairs) / len(pairs) if pairs else math.nan
+
     within = [value for value in (mean_within(group_a), mean_within(group_b)) if not math.isnan(value)]
     within_mean = sum(within) / len(within) if within else math.nan
     return within_mean - mean_between(group_a, group_b)
@@ -170,7 +179,7 @@ def exact_overlap_test(
         for _ in range(draws):
             shuffled = regs[:]
             rng.shuffle(shuffled)
-            if separation_score(jaccard, shuffled[:n_a], shuffled[n_a:n_a + n_b]) >= observed - eps:
+            if separation_score(jaccard, shuffled[:n_a], shuffled[n_a : n_a + n_b]) >= observed - eps:
                 ge += 1
             count += 1
     p_value = ge / count if count else math.nan
@@ -211,7 +220,10 @@ def main() -> None:
 
     # Top regulators by differential activity: adj.P.Val, then |t| (matches the
     # bespoke grn_dorothea.R selection; the |t| tiebreak orders the FDR-tied tail).
-    top_n = int(((project.config.get("analysis") or {}).get("settings") or {}).get("regulators", {}).get("top_regulators", 15) or 15)
+    top_n = int(
+        ((project.config.get("analysis") or {}).get("settings") or {}).get("regulators", {}).get("top_regulators", 15)
+        or 15
+    )
     ranked = sorted(
         regulator_rows,
         key=lambda row: (numeric(row.get("adj.P.Val"), math.inf), -abs(numeric(row.get("t"), 0.0))),
@@ -225,12 +237,20 @@ def main() -> None:
     targets_per_regulator = 6
     selected_edges: list[dict[str, Any]] = []
     for regulator in top_regulators:
-        current = [row for row in candidate_edges if row["source"] == regulator and row["target"].upper() in de and de[row["target"].upper()].get("adjusted_p_value") not in (None, "", "NA")]
-        current.sort(key=lambda row: (
-            numeric(de[row["target"].upper()].get("adjusted_p_value"), math.inf),
-            -abs(numeric(de[row["target"].upper()].get("log2_fold_change"), 0.0)),
-            row["target"],
-        ))
+        current = [
+            row
+            for row in candidate_edges
+            if row["source"] == regulator
+            and row["target"].upper() in de
+            and de[row["target"].upper()].get("adjusted_p_value") not in (None, "", "NA")
+        ]
+        current.sort(
+            key=lambda row: (
+                numeric(de[row["target"].upper()].get("adjusted_p_value"), math.inf),
+                -abs(numeric(de[row["target"].upper()].get("log2_fold_change"), 0.0)),
+                row["target"],
+            )
+        )
         selected_edges.extend(current[:targets_per_regulator])
 
     # Enriched edge table (mode of regulation, confidence likelihood, target DE).
@@ -241,14 +261,18 @@ def main() -> None:
         mor = numeric(row.get("mor"), 1.0)
         likelihood = numeric(row.get("likelihood"), 1.0)
         de_row = de.get(target.upper(), {})
-        edge_rows.append({
-            "source": source, "target": target,
-            "mode_of_regulation": mor, "likelihood": likelihood,
-            "regulation": "Activating" if mor >= 0 else "Repressing",
-            "target_log2fc": de_row.get("log2_fold_change", ""),
-            "target_padj": de_row.get("adjusted_p_value", ""),
-            "weight": max(abs(mor) * abs(likelihood), 0.05),
-        })
+        edge_rows.append(
+            {
+                "source": source,
+                "target": target,
+                "mode_of_regulation": mor,
+                "likelihood": likelihood,
+                "regulation": "Activating" if mor >= 0 else "Repressing",
+                "target_log2fc": de_row.get("log2_fold_change", ""),
+                "target_padj": de_row.get("adjusted_p_value", ""),
+                "weight": max(abs(mor) * abs(likelihood), 0.05),
+            }
+        )
         reg_targets[source].add(target)
 
     # Directed graph for the rectangular view + degree; likelihood-weighted
@@ -304,7 +328,9 @@ def main() -> None:
         for program in programs_early:
             anchors = [a for a in program.get("anchors", []) if a in diffusion_graph]
             for anchor in [a for a in anchors if a not in main_names]:
-                partners = [c for c in anchors if c != anchor and c in main_names] or [c for c in anchors if c != anchor]
+                partners = [c for c in anchors if c != anchor and c in main_names] or [
+                    c for c in anchors if c != anchor
+                ]
                 best: tuple[float, str, str] | None = None
                 for partner in partners:
                     shared = set(measured_targets.get(anchor, {})) & set(measured_targets.get(partner, {}))
@@ -362,16 +388,27 @@ def main() -> None:
         target_program = {node: mapping.get(node.upper(), "Unassigned") for node in graph if node not in top_regulators}
         labels = dict(target_program)
         for regulator in top_regulators:
-            member = [target_program.get(target, "Unassigned") for target in graph.successors(regulator)] if regulator in graph else []
+            member = (
+                [target_program.get(target, "Unassigned") for target in graph.successors(regulator)]
+                if regulator in graph
+                else []
+            )
             labels[regulator] = Counter(member).most_common(1)[0][0] if member else "Unassigned"
 
     fallback_palette = program_map(project)[1]
+
     def color_of(program: str) -> str:
         """Return the display colour for ``program``, falling back to the panel palette then grey."""
         return program_colors.get(program, fallback_palette.get(program, "#A0A8AE"))
 
     undirected = graph.to_undirected()
-    community_members = nx.community.louvain_communities(undirected, weight="weight", seed=project.config["analysis"].get("random_seed", 1)) if undirected.number_of_edges() else []
+    community_members = (
+        nx.community.louvain_communities(
+            undirected, weight="weight", seed=project.config["analysis"].get("random_seed", 1)
+        )
+        if undirected.number_of_edges()
+        else []
+    )
     community_map = {node: index + 1 for index, group in enumerate(community_members) for node in group}
 
     node_rows = []
@@ -380,24 +417,52 @@ def main() -> None:
         de_row = de.get(node.upper(), {})
         value = regulator_activity.get(node, "") if is_regulator else de_row.get("log2_fold_change", "")
         padj = regulator_padj.get(node, "") if is_regulator else de_row.get("adjusted_p_value", "")
-        node_rows.append({
-            "node": node, "node_type": "regulator" if is_regulator else "target",
-            "program": labels.get(node, "Unassigned"), "community": community_map.get(node, 0),
-            "value": value if value != "" and value is not None else "",
-            "padj": padj if padj != "" and padj is not None else "",
-            "log2_fold_change": de_row.get("log2_fold_change", ""),
-            "adjusted_p_value": de_row.get("adjusted_p_value", ""),
-            "activity_logfc": regulator_activity.get(node, ""),
-            "diffusion_probability": probs.get(node, ""),
-            "degree": undirected.degree(node),
-        })
-    write_tsv(tables / "grn_nodes_displayed.tsv", [
-        "node", "node_type", "program", "community", "value", "padj",
-        "log2_fold_change", "adjusted_p_value", "activity_logfc", "diffusion_probability", "degree",
-    ], node_rows)
-    write_tsv(tables / "grn_edges_displayed.tsv", [
-        "source", "target", "mode_of_regulation", "likelihood", "regulation", "target_log2fc", "target_padj", "weight",
-    ], edge_rows)
+        node_rows.append(
+            {
+                "node": node,
+                "node_type": "regulator" if is_regulator else "target",
+                "program": labels.get(node, "Unassigned"),
+                "community": community_map.get(node, 0),
+                "value": value if value != "" and value is not None else "",
+                "padj": padj if padj != "" and padj is not None else "",
+                "log2_fold_change": de_row.get("log2_fold_change", ""),
+                "adjusted_p_value": de_row.get("adjusted_p_value", ""),
+                "activity_logfc": regulator_activity.get(node, ""),
+                "diffusion_probability": probs.get(node, ""),
+                "degree": undirected.degree(node),
+            }
+        )
+    write_tsv(
+        tables / "grn_nodes_displayed.tsv",
+        [
+            "node",
+            "node_type",
+            "program",
+            "community",
+            "value",
+            "padj",
+            "log2_fold_change",
+            "adjusted_p_value",
+            "activity_logfc",
+            "diffusion_probability",
+            "degree",
+        ],
+        node_rows,
+    )
+    write_tsv(
+        tables / "grn_edges_displayed.tsv",
+        [
+            "source",
+            "target",
+            "mode_of_regulation",
+            "likelihood",
+            "regulation",
+            "target_log2fc",
+            "target_padj",
+            "weight",
+        ],
+        edge_rows,
+    )
 
     # Program separation test. Prefer the exact target-overlap statistic used by
     # the reference radial subtitle; otherwise the label-shuffle modularity test.
@@ -415,7 +480,14 @@ def main() -> None:
             rng.shuffle(shuffled)
             permutations.append(program_modularity(undirected, dict(zip(nodes, shuffled))))
         p_value = (1 + sum(value >= observed for value in permutations)) / (len(permutations) + 1)
-        separation = [{"observed_program_modularity": observed, "permutation_p_value": p_value, "permutations": len(permutations), "communities": len(community_members)}]
+        separation = [
+            {
+                "observed_program_modularity": observed,
+                "permutation_p_value": p_value,
+                "permutations": len(permutations),
+                "communities": len(community_members),
+            }
+        ]
     write_tsv(tables / "grn_program_separation_test.tsv", list(separation[0]), separation)
 
     ordered_programs = []
@@ -426,25 +498,64 @@ def main() -> None:
     for row in node_rows:
         if row["program"] not in ordered_programs:
             ordered_programs.append(row["program"])
-    sector_rows = [{
-        "program": program, "color": color_of(program),
-        "target_count": sum(row["program"] == program and row["node_type"] == "target" for row in node_rows),
-        "nodes": sum(row["program"] == program for row in node_rows),
-        "regulators": sum(row["program"] == program and row["node_type"] == "regulator" for row in node_rows),
-        "targets": sum(row["program"] == program and row["node_type"] == "target" for row in node_rows),
-    } for program in ordered_programs]
+    sector_rows = [
+        {
+            "program": program,
+            "color": color_of(program),
+            "target_count": sum(row["program"] == program and row["node_type"] == "target" for row in node_rows),
+            "nodes": sum(row["program"] == program for row in node_rows),
+            "regulators": sum(row["program"] == program and row["node_type"] == "regulator" for row in node_rows),
+            "targets": sum(row["program"] == program and row["node_type"] == "target" for row in node_rows),
+        }
+        for program in ordered_programs
+    ]
     sector_rows = [row for row in sector_rows if row["nodes"] > 0]
-    write_tsv(tables / "grn_sector_summary.tsv", ["program", "color", "target_count", "nodes", "regulators", "targets"], sector_rows)
+    write_tsv(
+        tables / "grn_sector_summary.tsv",
+        ["program", "color", "target_count", "nodes", "regulators", "targets"],
+        sector_rows,
+    )
 
     # Rectangular breadth-preserving matplotlib view (auditable secondary).
     regulators = [node for node in graph if node in top_regulators]
     targets = [node for node in graph if node not in top_regulators]
     positions = {node: (0, index) for index, node in enumerate(regulators)}
-    positions.update({node: (1, index * max(len(regulators), 1) / max(len(targets), 1)) for index, node in enumerate(targets)})
+    positions.update(
+        {node: (1, index * max(len(regulators), 1) / max(len(targets), 1)) for index, node in enumerate(targets)}
+    )
     figure, axis = plt.subplots(figsize=(10.5, max(6.2, 0.22 * max(len(targets), len(regulators)) + 2)))
-    nx.draw_networkx_edges(graph, positions, edge_color=["#D66B5D" if graph.edges[edge]["regulation"] == "Activating" else "#4E88A8" for edge in graph.edges], width=[0.6 + graph.edges[edge]["weight"] for edge in graph.edges], alpha=0.38, arrows=True, arrowsize=8, ax=axis)
-    nx.draw_networkx_nodes(graph, positions, nodelist=regulators, node_shape="s", node_color=[color_of(labels.get(node, "Unassigned")) for node in regulators], node_size=140, edgecolors="white", ax=axis)
-    nx.draw_networkx_nodes(graph, positions, nodelist=targets, node_shape="o", node_color=[color_of(labels.get(node, "Unassigned")) for node in targets], node_size=75, edgecolors="white", ax=axis)
+    nx.draw_networkx_edges(
+        graph,
+        positions,
+        edge_color=[
+            "#D66B5D" if graph.edges[edge]["regulation"] == "Activating" else "#4E88A8" for edge in graph.edges
+        ],
+        width=[0.6 + graph.edges[edge]["weight"] for edge in graph.edges],
+        alpha=0.38,
+        arrows=True,
+        arrowsize=8,
+        ax=axis,
+    )
+    nx.draw_networkx_nodes(
+        graph,
+        positions,
+        nodelist=regulators,
+        node_shape="s",
+        node_color=[color_of(labels.get(node, "Unassigned")) for node in regulators],
+        node_size=140,
+        edgecolors="white",
+        ax=axis,
+    )
+    nx.draw_networkx_nodes(
+        graph,
+        positions,
+        nodelist=targets,
+        node_shape="o",
+        node_color=[color_of(labels.get(node, "Unassigned")) for node in targets],
+        node_size=75,
+        edgecolors="white",
+        ax=axis,
+    )
     nx.draw_networkx_labels(graph, positions, font_size=6.2, font_color="#183B56", ax=axis)
     axis.set_title("Regulator–target network", loc="left", weight="bold", color="#183B56")
     axis.axis("off")
@@ -454,7 +565,10 @@ def main() -> None:
 
     # Legacy compact radial (matplotlib); the publication radial is grn_radial.R.
     ordered_for_radial = [row["program"] for row in sector_rows] or ["Unassigned"]
-    sector_angles = {program: 2 * math.pi * index / max(len(ordered_for_radial), 1) for index, program in enumerate(ordered_for_radial)}
+    sector_angles = {
+        program: 2 * math.pi * index / max(len(ordered_for_radial), 1)
+        for index, program in enumerate(ordered_for_radial)
+    }
     radial_positions = {}
     for program in ordered_for_radial:
         program_regulators = [node for node in regulators if labels.get(node, "Unassigned") == program]
@@ -469,13 +583,54 @@ def main() -> None:
     for node in graph:
         radial_positions.setdefault(node, (0.0, 0.0))
     figure, axis = plt.subplots(figsize=(8.4, 8.4))
-    nx.draw_networkx_edges(graph, radial_positions, edge_color=["#D66B5D" if graph.edges[edge]["regulation"] == "Activating" else "#4E88A8" for edge in graph.edges], width=0.65, alpha=0.25, arrows=True, arrowsize=7, connectionstyle="arc3,rad=0.08", ax=axis)
-    nx.draw_networkx_nodes(graph, radial_positions, nodelist=regulators, node_shape="s", node_color=[color_of(labels.get(node, "Unassigned")) for node in regulators], node_size=130, edgecolors="white", ax=axis)
-    nx.draw_networkx_nodes(graph, radial_positions, nodelist=targets, node_shape="o", node_color=[color_of(labels.get(node, "Unassigned")) for node in targets], node_size=65, edgecolors="white", ax=axis)
+    nx.draw_networkx_edges(
+        graph,
+        radial_positions,
+        edge_color=[
+            "#D66B5D" if graph.edges[edge]["regulation"] == "Activating" else "#4E88A8" for edge in graph.edges
+        ],
+        width=0.65,
+        alpha=0.25,
+        arrows=True,
+        arrowsize=7,
+        connectionstyle="arc3,rad=0.08",
+        ax=axis,
+    )
+    nx.draw_networkx_nodes(
+        graph,
+        radial_positions,
+        nodelist=regulators,
+        node_shape="s",
+        node_color=[color_of(labels.get(node, "Unassigned")) for node in regulators],
+        node_size=130,
+        edgecolors="white",
+        ax=axis,
+    )
+    nx.draw_networkx_nodes(
+        graph,
+        radial_positions,
+        nodelist=targets,
+        node_shape="o",
+        node_color=[color_of(labels.get(node, "Unassigned")) for node in targets],
+        node_size=65,
+        edgecolors="white",
+        ax=axis,
+    )
     label_nodes = regulators + sorted(targets, key=lambda node: -undirected.degree(node))[:25]
-    nx.draw_networkx_labels(graph, radial_positions, labels={node: node for node in label_nodes}, font_size=6, font_color="#183B56", ax=axis)
+    nx.draw_networkx_labels(
+        graph, radial_positions, labels={node: node for node in label_nodes}, font_size=6, font_color="#183B56", ax=axis
+    )
     for program, angle in sector_angles.items():
-        axis.text(1.22 * math.cos(angle), 1.22 * math.sin(angle), program.replace("_", " "), ha="center", va="center", color=color_of(program), weight="bold", fontsize=8)
+        axis.text(
+            1.22 * math.cos(angle),
+            1.22 * math.sin(angle),
+            program.replace("_", " "),
+            ha="center",
+            va="center",
+            color=color_of(program),
+            weight="bold",
+            fontsize=8,
+        )
     axis.set_title("Program-aware radial regulator network", loc="left", weight="bold", color="#183B56")
     axis.axis("off")
     axis.set_aspect("equal")
@@ -483,16 +638,26 @@ def main() -> None:
     figure.savefig(figures / "grn_radial_legacy.png", dpi=300, bbox_inches="tight")
     plt.close(figure)
 
-    (outdir / "grn_summary.json").write_text(json.dumps({
-        "schema_version": 2, "contrast_id": args.contrast_id, "displayed_regulators": len(regulators),
-        "displayed_targets": len(targets), "displayed_edges": len(edge_rows),
-        "selection": f"top {top_n} differential regulators (adj.P.Val, |t|) and top {targets_per_regulator} DE-ranked measured targets per regulator",
-        "program_assignment": "anchored network diffusion" if used_diffusion else "gene-panel majority",
-        "bridged_anchors": bridged_anchors,
-        "full_edges": str(Path(args.edges).resolve()),
-        "program_separation_p": p_value,
-        "programs": ordered_programs,
-    }, indent=2) + "\n", encoding="utf-8")
+    (outdir / "grn_summary.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "contrast_id": args.contrast_id,
+                "displayed_regulators": len(regulators),
+                "displayed_targets": len(targets),
+                "displayed_edges": len(edge_rows),
+                "selection": f"top {top_n} differential regulators (adj.P.Val, |t|) and top {targets_per_regulator} DE-ranked measured targets per regulator",
+                "program_assignment": "anchored network diffusion" if used_diffusion else "gene-panel majority",
+                "bridged_anchors": bridged_anchors,
+                "full_edges": str(Path(args.edges).resolve()),
+                "program_separation_p": p_value,
+                "programs": ordered_programs,
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
 
 
 if __name__ == "__main__":

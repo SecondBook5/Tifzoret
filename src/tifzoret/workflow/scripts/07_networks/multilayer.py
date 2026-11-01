@@ -37,10 +37,7 @@ def symbols(rows: list[dict[str, str]], columns: tuple[str, ...]) -> set[str]:
         if missing:
             raise ValueError(f"Missing required column(s): {', '.join(missing)}")
     return {
-        value.strip().upper()
-        for row in rows
-        for column in columns
-        if (value := row.get(column, "")) and value.strip()
+        value.strip().upper() for row in rows for column in columns if (value := row.get(column, "")) and value.strip()
     }
 
 
@@ -69,6 +66,7 @@ def arguments() -> argparse.Namespace:
     parser.add_argument("--contrast-id", required=True)
     parser.add_argument("--outdir", required=True)
     return parser.parse_args()
+
 
 def main() -> None:
     """Combine regulatory (GRN), co-expression (WGCNA hub), and STRING-association
@@ -108,8 +106,7 @@ def main() -> None:
 
     edge_rows = []
     edge_rows += [
-        {"source": row["source"].upper(), "target": row["target"].upper(), "layer": "regulatory"}
-        for row in grn
+        {"source": row["source"].upper(), "target": row["target"].upper(), "layer": "regulatory"} for row in grn
     ]
     edge_rows += [
         {"source": row["source"].upper(), "target": row["target"].upper(), "layer": "string_association"}
@@ -118,10 +115,7 @@ def main() -> None:
     write(out / "tables/multilayer_edges.tsv", edge_rows, ["source", "target", "layer"])
 
     graph = nx.Graph()
-    graph.add_edges_from(
-        (row["source"], row["target"], {"layer": row["layer"]})
-        for row in edge_rows
-    )
+    graph.add_edges_from((row["source"], row["target"], {"layer": row["layer"]}) for row in edge_rows)
     selected = {row["gene_symbol"] for row in triangulated}
     view = graph.subgraph(selected).copy()
     figure, axis = plt.subplots(figsize=(8, 6))

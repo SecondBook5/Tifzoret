@@ -27,9 +27,7 @@ from .estimands import (
 )
 
 
-def _load_companion(
-    base: Path, value: Any, schema_name: str
-) -> tuple[dict[str, Any] | None, list[str]]:
+def _load_companion(base: Path, value: Any, schema_name: str) -> tuple[dict[str, Any] | None, list[str]]:
     """Load a companion document from a path string or an inline mapping.
 
     A UI (or a hand-authored study) may embed the hypotheses/panels/recipe
@@ -55,9 +53,7 @@ def _selected_samples(
     if analysis_set is None:
         return samples
     if "analysis_set" not in sample_header:
-        raise ProjectValidationError(
-            "inputs.analysis_set requires an analysis_set column in samples.tsv"
-        )
+        raise ProjectValidationError("inputs.analysis_set requires an analysis_set column in samples.tsv")
     selected = [
         row
         for row in samples
@@ -98,9 +94,7 @@ def _resolve_bams(
             try:
                 relative = str(inputs["bam_pattern"]).format_map(row)
             except KeyError as error:
-                errors.append(
-                    f"sample {sample_id}: bam_pattern references missing metadata column {error.args[0]!r}"
-                )
+                errors.append(f"sample {sample_id}: bam_pattern references missing metadata column {error.args[0]!r}")
                 continue
         path = _resolve(root, relative)
         try:
@@ -140,8 +134,7 @@ def load_project(config_path: str | Path) -> ResolvedProject:
         key=lambda error: tuple(error.absolute_path),
     )
     errors = [
-        f"schema {'.'.join(map(str, error.absolute_path)) or '<root>'}: {error.message}"
-        for error in schema_errors
+        f"schema {'.'.join(map(str, error.absolute_path)) or '<root>'}: {error.message}" for error in schema_errors
     ]
     if errors:
         raise ProjectValidationError("\n".join(errors))
@@ -274,12 +267,8 @@ def load_project(config_path: str | Path) -> ResolvedProject:
         if not gtf_path.is_file():
             errors.append(f"gtf file does not exist: {gtf_path}")
         counting = config["counting"]
-        if counting["strandedness"] == "infer" and not {1, 2}.issubset(
-            counting["strand_test_modes"]
-        ):
-            errors.append(
-                "counting.strand_test_modes must include 1 and 2 when strandedness is infer"
-            )
+        if counting["strandedness"] == "infer" and not {1, 2}.issubset(counting["strand_test_modes"]):
+            errors.append("counting.strand_test_modes must include 1 and 2 when strandedness is infer")
         if not counting["paired_end"] and any(
             counting[key]
             for key in (
@@ -320,14 +309,8 @@ def load_project(config_path: str | Path) -> ResolvedProject:
                 relative = row.get("bam", "").strip().replace("\\", "/")
                 combined = f"{member_root}/{relative}" if member_root else relative
                 member = PurePosixPath(combined)
-                if (
-                    not relative
-                    or member.is_absolute()
-                    or any(part in {"", ".", ".."} for part in member.parts)
-                ):
-                    errors.append(
-                        f"sample {row.get('sample_id', '<missing>')}: unsafe archive BAM member {combined!r}"
-                    )
+                if not relative or member.is_absolute() or any(part in {"", ".", ".."} for part in member.parts):
+                    errors.append(f"sample {row.get('sample_id', '<missing>')}: unsafe archive BAM member {combined!r}")
 
     contrast_header, contrasts = _read_tsv(contrasts_path)
     required_contrast = {"contrast_id", "factor", "numerator", "denominator"}
@@ -351,7 +334,9 @@ def load_project(config_path: str | Path) -> ResolvedProject:
             errors.append(f"invalid contrast_id {contrast_id!r}")
         contrast_type = (row.get("type", "") or "").strip() or "pairwise"
         if contrast_type not in {"pairwise", "coefficient", "omnibus"}:
-            errors.append(f"contrast {contrast_id}: type {contrast_type!r} must be 'pairwise', 'coefficient', or 'omnibus'")
+            errors.append(
+                f"contrast {contrast_id}: type {contrast_type!r} must be 'pairwise', 'coefficient', or 'omnibus'"
+            )
             continue
         factor = row.get("factor", "")
         if factor not in sample_header:
@@ -409,9 +394,13 @@ def load_project(config_path: str | Path) -> ResolvedProject:
                         continue
                     reference_factor, reference_level = (part.strip() for part in piece.split("="))
                     if reference_factor not in design_vars:
-                        errors.append(f"contrast {contrast_id}: reference_levels factor {reference_factor!r} is not a design variable")
+                        errors.append(
+                            f"contrast {contrast_id}: reference_levels factor {reference_factor!r} is not a design variable"
+                        )
                     elif reference_level not in {sample.get(reference_factor, "") for sample in samples}:
-                        errors.append(f"contrast {contrast_id}: reference_levels level {reference_level!r} is absent from {reference_factor}")
+                        errors.append(
+                            f"contrast {contrast_id}: reference_levels level {reference_level!r} is absent from {reference_factor}"
+                        )
         else:
             # Omnibus (LRT) contrast: an analysis-of-deviance across every level of
             # `factor` rather than a single signed pair. Requires the factor in the
@@ -419,14 +408,18 @@ def load_project(config_path: str | Path) -> ResolvedProject:
             # DESeq2 test="LRT" against that reduced model. There is no single
             # signed effect, so downstream volcano/MA/pathways skip omnibus rows.
             if len(levels) < 2:
-                errors.append(f"contrast {contrast_id}: omnibus contrast requires {factor!r} to have at least two levels")
+                errors.append(
+                    f"contrast {contrast_id}: omnibus contrast requires {factor!r} to have at least two levels"
+                )
             if not re.search(rf"\b{re.escape(factor)}\b", design_default):
                 errors.append(f"contrast {contrast_id}: factor {factor!r} is absent from design formula")
             reduced = (row.get("reduced", "") or "").strip()
             if not reduced:
                 errors.append(f"contrast {contrast_id}: omnibus contrast requires a non-empty reduced design formula")
             elif re.search(rf"\b{re.escape(factor)}\b", reduced):
-                errors.append(f"contrast {contrast_id}: omnibus reduced formula must not contain the tested factor {factor!r}")
+                errors.append(
+                    f"contrast {contrast_id}: omnibus reduced formula must not contain the tested factor {factor!r}"
+                )
 
     group = config["figures"]["group"]
     if group not in sample_header:
@@ -480,9 +473,7 @@ def load_project(config_path: str | Path) -> ResolvedProject:
         errors.append("modules.curvature requires modules.wgcna (it runs on the WGCNA co-expression graph)")
     # Cross-contrast consensus reduces over every pairwise contrast's DE table, so
     # it needs DE and at least two pairwise contrasts to compare.
-    pairwise_count = sum(
-        1 for row in contrasts if (row.get("type", "") or "pairwise").strip().lower() == "pairwise"
-    )
+    pairwise_count = sum(1 for row in contrasts if (row.get("type", "") or "pairwise").strip().lower() == "pairwise")
     if modules["consensus"]:
         if not modules["de"]:
             errors.append("modules.consensus requires modules.de")
@@ -518,9 +509,7 @@ def load_project(config_path: str | Path) -> ResolvedProject:
             ("networks", "both STRING edge tables"),
         ):
             if not modules[producer]:
-                errors.append(
-                    f"modules.multilayer requires modules.{producer} because it fuses {reason}"
-                )
+                errors.append(f"modules.multilayer requires modules.{producer} because it fuses {reason}")
     # The factorial views synthesize interaction views from a family's fitted
     # estimands (spec §F): it requires qc (VST expression), de (family path), and
     # references a family with arm and interaction estimands.
@@ -540,7 +529,9 @@ def load_project(config_path: str | Path) -> ResolvedProject:
         elif not isinstance(arms, list) or len(arms) != 2:
             errors.append("modules.factorial.arms must be a list of exactly two estimand_ids")
         if not interaction:
-            errors.append("modules.factorial requires analysis.settings.factorial.interaction (interaction estimand_id)")
+            errors.append(
+                "modules.factorial requires analysis.settings.factorial.interaction (interaction estimand_id)"
+            )
 
     signature_path: Path | None = None
     regulon_path: Path | None = None
@@ -569,9 +560,7 @@ def load_project(config_path: str | Path) -> ResolvedProject:
     # canonical output filenames the GRN/hypothesis stages read); every later view
     # writes `_<name>` variants. Project-agnostic: the engine ships no view lists.
     views_raw = (
-        config["analysis"].get("settings", {}).get("regulators", {}).get("views")
-        if modules["regulators"]
-        else None
+        config["analysis"].get("settings", {}).get("regulators", {}).get("views") if modules["regulators"] else None
     )
     if views_raw:
         if config["resources"].get("regulon_edges") or config["resources"].get("binding_prior_edges"):
@@ -654,8 +643,7 @@ def load_project(config_path: str | Path) -> ResolvedProject:
                 errors.append(str(error))
         else:
             errors.append(
-                "modules.deconvolution requires resources.deconvolution_signature or "
-                "resources.deconvolution_preset"
+                "modules.deconvolution requires resources.deconvolution_signature or " "resources.deconvolution_preset"
             )
         if deconvolution_signature_path is not None:
             if not deconvolution_signature_path.is_file():
@@ -683,16 +671,12 @@ def load_project(config_path: str | Path) -> ResolvedProject:
                 "module also requires hypotheses.claims"
             )
         else:
-            panel_config, document_errors = _load_companion(
-                base, config["hypotheses"]["panels"], "hypothesis_panels"
-            )
+            panel_config, document_errors = _load_companion(base, config["hypotheses"]["panels"], "hypothesis_panels")
             errors.extend(document_errors)
             if panel_config is not None:
                 panel_path = canonical_inputs / "hypothesis_panels.yaml"
             if modules["hypotheses"]:
-                hypothesis_config, document_errors = _load_companion(
-                    base, config["hypotheses"]["claims"], "hypotheses"
-                )
+                hypothesis_config, document_errors = _load_companion(base, config["hypotheses"]["claims"], "hypotheses")
                 errors.extend(document_errors)
                 if hypothesis_config is not None:
                     hypothesis_path = canonical_inputs / "hypotheses.yaml"
@@ -704,9 +688,7 @@ def load_project(config_path: str | Path) -> ResolvedProject:
         # standalone step, so a standard-profile study (QC/DE panels only) can
         # still assemble its figure set. The recipe contract check below rejects
         # any panel whose constructor needs a module this profile did not enable.
-        recipe_config, document_errors = _load_companion(
-            base, config["publication"]["recipe"], "figure_recipe"
-        )
+        recipe_config, document_errors = _load_companion(base, config["publication"]["recipe"], "figure_recipe")
         errors.extend(document_errors)
         if recipe_config is not None:
             recipe_path = canonical_inputs / "figure_recipe.yaml"
@@ -716,9 +698,7 @@ def load_project(config_path: str | Path) -> ResolvedProject:
     compiled_families, family_errors = compile_project_families(config, samples, contrasts)
     errors.extend(family_errors)
     existing_contrast_ids = {str(row.get("contrast_id", "")).strip() for row in contrasts}
-    contrasts = list(contrasts) + synthesized_contrast_rows(
-        compiled_families, existing_contrast_ids
-    )
+    contrasts = list(contrasts) + synthesized_contrast_rows(compiled_families, existing_contrast_ids)
 
     resolved_contrast_ids = [str(row.get("contrast_id", "")).strip() for row in contrasts]
     if hypothesis_config is not None:
@@ -731,9 +711,7 @@ def load_project(config_path: str | Path) -> ResolvedProject:
             errors.append("hypothesis ids must be unique")
         for item in hypothesis_config["hypotheses"]:
             if item["contrast"] not in known_contrasts:
-                errors.append(
-                    f"hypothesis {item['id']}: unknown contrast {item['contrast']!r}"
-                )
+                errors.append(f"hypothesis {item['id']}: unknown contrast {item['contrast']!r}")
             if panel_config is not None:
                 for panel in item.get("gene_panels", []):
                     if panel not in known_gene_panels:
@@ -742,9 +720,7 @@ def load_project(config_path: str | Path) -> ResolvedProject:
                     if panel not in panel_config.get("pathway_panels", {}):
                         errors.append(f"hypothesis {item['id']}: unknown pathway panel {panel!r}")
     if panel_config is not None:
-        known_gene_panels = set(panel_config.get("gene_panels", {})) | set(
-            panel_config.get("programs", {})
-        )
+        known_gene_panels = set(panel_config.get("gene_panels", {})) | set(panel_config.get("programs", {}))
         known_pathway_panels = set(panel_config.get("pathway_panels", {}))
         order = panel_config.get("figure_order", {})
         for panel in order.get("gene_panels", []):
@@ -770,7 +746,11 @@ def load_project(config_path: str | Path) -> ResolvedProject:
                 errors.append(f"figure set {figure_set!r} contains duplicate panel ids")
         from ..figures import validate_recipe_contract
 
-        errors.extend(validate_recipe_contract(recipe_config, (name for name, enabled in modules.items() if enabled), resolved_contrast_ids))
+        errors.extend(
+            validate_recipe_contract(
+                recipe_config, (name for name, enabled in modules.items() if enabled), resolved_contrast_ids
+            )
+        )
     valid_gmt_lines = 0
     with gmt_path.open(encoding="utf-8") as handle:
         for line_number, line in enumerate(handle, start=1):
@@ -778,15 +758,16 @@ def load_project(config_path: str | Path) -> ResolvedProject:
                 continue
             fields = line.rstrip("\n").split("\t")
             if len(fields) < 4:
-                errors.append(
-                    f"GMT line {line_number} must contain a name, description, and at least two genes"
-                )
+                errors.append(f"GMT line {line_number} must contain a name, description, and at least two genes")
             else:
                 valid_gmt_lines += 1
-    if (valid_gmt_lines == 0
-            and any(modules.get(name, False) for name in ("pathways", "ontology", "hypotheses"))
-            and not any(config["resources"].get("providers", {}).get(name, False)
-                        for name in ("go", "msigdb", "kegg", "reactome"))):
+    if (
+        valid_gmt_lines == 0
+        and any(modules.get(name, False) for name in ("pathways", "ontology", "hypotheses"))
+        and not any(
+            config["resources"].get("providers", {}).get(name, False) for name in ("go", "msigdb", "kegg", "reactome")
+        )
+    ):
         errors.append("GMT file contains no valid gene sets")
 
     if errors:
@@ -839,7 +820,7 @@ def deconvolution_presets() -> tuple[str, ...]:
     than hard-coded here.
     """
     from importlib import resources
-    
+
     directory = resources.files("tifzoret").joinpath("data/deconvolution")
     if not directory.is_dir():
         return ()
@@ -854,11 +835,9 @@ def _deconvolution_preset_path(name: str) -> Path:
     rather than silently deconvolving against nothing.
     """
     from importlib import resources
-    
+
     entry = resources.files("tifzoret").joinpath(f"data/deconvolution/{name}.tsv")
     if not entry.is_file():
         available = ", ".join(deconvolution_presets()) or "(none installed)"
-        raise ProjectValidationError(
-            f"unknown resources.deconvolution_preset {name!r}; available presets: {available}"
-        )
+        raise ProjectValidationError(f"unknown resources.deconvolution_preset {name!r}; available presets: {available}")
     return Path(str(entry))

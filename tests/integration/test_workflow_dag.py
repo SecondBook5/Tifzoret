@@ -35,25 +35,33 @@ TEMPLATE = ROOT / "src" / "tifzoret" / "templates" / "minimal"
 # happened to resolve". assemble_figure is the capstone: it depends on every
 # recipe panel's source, so its presence also proves each panel -- including the
 # binding-view regulator panel -- resolved to a producible file.
-PUBLICATION_RULES = frozenset({
-    "contrast_composition",
-    "contrast_regulators",
-    "contrast_grn",
-    "contrast_grn_radial",
-    "contrast_networks",
-    "contrast_string_figures",
-    "contrast_hypotheses",
-    "contrast_publication",
-    "assemble_figure",
-})
+PUBLICATION_RULES = frozenset(
+    {
+        "contrast_composition",
+        "contrast_regulators",
+        "contrast_grn",
+        "contrast_grn_radial",
+        "contrast_networks",
+        "contrast_string_figures",
+        "contrast_hypotheses",
+        "contrast_publication",
+        "assemble_figure",
+    }
+)
 
 
 def _dry_run(config_path: Path) -> subprocess.CompletedProcess:
     """Plan the DAG for ``config_path`` offline (no conda, single core)."""
     return subprocess.run(
         [
-            sys.executable, "-m", "tifzoret", "dry-run",
-            str(config_path), "--no-conda", "--cores", "1",
+            sys.executable,
+            "-m",
+            "tifzoret",
+            "dry-run",
+            str(config_path),
+            "--no-conda",
+            "--cores",
+            "1",
         ],
         check=False,
         capture_output=True,
@@ -67,7 +75,7 @@ def _planned_rules(output: str) -> set[str]:
     for line in output.splitlines():
         stripped = line.strip()
         if stripped.startswith("rule ") and stripped.endswith(":"):
-            rules.add(stripped[len("rule "):-1])
+            rules.add(stripped[len("rule ") : -1])
     return rules
 
 
@@ -82,7 +90,7 @@ def _result_tail(rel: str) -> str:
     which contrast produced it. QC panel paths carry no prefix and pass through.
     """
     prefix = "contrasts/{contrast}/"
-    return rel[len(prefix):] if rel.startswith(prefix) else rel
+    return rel[len(prefix) :] if rel.startswith(prefix) else rel
 
 
 def _publication_project(tmp_path: Path) -> Path:
@@ -100,15 +108,26 @@ def _publication_project(tmp_path: Path) -> Path:
     shutil.copytree(TEMPLATE, destination)
 
     yaml.safe_dump(
-        {"signatures": [
-            {"id": "smooth_muscle", "label": "Smooth muscle", "category": "structural",
-             "description": "Synthetic smooth-muscle signature for the DAG fixture.",
-             "genes": ["Acta2", "Cnn1", "Myh11", "Tagln", "Tpm2", "Mylk"]},
-            {"id": "epithelial", "label": "Epithelial", "category": "structural",
-             "description": "Synthetic epithelial signature for the DAG fixture.",
-             "genes": ["Epcam", "Krt5", "Krt18", "Cldn7", "Gata3", "Foxq1"]},
-        ]},
-        (destination / "signatures.yaml").open("w"), sort_keys=False,
+        {
+            "signatures": [
+                {
+                    "id": "smooth_muscle",
+                    "label": "Smooth muscle",
+                    "category": "structural",
+                    "description": "Synthetic smooth-muscle signature for the DAG fixture.",
+                    "genes": ["Acta2", "Cnn1", "Myh11", "Tagln", "Tpm2", "Mylk"],
+                },
+                {
+                    "id": "epithelial",
+                    "label": "Epithelial",
+                    "category": "structural",
+                    "description": "Synthetic epithelial signature for the DAG fixture.",
+                    "genes": ["Epcam", "Krt5", "Krt18", "Cldn7", "Gata3", "Foxq1"],
+                },
+            ]
+        },
+        (destination / "signatures.yaml").open("w"),
+        sort_keys=False,
     )
 
     (destination / "binding.tsv").write_text(
@@ -116,52 +135,90 @@ def _publication_project(tmp_path: Path) -> Path:
     )
 
     yaml.safe_dump(
-        {"programs": {
-            "contractile": {
-                "label": "Contractile program",
-                "description": "Synthetic contractile program for the fixture.",
-                "color": "#A6CEE3", "genes": ["Acta2", "Cnn1", "Myh11", "Tagln"],
-                "expected_direction": "increased", "contrast": "treatment_a_vs_control"},
-            "epithelial_id": {
-                "label": "Epithelial identity",
-                "description": "Synthetic epithelial-identity program for the fixture.",
-                "color": "#F4A6A6", "genes": ["Epcam", "Krt5", "Krt18", "Cldn7"],
-                "expected_direction": "decreased", "contrast": "treatment_a_vs_control"},
-        }, "program_order": ["contractile", "epithelial_id"]},
-        (destination / "panels.yaml").open("w"), sort_keys=False,
+        {
+            "programs": {
+                "contractile": {
+                    "label": "Contractile program",
+                    "description": "Synthetic contractile program for the fixture.",
+                    "color": "#A6CEE3",
+                    "genes": ["Acta2", "Cnn1", "Myh11", "Tagln"],
+                    "expected_direction": "increased",
+                    "contrast": "treatment_a_vs_control",
+                },
+                "epithelial_id": {
+                    "label": "Epithelial identity",
+                    "description": "Synthetic epithelial-identity program for the fixture.",
+                    "color": "#F4A6A6",
+                    "genes": ["Epcam", "Krt5", "Krt18", "Cldn7"],
+                    "expected_direction": "decreased",
+                    "contrast": "treatment_a_vs_control",
+                },
+            },
+            "program_order": ["contractile", "epithelial_id"],
+        },
+        (destination / "panels.yaml").open("w"),
+        sort_keys=False,
     )
 
     yaml.safe_dump(
-        {"study": "synthetic_publication_fixture", "hypotheses": [
-            {"id": "h1", "statement": "The contractile program increases under treatment A.",
-             "contrast": "treatment_a_vs_control", "expected_direction": "increased",
-             "gene_panels": ["contractile"]},
-            {"id": "h2", "statement": "The epithelial-identity program decreases under treatment A.",
-             "contrast": "treatment_a_vs_control", "expected_direction": "decreased",
-             "gene_panels": ["epithelial_id"]},
-        ]},
-        (destination / "hypotheses.yaml").open("w"), sort_keys=False,
-    )
-
-    yaml.safe_dump(
-        {"figure_sets": {"main": {
-            "title": "Synthetic publication figure",
-            "description": "Exercises the publication DAG across every publication module.",
-            "width": 180, "height": 240, "units": "mm", "columns": 2,
-            "panels": [
-                {"id": "A", "constructor": "pca"},
-                {"id": "B", "constructor": "volcano", "contrast": "treatment_a_vs_control"},
-                {"id": "C", "constructor": "ora_bidirectional", "contrast": "treatment_a_vs_control"},
-                {"id": "D", "constructor": "cell_state_effects", "contrast": "treatment_a_vs_control"},
-                {"id": "E", "constructor": "regulator_activity", "variant": "default",
-                 "contrast": "treatment_a_vs_control"},
-                {"id": "F", "constructor": "regulator_activity", "variant": "binding",
-                 "contrast": "treatment_a_vs_control"},
-                {"id": "G", "constructor": "string_enrichment", "contrast": "treatment_a_vs_control"},
-                {"id": "H", "constructor": "program_heatmap_effects", "contrast": "treatment_a_vs_control"},
+        {
+            "study": "synthetic_publication_fixture",
+            "hypotheses": [
+                {
+                    "id": "h1",
+                    "statement": "The contractile program increases under treatment A.",
+                    "contrast": "treatment_a_vs_control",
+                    "expected_direction": "increased",
+                    "gene_panels": ["contractile"],
+                },
+                {
+                    "id": "h2",
+                    "statement": "The epithelial-identity program decreases under treatment A.",
+                    "contrast": "treatment_a_vs_control",
+                    "expected_direction": "decreased",
+                    "gene_panels": ["epithelial_id"],
+                },
             ],
-        }}},
-        (destination / "recipe.yaml").open("w"), sort_keys=False,
+        },
+        (destination / "hypotheses.yaml").open("w"),
+        sort_keys=False,
+    )
+
+    yaml.safe_dump(
+        {
+            "figure_sets": {
+                "main": {
+                    "title": "Synthetic publication figure",
+                    "description": "Exercises the publication DAG across every publication module.",
+                    "width": 180,
+                    "height": 240,
+                    "units": "mm",
+                    "columns": 2,
+                    "panels": [
+                        {"id": "A", "constructor": "pca"},
+                        {"id": "B", "constructor": "volcano", "contrast": "treatment_a_vs_control"},
+                        {"id": "C", "constructor": "ora_bidirectional", "contrast": "treatment_a_vs_control"},
+                        {"id": "D", "constructor": "cell_state_effects", "contrast": "treatment_a_vs_control"},
+                        {
+                            "id": "E",
+                            "constructor": "regulator_activity",
+                            "variant": "default",
+                            "contrast": "treatment_a_vs_control",
+                        },
+                        {
+                            "id": "F",
+                            "constructor": "regulator_activity",
+                            "variant": "binding",
+                            "contrast": "treatment_a_vs_control",
+                        },
+                        {"id": "G", "constructor": "string_enrichment", "contrast": "treatment_a_vs_control"},
+                        {"id": "H", "constructor": "program_heatmap_effects", "contrast": "treatment_a_vs_control"},
+                    ],
+                }
+            }
+        },
+        (destination / "recipe.yaml").open("w"),
+        sort_keys=False,
     )
 
     config_path = destination / "project.yaml"
@@ -254,19 +311,21 @@ def test_displayed_data_are_declared_outputs(tmp_path):
     assert not undeclared, (
         "displayed-data tables exposed by a built panel but NOT declared as engine "
         "outputs (untracked side-effects -- deleting them would not reschedule "
-        f"their rule):\n  " + "\n  ".join(sorted(undeclared))
+        "their rule):\n  " + "\n  ".join(sorted(undeclared))
     )
 
 
 # Rules only the ``full`` profile pulls in, on top of the publication set. They
 # read the DESeqDataSet and the co-expression graph, so they are the rules most
 # exposed to a change in where the canonical fit lives.
-FULL_PROFILE_RULES = frozenset({
-    "contrast_sva",
-    "contrast_wgcna",
-    "contrast_mediation",
-    "contrast_multilayer",
-})
+FULL_PROFILE_RULES = frozenset(
+    {
+        "contrast_sva",
+        "contrast_wgcna",
+        "contrast_mediation",
+        "contrast_multilayer",
+    }
+)
 
 
 def test_full_profile_dag_resolves(tmp_path):

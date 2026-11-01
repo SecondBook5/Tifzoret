@@ -37,9 +37,7 @@ def _cells(levels: dict[str, tuple[str, ...]]) -> list[dict[str, str]]:
     columns = list(levels)
     combos: list[dict[str, str]] = [{}]
     for column in columns:
-        combos = [
-            {**combo, column: level} for combo in combos for level in levels[column]
-        ]
+        combos = [{**combo, column: level} for combo in combos for level in levels[column]]
     return combos
 
 
@@ -102,18 +100,14 @@ SCENARIOS: dict[str, dict] = {
         # Varies within cells, and the mix differs between cells, so a naive
         # per-cell average of real model-matrix rows would leak a nuisance
         # difference into the estimand (spec §5).
-        "nuisance": lambda cell, position, index: (
-            "z1" if position < (3 if cell["factor_a"] == "a1" else 1) else "z2"
-        ),
+        "nuisance": lambda cell, position, index: ("z1" if position < (3 if cell["factor_a"] == "a1" else 1) else "z2"),
         "effect": lambda cell: 0.0,
         "truth": {"n_signal_genes": 0, "signal_prefix": SIGNAL_PREFIX},
     },
     "confounded_batch": {
         "levels": {"factor_a": ("a1", "a2"), "factor_b": ("b1", "b2")},
         "per_cell": 4,
-        "nuisance": lambda cell, position, index: (
-            f"z_{cell['factor_a']}_{cell['factor_b']}"
-        ),
+        "nuisance": lambda cell, position, index: (f"z_{cell['factor_a']}_{cell['factor_b']}"),
         "effect": lambda cell: 0.0,
         "truth": {"n_signal_genes": 0, "signal_prefix": SIGNAL_PREFIX},
     },
@@ -145,17 +139,14 @@ SCENARIOS: dict[str, dict] = {
         "levels": {"factor_a": ("a1", "a2"), "factor_b": ("b1", "b2")},
         "per_cell": 4,
         "effect": lambda cell: (
-            (1.2 if cell["factor_a"] == "a2" else 0.0)
-            + (0.9 if cell["factor_b"] == "b2" else 0.0)
+            (1.2 if cell["factor_a"] == "a2" else 0.0) + (0.9 if cell["factor_b"] == "b2" else 0.0)
         ),
         "truth": {"n_signal_genes": N_SIGNAL, "signal_prefix": SIGNAL_PREFIX, "interaction_log2": 0.0},
     },
     "positive_interaction": {
         "levels": {"factor_a": ("a1", "a2"), "factor_b": ("b1", "b2")},
         "per_cell": 4,
-        "effect": lambda cell: (
-            2.0 if cell["factor_a"] == "a2" and cell["factor_b"] == "b2" else 0.0
-        ),
+        "effect": lambda cell: (2.0 if cell["factor_a"] == "a2" and cell["factor_b"] == "b2" else 0.0),
         "truth": {"n_signal_genes": N_SIGNAL, "signal_prefix": SIGNAL_PREFIX, "interaction_log2": 2.0},
     },
     "negative_interaction": {
@@ -250,9 +241,7 @@ STATISTICAL = (
 def _write_tsv(path: Path, fieldnames: list[str], rows: list[dict[str, object]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(
-            handle, fieldnames=fieldnames, delimiter="\t", lineterminator="\n"
-        )
+        writer = csv.DictWriter(handle, fieldnames=fieldnames, delimiter="\t", lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
 
@@ -282,9 +271,7 @@ def build(name: str, destination: Path) -> Path:
             cell = {column: sample[column] for column in levels}
             shift = scenario["effect"](cell) if is_signal else 0.0
             mean = base_mean * (2.0**shift)
-            row[sample["sample_id"]] = int(
-                rng.negative_binomial(size, size / (size + mean))
-            )
+            row[sample["sample_id"]] = int(rng.negative_binomial(size, size / (size + mean)))
         count_rows.append(row)
     if scenario.get("outlier"):
         target = scenario["truth"]["outlier_sample"]

@@ -106,12 +106,20 @@ def main() -> None:
                     row = de.get(gene.upper())
                     effect = number(row.get("log2_fold_change")) if row else None
                     fdr = number(row.get("adjusted_p_value")) if row else None
-                    evidence.append({
-                        "hypothesis_id": claim["id"], "evidence_type": "gene", "panel": panel_id,
-                        "group": group, "item": gene, "effect": effect, "fdr": fdr,
-                        "direction": row.get("direction", "unmeasured") if row else "unmeasured",
-                        "support": support(expected, effect), "source": str(Path(args.de).resolve()),
-                    })
+                    evidence.append(
+                        {
+                            "hypothesis_id": claim["id"],
+                            "evidence_type": "gene",
+                            "panel": panel_id,
+                            "group": group,
+                            "item": gene,
+                            "effect": effect,
+                            "fdr": fdr,
+                            "direction": row.get("direction", "unmeasured") if row else "unmeasured",
+                            "support": support(expected, effect),
+                            "source": str(Path(args.de).resolve()),
+                        }
+                    )
         for panel_id in claim.get("pathway_panels", []):
             for pathway in panels["pathway_panels"][panel_id]["pathways"]:
                 item = pathway["pathway"]
@@ -126,23 +134,58 @@ def main() -> None:
                     effect = number(matched.get("logFC")) if matched else None
                     fdr = number(matched.get("adj.P.Val")) if matched else None
                     source = args.gsva
-                evidence.append({
-                    "hypothesis_id": claim["id"], "evidence_type": evidence_type, "panel": panel_id,
-                    "group": pathway["collection"], "item": item, "effect": effect, "fdr": fdr,
-                    "direction": "positive" if effect is not None and effect > 0 else "negative" if effect is not None and effect < 0 else "unmeasured",
-                    "support": support(expected, effect), "source": str(Path(source).resolve()),
-                })
+                evidence.append(
+                    {
+                        "hypothesis_id": claim["id"],
+                        "evidence_type": evidence_type,
+                        "panel": panel_id,
+                        "group": pathway["collection"],
+                        "item": item,
+                        "effect": effect,
+                        "fdr": fdr,
+                        "direction": "positive"
+                        if effect is not None and effect > 0
+                        else "negative"
+                        if effect is not None and effect < 0
+                        else "unmeasured",
+                        "support": support(expected, effect),
+                        "source": str(Path(source).resolve()),
+                    }
+                )
         for regulator in claim.get("regulators", []):
             row = regulators.get(regulator.upper())
             effect = number(row.get("logFC")) if row else None
             fdr = number(row.get("adj.P.Val")) if row else None
-            evidence.append({
-                "hypothesis_id": claim["id"], "evidence_type": "regulator", "panel": "", "group": "",
-                "item": regulator, "effect": effect, "fdr": fdr,
-                "direction": "positive" if effect is not None and effect > 0 else "negative" if effect is not None and effect < 0 else "unmeasured",
-                "support": support(expected, effect), "source": str(Path(args.regulators).resolve()) if args.regulators else "",
-            })
-    fields = ["hypothesis_id", "evidence_type", "panel", "group", "item", "effect", "fdr", "direction", "support", "source"]
+            evidence.append(
+                {
+                    "hypothesis_id": claim["id"],
+                    "evidence_type": "regulator",
+                    "panel": "",
+                    "group": "",
+                    "item": regulator,
+                    "effect": effect,
+                    "fdr": fdr,
+                    "direction": "positive"
+                    if effect is not None and effect > 0
+                    else "negative"
+                    if effect is not None and effect < 0
+                    else "unmeasured",
+                    "support": support(expected, effect),
+                    "source": str(Path(args.regulators).resolve()) if args.regulators else "",
+                }
+            )
+    fields = [
+        "hypothesis_id",
+        "evidence_type",
+        "panel",
+        "group",
+        "item",
+        "effect",
+        "fdr",
+        "direction",
+        "support",
+        "source",
+    ]
     outdir = Path(args.outdir).resolve()
     tables = outdir / "tables"
     tables.mkdir(parents=True, exist_ok=True)
@@ -150,19 +193,49 @@ def main() -> None:
     summaries = []
     for claim in claims:
         rows = [row for row in evidence if row["hypothesis_id"] == claim["id"]]
-        summaries.append({
-            "hypothesis_id": claim["id"], "statement": claim["statement"], "expected_direction": claim["expected_direction"],
-            "evidence_lines": len(rows), "measured": sum(row["support"] != "unmeasured" for row in rows),
-            "significant": sum(row["fdr"] is not None and row["fdr"] < project.config["figures"]["de"]["fdr"] for row in rows),
-            "supporting": sum(row["support"] == "supporting" for row in rows),
-            "conflicting": sum(row["support"] == "conflicting" for row in rows),
-        })
-    summary_fields = ["hypothesis_id", "statement", "expected_direction", "evidence_lines", "measured", "significant", "supporting", "conflicting"]
+        summaries.append(
+            {
+                "hypothesis_id": claim["id"],
+                "statement": claim["statement"],
+                "expected_direction": claim["expected_direction"],
+                "evidence_lines": len(rows),
+                "measured": sum(row["support"] != "unmeasured" for row in rows),
+                "significant": sum(
+                    row["fdr"] is not None and row["fdr"] < project.config["figures"]["de"]["fdr"] for row in rows
+                ),
+                "supporting": sum(row["support"] == "supporting" for row in rows),
+                "conflicting": sum(row["support"] == "conflicting" for row in rows),
+            }
+        )
+    summary_fields = [
+        "hypothesis_id",
+        "statement",
+        "expected_direction",
+        "evidence_lines",
+        "measured",
+        "significant",
+        "supporting",
+        "conflicting",
+    ]
     write_tsv(tables / "hypothesis_summary.tsv", summary_fields, summaries)
-    warnings = ["Hypothesis summaries organize configured evidence; they do not convert exploratory associations into causal validation."]
-    (outdir / "hypotheses_summary.json").write_text(json.dumps({"schema_version": 1, "contrast_id": args.contrast_id, "claims": summaries, "warnings": warnings}, indent=2) + "\n", encoding="utf-8")
-    rows_html = "".join(f"<tr><td>{h(row['hypothesis_id'])}</td><td>{h(row['statement'])}</td><td>{row['supporting']}</td><td>{row['conflicting']}</td><td>{row['significant']}</td></tr>" for row in summaries)
-    (outdir / "hypotheses_report.html").write_text(f"<!doctype html><html><head><meta charset='utf-8'><title>Hypothesis evidence</title></head><body><h1>Hypothesis evidence: {h(args.contrast_id)}</h1><p>Positive effects are numerator minus denominator.</p><table><tr><th>Claim</th><th>Statement</th><th>Supporting</th><th>Conflicting</th><th>Significant</th></tr>{rows_html}</table><p>{h(warnings[0])}</p></body></html>", encoding="utf-8")
+    warnings = [
+        "Hypothesis summaries organize configured evidence; they do not convert exploratory associations into causal validation."
+    ]
+    (outdir / "hypotheses_summary.json").write_text(
+        json.dumps(
+            {"schema_version": 1, "contrast_id": args.contrast_id, "claims": summaries, "warnings": warnings}, indent=2
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    rows_html = "".join(
+        f"<tr><td>{h(row['hypothesis_id'])}</td><td>{h(row['statement'])}</td><td>{row['supporting']}</td><td>{row['conflicting']}</td><td>{row['significant']}</td></tr>"
+        for row in summaries
+    )
+    (outdir / "hypotheses_report.html").write_text(
+        f"<!doctype html><html><head><meta charset='utf-8'><title>Hypothesis evidence</title></head><body><h1>Hypothesis evidence: {h(args.contrast_id)}</h1><p>Positive effects are numerator minus denominator.</p><table><tr><th>Claim</th><th>Statement</th><th>Supporting</th><th>Conflicting</th><th>Significant</th></tr>{rows_html}</table><p>{h(warnings[0])}</p></body></html>",
+        encoding="utf-8",
+    )
 
 
 if __name__ == "__main__":

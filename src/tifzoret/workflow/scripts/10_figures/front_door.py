@@ -78,9 +78,7 @@ def resolve_panel_sources(project, root: Path) -> list[tuple[str, Path, dict]]:
         indexed_panels: dict[str, dict] = {}
         if panel_index_path.is_file():
             panel_index = json.loads(panel_index_path.read_text(encoding="utf-8"))
-            indexed_panels = {
-                str(entry.get("id")): entry for entry in panel_index.get("panels", [])
-            }
+            indexed_panels = {str(entry.get("id")): entry for entry in panel_index.get("panels", [])}
         for panel in spec.get("panels", []):
             indexed = indexed_panels.get(str(panel.get("id")), {})
             staged = indexed.get("staged_png") or indexed.get("staged_pdf") or panel.get("source")
@@ -144,12 +142,14 @@ def main() -> None:
         for source in available:
             destination = figures_dir / f"{label}{source.suffix.lower()}"
             shutil.copy2(source, destination)
-            artifacts.append({
-                "path": destination.relative_to(root).as_posix(),
-                "source": source.relative_to(root).as_posix(),
-                "sha256": checksum(destination),
-                **dimensions(destination),
-            })
+            artifacts.append(
+                {
+                    "path": destination.relative_to(root).as_posix(),
+                    "source": source.relative_to(root).as_posix(),
+                    "sha256": checksum(destination),
+                    **dimensions(destination),
+                }
+            )
         record = {
             "id": label,
             "selection": selection,
@@ -165,18 +165,24 @@ def main() -> None:
         if tables_dir in source.parents or not source.is_file():
             continue
         if "displayed" not in source.stem and source.name not in {
-            "de_results.tsv", "fgsea.tsv", "ora.tsv", "gsva_differential.tsv",
-            "hypothesis_summary.tsv", "regulator_differential.tsv",
+            "de_results.tsv",
+            "fgsea.tsv",
+            "ora.tsv",
+            "gsva_differential.tsv",
+            "hypothesis_summary.tsv",
+            "regulator_differential.tsv",
         }:
             continue
         name = f"{safe_name(source, root)}.tsv"
         destination = tables_dir / name
         shutil.copy2(source, destination)
-        table_records.append({
-            "path": destination.relative_to(root).as_posix(),
-            "source": source.relative_to(root).as_posix(),
-            "sha256": checksum(destination),
-        })
+        table_records.append(
+            {
+                "path": destination.relative_to(root).as_posix(),
+                "source": source.relative_to(root).as_posix(),
+                "sha256": checksum(destination),
+            }
+        )
 
     figures_index = {
         "schema_version": 1,

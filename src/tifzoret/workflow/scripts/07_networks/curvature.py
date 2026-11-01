@@ -128,7 +128,7 @@ def wasserstein_distance(graph: nx.Graph, source_measure: dict[str, float], targ
     n_x, n_y = len(support_x), len(support_y)
     equality = np.zeros((n_x + n_y, n_x * n_y), dtype=float)
     for i in range(n_x):
-        equality[i, i * n_y:(i + 1) * n_y] = 1.0
+        equality[i, i * n_y : (i + 1) * n_y] = 1.0
     for j in range(n_y):
         equality[n_x + j, j::n_y] = 1.0
     demand = np.array([source_measure[a] for a in support_x] + [target_measure[b] for b in support_y], dtype=float)
@@ -148,7 +148,9 @@ def compute_edge_curvature(graph: nx.Graph, alpha: float) -> dict[tuple[str, str
     return curvature
 
 
-def draw_network(graph: nx.Graph, edge_curvature: dict[tuple[str, str], float], gene_curvature: dict[str, float], stem: Path) -> int:
+def draw_network(
+    graph: nx.Graph, edge_curvature: dict[tuple[str, str], float], gene_curvature: dict[str, float], stem: Path
+) -> int:
     """Render a curvature-coloured network view, subset to the highest-degree nodes.
 
     Returns the number of nodes actually drawn (the whole graph if within the cap).
@@ -169,11 +171,41 @@ def draw_network(graph: nx.Graph, edge_curvature: dict[tuple[str, str], float], 
     span = span if span > 0 else 1.0
 
     figure, axis = plt.subplots(figsize=(7.4, 6.6))
-    nx.draw_networkx_edges(drawn, layout, ax=axis, edge_color=edge_values, edge_cmap=plt.get_cmap(CURVATURE_CMAP), edge_vmin=-span, edge_vmax=span, width=0.7, alpha=0.6)
-    nodes = nx.draw_networkx_nodes(drawn, layout, ax=axis, node_color=node_values, cmap=plt.get_cmap(CURVATURE_CMAP), vmin=-span, vmax=span, node_size=26, linewidths=0.3, edgecolors="white")
+    nx.draw_networkx_edges(
+        drawn,
+        layout,
+        ax=axis,
+        edge_color=edge_values,
+        edge_cmap=plt.get_cmap(CURVATURE_CMAP),
+        edge_vmin=-span,
+        edge_vmax=span,
+        width=0.7,
+        alpha=0.6,
+    )
+    nodes = nx.draw_networkx_nodes(
+        drawn,
+        layout,
+        ax=axis,
+        node_color=node_values,
+        cmap=plt.get_cmap(CURVATURE_CMAP),
+        vmin=-span,
+        vmax=span,
+        node_size=26,
+        linewidths=0.3,
+        edgecolors="white",
+    )
     axis.set_title("Co-expression Ollivier-Ricci curvature", color=NAVY, fontsize=12, fontweight="bold")
     if drawn.number_of_nodes() < graph.number_of_nodes():
-        axis.text(0.5, -0.02, f"Top {drawn.number_of_nodes()} of {graph.number_of_nodes()} nodes by degree", transform=axis.transAxes, ha="center", va="top", color="#697783", fontsize=8)
+        axis.text(
+            0.5,
+            -0.02,
+            f"Top {drawn.number_of_nodes()} of {graph.number_of_nodes()} nodes by degree",
+            transform=axis.transAxes,
+            ha="center",
+            va="top",
+            color="#697783",
+            fontsize=8,
+        )
     axis.set_axis_off()
     colourbar = figure.colorbar(nodes, ax=axis, fraction=0.045, pad=0.02)
     colourbar.set_label("Curvature", color=NAVY)
@@ -236,17 +268,19 @@ def main() -> None:
         source_module = module_of.get(source, "")
         target_module = module_of.get(target, "")
         inter_module = source_module != target_module
-        edge_records.append({
-            "source": source,
-            "target": target,
-            "source_symbol": symbol_of.get(source, source),
-            "target_symbol": symbol_of.get(target, target),
-            "source_module": source_module,
-            "target_module": target_module,
-            "weight": graph[source][target]["weight"],
-            "curvature": value,
-            "inter_module": inter_module,
-        })
+        edge_records.append(
+            {
+                "source": source,
+                "target": target,
+                "source_symbol": symbol_of.get(source, source),
+                "target_symbol": symbol_of.get(target, target),
+                "source_module": source_module,
+                "target_module": target_module,
+                "weight": graph[source][target]["weight"],
+                "curvature": value,
+                "inter_module": inter_module,
+            }
+        )
         if not np.isnan(value):
             gene_accumulator[source].append(value)
             gene_accumulator[target].append(value)
@@ -255,7 +289,17 @@ def main() -> None:
     edge_records.sort(key=lambda record: (record["curvature"] if not np.isnan(record["curvature"]) else float("inf")))
     write_tsv(
         tables_dir / "edge_curvature.tsv",
-        ["source", "target", "source_symbol", "target_symbol", "source_module", "target_module", "weight", "curvature", "inter_module"],
+        [
+            "source",
+            "target",
+            "source_symbol",
+            "target_symbol",
+            "source_module",
+            "target_module",
+            "weight",
+            "curvature",
+            "inter_module",
+        ],
         edge_records,
     )
 
@@ -272,7 +316,11 @@ def main() -> None:
     ]
     gene_records.sort(key=lambda record: record["gene_symbol"])
     gene_curvature = {record["gene_id"]: record["mean_curvature"] for record in gene_records}
-    write_tsv(tables_dir / "gene_curvature.tsv", ["gene_id", "gene_symbol", "module", "degree", "mean_curvature"], gene_records)
+    write_tsv(
+        tables_dir / "gene_curvature.tsv",
+        ["gene_id", "gene_symbol", "module", "degree", "mean_curvature"],
+        gene_records,
+    )
 
     # Per-module robustness scalar (mean intra-module edge curvature).
     module_members: dict[str, int] = defaultdict(int)
@@ -287,17 +335,37 @@ def main() -> None:
         }
         for module, values in sorted(module_intra.items())
     ]
-    module_records.sort(key=lambda record: (record["mean_intra_curvature"] if not np.isnan(record["mean_intra_curvature"]) else float("inf")), reverse=True)
-    write_tsv(tables_dir / "module_curvature.tsv", ["module", "n_genes", "n_intra_edges", "mean_intra_curvature"], module_records)
+    module_records.sort(
+        key=lambda record: (
+            record["mean_intra_curvature"] if not np.isnan(record["mean_intra_curvature"]) else float("inf")
+        ),
+        reverse=True,
+    )
+    write_tsv(
+        tables_dir / "module_curvature.tsv",
+        ["module", "n_genes", "n_intra_edges", "mean_intra_curvature"],
+        module_records,
+    )
 
     # Negative-curvature inter-module bridges (bottleneck genes linking modules).
     bridge_records = [
-        record for record in edge_records
+        record
+        for record in edge_records
         if record["inter_module"] and not np.isnan(record["curvature"]) and record["curvature"] < 0
     ][:top_bridges]
     write_tsv(
         tables_dir / "curvature_bridges.tsv",
-        ["source", "target", "source_symbol", "target_symbol", "source_module", "target_module", "weight", "curvature", "inter_module"],
+        [
+            "source",
+            "target",
+            "source_symbol",
+            "target_symbol",
+            "source_module",
+            "target_module",
+            "weight",
+            "curvature",
+            "inter_module",
+        ],
         bridge_records,
     )
 

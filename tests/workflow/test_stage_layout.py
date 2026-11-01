@@ -1,4 +1,5 @@
 """Every stage script lives in exactly one phase folder — no orphans, no flat leftovers."""
+
 from pathlib import Path
 
 SCRIPTS = Path(__file__).resolve().parents[2] / "src" / "tifzoret" / "workflow" / "scripts"
@@ -10,8 +11,7 @@ EXPECTED = {
     "04_enrichment": {"pathways.R", "ontology.R", "spia.R", "enrichment_map.py"},
     "05_composition": {"composition.R", "deconvolution.R"},
     "06_regulators": {"regulators.R", "grn.py", "grn_radial.R"},
-    "07_networks": {"networks.py", "string_network.R", "string_figures.R",
-                    "wgcna.R", "curvature.py", "multilayer.py"},
+    "07_networks": {"networks.py", "string_network.R", "string_figures.R", "wgcna.R", "curvature.py", "multilayer.py"},
     "08_causal": {"mediation.R", "power.py"},
     "09_synthesis": {"consensus.py", "hypotheses.py"},
     "10_figures": {"publication.R", "assemble.py", "report.py", "manifest.py", "front_door.py"},

@@ -138,7 +138,9 @@ _BASE_YAML = {
         "design": "~condition",
         "contrasts": "contrasts.tsv",
         "profile": "standard",
-        "settings": {"regulators": {"confidence": ["A", "B", "C"], "min_targets": 5, "max_targets": 1000, "top_regulators": 15}},
+        "settings": {
+            "regulators": {"confidence": ["A", "B", "C"], "min_targets": 5, "max_targets": 1000, "top_regulators": 15}
+        },
     },
     "resources": {
         "gene_sets": {"gmt": "sets.gmt"},
@@ -172,16 +174,26 @@ def _run_regulators(fixture: Path, config_name: str, outdir: Path) -> None:
     outdir.mkdir(parents=True, exist_ok=True)
     proc = subprocess.run(
         [
-            "Rscript", "--vanilla", str(REGULATORS_R),
-            "--project-config", str(fixture / config_name),
-            "--samples", str(fixture / "samples.tsv"),
-            "--annotation", str(fixture / "annotation.tsv"),
-            "--contrasts", str(fixture / "contrasts.tsv"),
-            "--contrast-id", "treated_vs_control",
-            "--vst", str(fixture / "vst.rds"),
-            "--outdir", str(outdir),
+            "Rscript",
+            "--vanilla",
+            str(REGULATORS_R),
+            "--project-config",
+            str(fixture / config_name),
+            "--samples",
+            str(fixture / "samples.tsv"),
+            "--annotation",
+            str(fixture / "annotation.tsv"),
+            "--contrasts",
+            str(fixture / "contrasts.tsv"),
+            "--contrast-id",
+            "treated_vs_control",
+            "--vst",
+            str(fixture / "vst.rds"),
+            "--outdir",
+            str(outdir),
         ],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     if proc.returncode != 0:
         sys.stderr.write(proc.stdout + "\n" + proc.stderr)
@@ -196,8 +208,7 @@ def _rscript_has_viper() -> bool:
     if shutil.which("Rscript") is None:
         return False
     proc = subprocess.run(
-        ["Rscript", "--vanilla", "-e",
-         'quit(status = as.integer(!requireNamespace("viper", quietly = TRUE)))'],
+        ["Rscript", "--vanilla", "-e", 'quit(status = as.integer(!requireNamespace("viper", quietly = TRUE)))'],
         capture_output=True,
     )
     return proc.returncode == 0
@@ -245,16 +256,26 @@ def test_strict_mode_fails_on_non_viper_fallback(tmp_path):
     outdir.mkdir(parents=True, exist_ok=True)
     proc = subprocess.run(
         [
-            "Rscript", "--vanilla", str(REGULATORS_R),
-            "--project-config", str(fixture / "project_strict.yaml"),
-            "--samples", str(fixture / "samples.tsv"),
-            "--annotation", str(fixture / "annotation.tsv"),
-            "--contrasts", str(fixture / "contrasts.tsv"),
-            "--contrast-id", "treated_vs_control",
-            "--vst", str(fixture / "vst.rds"),
-            "--outdir", str(outdir),
+            "Rscript",
+            "--vanilla",
+            str(REGULATORS_R),
+            "--project-config",
+            str(fixture / "project_strict.yaml"),
+            "--samples",
+            str(fixture / "samples.tsv"),
+            "--annotation",
+            str(fixture / "annotation.tsv"),
+            "--contrasts",
+            str(fixture / "contrasts.tsv"),
+            "--contrast-id",
+            "treated_vs_control",
+            "--vst",
+            str(fixture / "vst.rds"),
+            "--outdir",
+            str(outdir),
         ],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     assert proc.returncode != 0, "strict mode must fail on the non-VIPER fallback"
     assert "strict mode" in proc.stderr, proc.stderr
@@ -406,8 +427,7 @@ def test_single_regulator_regulon_keeps_its_name(tmp_path):
 
     fixture = _build_fixture(tmp_path)
     (fixture / "regulon_single.tsv").write_text(
-        "source\ttarget\tmor\n"
-        + "".join(f"SOLO\tGene{index:02d}\t1\n" for index in range(1, 7)),
+        "source\ttarget\tmor\n" + "".join(f"SOLO\tGene{index:02d}\t1\n" for index in range(1, 7)),
         encoding="utf-8",
     )
     data = copy.deepcopy(_BASE_YAML)
@@ -417,8 +437,6 @@ def test_single_regulator_regulon_keeps_its_name(tmp_path):
     outdir = tmp_path / "single"
     _run_regulators(fixture, "project_single.yaml", outdir)
 
-    with (outdir / "tables" / "regulator_differential.tsv").open(
-        newline="", encoding="utf-8"
-    ) as handle:
+    with (outdir / "tables" / "regulator_differential.tsv").open(newline="", encoding="utf-8") as handle:
         rows = list(csv.DictReader(handle, delimiter="\t"))
     assert [row["regulator"] for row in rows] == ["SOLO"], rows

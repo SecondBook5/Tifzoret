@@ -20,6 +20,7 @@ def test_wheel_contains_required_assets(tmp_path):
     for path in [dist_dir, build_dir, egg_info]:
         if path.exists():
             import shutil
+
             shutil.rmtree(path)
 
     # Attempt to build wheel

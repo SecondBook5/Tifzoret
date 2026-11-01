@@ -29,9 +29,7 @@ def _limits(scores: list[float], counts: list[int]) -> dict:
         f"s <- c({','.join(map(str, scores))}); n <- c({','.join(map(str, counts))});"
         "cat(jsonlite::toJSON(ora_scale_limits(s, n), auto_unbox = TRUE))"
     )
-    result = subprocess.run(
-        ["Rscript", "--vanilla", "-e", code, str(UTILS_R)], capture_output=True, text=True
-    )
+    result = subprocess.run(["Rscript", "--vanilla", "-e", code, str(UTILS_R)], capture_output=True, text=True)
     if result.returncode != 0:
         pytest.fail(result.stderr)
     return json.loads(result.stdout)

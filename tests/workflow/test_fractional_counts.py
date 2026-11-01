@@ -25,11 +25,7 @@ def test_integer_counts_are_unchanged():
 
     with tempfile.TemporaryDirectory() as tmpdir:
         counts_file = Path(tmpdir) / "counts.tsv"
-        counts_file.write_text(
-            "gene_id\tsample1\tsample2\n"
-            "g001\t100\t200\n"
-            "g002\t50\t75\n"
-        )
+        counts_file.write_text("gene_id\tsample1\tsample2\n" "g001\t100\t200\n" "g002\t50\t75\n")
 
         script = f"""
         source("{ROOT / 'src' / 'tifzoret' / 'workflow' / 'scripts' / 'utils.R'}")
@@ -59,11 +55,7 @@ def test_fractional_counts_are_rounded_with_warning():
 
     with tempfile.TemporaryDirectory() as tmpdir:
         counts_file = Path(tmpdir) / "counts.tsv"
-        counts_file.write_text(
-            "gene_id\tsample1\tsample2\n"
-            "g001\t100.7\t200.3\n"
-            "g002\t50.2\t75.8\n"
-        )
+        counts_file.write_text("gene_id\tsample1\tsample2\n" "g001\t100.7\t200.3\n" "g002\t50.2\t75.8\n")
 
         script = f"""
         source("{ROOT / 'src' / 'tifzoret' / 'workflow' / 'scripts' / 'utils.R'}")
@@ -83,7 +75,5 @@ def test_fractional_counts_are_rounded_with_warning():
 
         # Should succeed with a warning about non-integer counts.
         assert result.returncode == 0, f"stdout: {result.stdout}\nstderr: {result.stderr}"
-        assert "non-integer counts detected" in result.stderr, (
-            "Fractional counts should trigger a warning"
-        )
+        assert "non-integer counts detected" in result.stderr, "Fractional counts should trigger a warning"
         assert "rounding to nearest integer" in result.stderr

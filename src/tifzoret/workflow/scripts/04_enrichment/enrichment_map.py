@@ -76,8 +76,14 @@ DOWN_COLOUR = "#2C6FBB"
 # Okabe-Ito qualitative palette for community colours: colourblind-safe by
 # construction, so cluster identity survives CVD without secondary encoding.
 OKABE_ITO = [
-    "#0072B2", "#E69F00", "#009E73", "#CC79A7",
-    "#56B4E9", "#D55E00", "#F0E442", "#000000",
+    "#0072B2",
+    "#E69F00",
+    "#009E73",
+    "#CC79A7",
+    "#56B4E9",
+    "#D55E00",
+    "#F0E442",
+    "#000000",
 ]
 OTHER_COLOUR = "#B7BEC4"
 
@@ -189,15 +195,17 @@ def build_graph(terms: dict[str, dict[str, Any]], min_similarity: float) -> tupl
         if jaccard < min_similarity:
             continue
         graph.add_edge(a, b, weight=jaccard)
-        edge_rows.append({
-            "term_a": a,
-            "term_b": b,
-            "label_a": terms[a]["label"],
-            "label_b": terms[b]["label"],
-            "jaccard": jaccard,
-            "n_shared": len(shared),
-            "shared_genes": ";".join(sorted(shared)),
-        })
+        edge_rows.append(
+            {
+                "term_a": a,
+                "term_b": b,
+                "label_a": terms[a]["label"],
+                "label_b": terms[b]["label"],
+                "jaccard": jaccard,
+                "n_shared": len(shared),
+                "shared_genes": ";".join(sorted(shared)),
+            }
+        )
     edge_rows.sort(key=lambda r: (-r["jaccard"], r["term_a"], r["term_b"]))
     return graph, edge_rows
 
@@ -239,18 +247,21 @@ def draw_map(
         return 0
 
     positions = nx.spring_layout(
-        graph, seed=seed, weight="weight",
+        graph,
+        seed=seed,
+        weight="weight",
         k=1.6 / math.sqrt(max(graph.number_of_nodes(), 1)),
     )
     nodes = sorted(graph.nodes())
     cluster_colour = {
-        index: (OKABE_ITO[index] if index < len(OKABE_ITO) else OTHER_COLOUR)
-        for index in range(n_clusters)
+        index: (OKABE_ITO[index] if index < len(OKABE_ITO) else OTHER_COLOUR) for index in range(n_clusters)
     }
     node_colours = [cluster_colour.get(clusters.get(node, 0), OTHER_COLOUR) for node in nodes]
     ring_colours = [
-        UP_COLOUR if terms[node]["direction"] == "up_in_numerator"
-        else DOWN_COLOUR if terms[node]["direction"] == "down_in_numerator"
+        UP_COLOUR
+        if terms[node]["direction"] == "up_in_numerator"
+        else DOWN_COLOUR
+        if terms[node]["direction"] == "down_in_numerator"
         else MID_GREY
         for node in nodes
     ]
@@ -259,12 +270,22 @@ def draw_map(
     figure, axis = plt.subplots(figsize=(8.4, 6.6))
     if graph.number_of_edges():
         nx.draw_networkx_edges(
-            graph, positions, ax=axis, alpha=0.35, edge_color="#9AA6AE",
+            graph,
+            positions,
+            ax=axis,
+            alpha=0.35,
+            edge_color="#9AA6AE",
             width=[0.5 + 3.0 * graph.edges[edge]["weight"] for edge in graph.edges],
         )
     nx.draw_networkx_nodes(
-        graph, positions, nodelist=nodes, ax=axis, node_color=node_colours,
-        node_size=sizes, edgecolors=ring_colours, linewidths=1.4,
+        graph,
+        positions,
+        nodelist=nodes,
+        ax=axis,
+        node_color=node_colours,
+        node_size=sizes,
+        edgecolors=ring_colours,
+        linewidths=1.4,
     )
     # Label only the most significant terms to keep the map legible.
     labelled = sorted(nodes, key=lambda node: (best_p(terms[node]), node))[:MAX_DRAWN_LABELS]
@@ -274,20 +295,48 @@ def draw_map(
     axis.set_title("Enrichment map: shared-gene term similarity", color=NAVY, fontsize=13, fontweight="bold")
     axis.set_axis_off()
     cluster_handles = [
-        plt.Line2D([0], [0], marker="o", linestyle="none", markersize=9,
-                   markerfacecolor=cluster_colour[index], markeredgecolor="none",
-                   label=f"Cluster {index + 1}")
+        plt.Line2D(
+            [0],
+            [0],
+            marker="o",
+            linestyle="none",
+            markersize=9,
+            markerfacecolor=cluster_colour[index],
+            markeredgecolor="none",
+            label=f"Cluster {index + 1}",
+        )
         for index in range(min(n_clusters, len(OKABE_ITO)))
     ]
     direction_handles = [
-        plt.Line2D([0], [0], marker="o", linestyle="none", markersize=9,
-                   markerfacecolor="white", markeredgecolor=UP_COLOUR, markeredgewidth=1.6, label="Up in numerator"),
-        plt.Line2D([0], [0], marker="o", linestyle="none", markersize=9,
-                   markerfacecolor="white", markeredgecolor=DOWN_COLOUR, markeredgewidth=1.6, label="Down in numerator"),
+        plt.Line2D(
+            [0],
+            [0],
+            marker="o",
+            linestyle="none",
+            markersize=9,
+            markerfacecolor="white",
+            markeredgecolor=UP_COLOUR,
+            markeredgewidth=1.6,
+            label="Up in numerator",
+        ),
+        plt.Line2D(
+            [0],
+            [0],
+            marker="o",
+            linestyle="none",
+            markersize=9,
+            markerfacecolor="white",
+            markeredgecolor=DOWN_COLOUR,
+            markeredgewidth=1.6,
+            label="Down in numerator",
+        ),
     ]
     axis.legend(
         handles=cluster_handles + direction_handles,
-        loc="upper left", bbox_to_anchor=(1.01, 1.0), fontsize=7, frameon=False,
+        loc="upper left",
+        bbox_to_anchor=(1.01, 1.0),
+        fontsize=7,
+        frameon=False,
     )
     figure.savefig(f"{stem}.pdf", bbox_inches="tight")
     figure.savefig(f"{stem}.png", dpi=300, bbox_inches="tight")
@@ -331,26 +380,37 @@ def main() -> None:
     n_clusters = (max(clusters.values()) + 1) if clusters else 0
 
     node_fields = [
-        "term", "label", "provider", "direction", "nes",
-        "fgsea_padj", "ora_padj", "signature_size", "degree", "cluster", "cluster_label",
+        "term",
+        "label",
+        "provider",
+        "direction",
+        "nes",
+        "fgsea_padj",
+        "ora_padj",
+        "signature_size",
+        "degree",
+        "cluster",
+        "cluster_label",
     ]
     node_rows = []
     for term in sorted(terms):
         record = terms[term]
         cluster = clusters.get(term, 0)
-        node_rows.append({
-            "term": term,
-            "label": record["label"],
-            "provider": record["provider"],
-            "direction": record["direction"],
-            "nes": record["nes"],
-            "fgsea_padj": record["fgsea_padj"],
-            "ora_padj": record["ora_padj"],
-            "signature_size": len(record["signature"]),
-            "degree": graph.degree(term) if term in graph else 0,
-            "cluster": cluster,
-            "cluster_label": f"C{cluster + 1}",
-        })
+        node_rows.append(
+            {
+                "term": term,
+                "label": record["label"],
+                "provider": record["provider"],
+                "direction": record["direction"],
+                "nes": record["nes"],
+                "fgsea_padj": record["fgsea_padj"],
+                "ora_padj": record["ora_padj"],
+                "signature_size": len(record["signature"]),
+                "degree": graph.degree(term) if term in graph else 0,
+                "cluster": cluster,
+                "cluster_label": f"C{cluster + 1}",
+            }
+        )
     node_rows.sort(key=lambda r: (r["cluster"], best_p(terms[r["term"]]), r["term"]))
     write_tsv(tables_dir / "enrichment_map_nodes.tsv", node_fields, node_rows)
 
@@ -367,19 +427,30 @@ def main() -> None:
         n_up = sum(1 for term in members if terms[term]["direction"] == "up_in_numerator")
         n_down = sum(1 for term in members if terms[term]["direction"] == "down_in_numerator")
         representative = members[0]
-        cluster_rows.append({
-            "cluster": index,
-            "cluster_label": f"C{index + 1}",
-            "size": len(members),
-            "representative_term": representative,
-            "representative_label": terms[representative]["label"],
-            "n_up": n_up,
-            "n_down": n_down,
-            "member_terms": ";".join(members),
-        })
+        cluster_rows.append(
+            {
+                "cluster": index,
+                "cluster_label": f"C{index + 1}",
+                "size": len(members),
+                "representative_term": representative,
+                "representative_label": terms[representative]["label"],
+                "n_up": n_up,
+                "n_down": n_down,
+                "member_terms": ";".join(members),
+            }
+        )
     write_tsv(
         tables_dir / "enrichment_map_clusters.tsv",
-        ["cluster", "cluster_label", "size", "representative_term", "representative_label", "n_up", "n_down", "member_terms"],
+        [
+            "cluster",
+            "cluster_label",
+            "size",
+            "representative_term",
+            "representative_label",
+            "n_up",
+            "n_down",
+            "member_terms",
+        ],
         cluster_rows,
     )
 
@@ -399,7 +470,9 @@ def main() -> None:
     }
     outdir.mkdir(parents=True, exist_ok=True)
     (outdir / "enrichment_map_summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
-    print(f"Built enrichment map for {args.contrast_id}: {len(terms)} terms, {graph.number_of_edges()} edges, {n_clusters} clusters")
+    print(
+        f"Built enrichment map for {args.contrast_id}: {len(terms)} terms, {graph.number_of_edges()} edges, {n_clusters} clusters"
+    )
 
 
 if __name__ == "__main__":

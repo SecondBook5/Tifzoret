@@ -24,13 +24,21 @@ def test_front_door_promotes_figure_pair_and_metadata(tmp_path: Path):
     canvas.save()
     figures_index = results / "figures" / "index.json"
     tables_index = results / "tables" / "index.json"
-    subprocess.run([
-        sys.executable, str(SCRIPT),
-        "--project-config", str(TEMPLATE / "project.yaml"),
-        "--results", str(results),
-        "--figures-index", str(figures_index),
-        "--tables-index", str(tables_index),
-    ], check=True)
+    subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT),
+            "--project-config",
+            str(TEMPLATE / "project.yaml"),
+            "--results",
+            str(results),
+            "--figures-index",
+            str(figures_index),
+            "--tables-index",
+            str(tables_index),
+        ],
+        check=True,
+    )
     index = json.loads(figures_index.read_text())
     assert index["figures"][0]["id"] == "qc__pca_correlation"
     metadata = results / index["figures"][0]["metadata"]

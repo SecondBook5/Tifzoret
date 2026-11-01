@@ -100,9 +100,7 @@ def stage_family(
     project = tmp_path / "project"
     shutil.copytree(template, project)
     config = yaml.safe_load((project / "project.yaml").read_text(encoding="utf-8"))
-    (project / "project.yaml").write_text(
-        yaml.safe_dump(config, sort_keys=False), encoding="utf-8"
-    )
+    (project / "project.yaml").write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
     (tmp_path / "families.tsv").write_text(
         "family_id\tdesign\tcells\treference_levels\treplicate_unit\tshrinkage\tfilter\tdeclared\n"
         f"fam_a\t{design}\t{cells}\t\t\tapeglm\t{gene_filter}\ttrue\n",
@@ -116,9 +114,7 @@ def stage_family(
         for key, weight in cell_weights.items():
             weights.append(f"fam_a\t{name}\t{key}\t{weight!r}")
     (tmp_path / "estimands.tsv").write_text("\n".join(lines) + "\n", encoding="utf-8")
-    (tmp_path / "estimand_cell_weights.tsv").write_text(
-        "\n".join(weights) + "\n", encoding="utf-8"
-    )
+    (tmp_path / "estimand_cell_weights.tsv").write_text("\n".join(weights) + "\n", encoding="utf-8")
     outdir = tmp_path / "out"
     result = subprocess.run(
         [

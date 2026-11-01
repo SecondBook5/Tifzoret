@@ -16,7 +16,13 @@ from tifzoret.figures import (
 __version__ = "0.1.1"
 
 __all__ = [
-    "ProjectValidationError", "ResolvedProject", "load_project", "validation_report",
-    "PANEL_REGISTRY", "build_gallery", "normalized_gene_panels", "resolve_panel",
+    "ProjectValidationError",
+    "ResolvedProject",
+    "load_project",
+    "validation_report",
+    "PANEL_REGISTRY",
+    "build_gallery",
+    "normalized_gene_panels",
+    "resolve_panel",
     "__version__",
 ]

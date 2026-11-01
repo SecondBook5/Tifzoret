@@ -78,10 +78,8 @@ _PROJECT_YAML = {
     "project": {"id": "sva_fixture", "title": "sva fixture", "description": "fixture"},
     "species": {"provider": "custom", "scientific_name": "synthetic", "taxonomy_id": None},
     "reference": {"genome_build": "synthetic", "annotation_release": None},
-    "inputs": {"kind": "counts", "samples": "samples.tsv", "counts": "counts.tsv",
-               "annotation": "annotation.tsv"},
-    "analysis": {"design": "~ condition", "contrasts": "contrasts.tsv",
-                 "profile": "full", "random_seed": 1},
+    "inputs": {"kind": "counts", "samples": "samples.tsv", "counts": "counts.tsv", "annotation": "annotation.tsv"},
+    "analysis": {"design": "~ condition", "contrasts": "contrasts.tsv", "profile": "full", "random_seed": 1},
     "resources": {"gene_sets": {"gmt": "sets.gmt"}},
     "figures": {"group": "condition"},
     "output": {"root": "out"},
@@ -92,10 +90,8 @@ def _build_fixture(tmp_path: Path) -> Path:
     fixture = tmp_path / "fixture"
     builder = tmp_path / "build_sva.R"
     builder.write_text(FIXTURE_BUILDER_R, encoding="utf-8")
-    subprocess.run(["Rscript", "--vanilla", str(builder), str(fixture)],
-                   check=True, capture_output=True, text=True)
-    (fixture / "project.yaml").write_text(
-        yaml.safe_dump(_PROJECT_YAML, sort_keys=False), encoding="utf-8")
+    subprocess.run(["Rscript", "--vanilla", str(builder), str(fixture)], check=True, capture_output=True, text=True)
+    (fixture / "project.yaml").write_text(yaml.safe_dump(_PROJECT_YAML, sort_keys=False), encoding="utf-8")
     return fixture
 
 
@@ -107,11 +103,13 @@ def _read_tsv(path: Path) -> list[dict[str, str]]:
 def _rscript_has_sva() -> bool:
     if shutil.which("Rscript") is None:
         return False
-    return subprocess.run(
-        ["Rscript", "--vanilla", "-e",
-         'quit(status = as.integer(!requireNamespace("sva", quietly = TRUE)))'],
-        capture_output=True,
-    ).returncode == 0
+    return (
+        subprocess.run(
+            ["Rscript", "--vanilla", "-e", 'quit(status = as.integer(!requireNamespace("sva", quietly = TRUE)))'],
+            capture_output=True,
+        ).returncode
+        == 0
+    )
 
 
 @pytest.mark.skipif(not _rscript_has_sva(), reason="sva not installed for this Rscript")
@@ -126,15 +124,24 @@ def test_sva_resolves_the_contrast_without_a_matching_coefficient_name(tmp_path)
     outdir = tmp_path / "out"
     proc = subprocess.run(
         [
-            "Rscript", "--vanilla", str(SVA_R),
-            "--project-config", str(fixture / "project.yaml"),
-            "--dds", str(fixture / "dds.rds"),
-            "--vst", str(fixture / "vst.rds"),
-            "--contrasts", str(fixture / "contrasts.tsv"),
-            "--contrast-id", "control_vs_treated",
-            "--outdir", str(outdir),
+            "Rscript",
+            "--vanilla",
+            str(SVA_R),
+            "--project-config",
+            str(fixture / "project.yaml"),
+            "--dds",
+            str(fixture / "dds.rds"),
+            "--vst",
+            str(fixture / "vst.rds"),
+            "--contrasts",
+            str(fixture / "contrasts.tsv"),
+            "--contrast-id",
+            "control_vs_treated",
+            "--outdir",
+            str(outdir),
         ],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     assert proc.returncode == 0, proc.stdout + proc.stderr
 
@@ -157,7 +164,6 @@ def test_sva_resolves_the_contrast_without_a_matching_coefficient_name(tmp_path)
         for row in sensitivity
         if row["log2_fold_change_original"] not in ("", "NA")
     }
-    raised_in_treated = [effects[f"G{index:03d}"] for index in range(1, 61)
-                         if f"G{index:03d}" in effects]
+    raised_in_treated = [effects[f"G{index:03d}"] for index in range(1, 61) if f"G{index:03d}" in effects]
     assert len(raised_in_treated) >= 55, len(raised_in_treated)
     assert all(value < 0 for value in raised_in_treated), sorted(raised_in_treated)[-5:]

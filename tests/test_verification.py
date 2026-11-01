@@ -11,8 +11,10 @@ TEMPLATE = ROOT / "src" / "tifzoret" / "templates" / "minimal"
 
 
 def test_verification_detects_and_reports_table_differences(tmp_path: Path):
-    reference = tmp_path / "reference"; candidate = tmp_path / "candidate"
-    reference.mkdir(); candidate.mkdir()
+    reference = tmp_path / "reference"
+    candidate = tmp_path / "candidate"
+    reference.mkdir()
+    candidate.mkdir()
     (reference / "counts.tsv").write_text("gene_id\ts1\ng1\t10\n")
     (candidate / "counts.tsv").write_text("gene_id\ts1\ng1\t11\n")
     result = verify_runs(reference, candidate)
@@ -25,8 +27,10 @@ def test_verification_fails_on_candidate_only_table(tmp_path: Path):
     # verify_runs records such tables under candidate_only_tables AND must fail on
     # them: a candidate whose every shared cell agrees but which adds an extra
     # table is not a match. (Regression: `passed` once omitted `not extra`.)
-    reference = tmp_path / "reference"; candidate = tmp_path / "candidate"
-    reference.mkdir(); candidate.mkdir()
+    reference = tmp_path / "reference"
+    candidate = tmp_path / "candidate"
+    reference.mkdir()
+    candidate.mkdir()
     (reference / "counts.tsv").write_text("gene_id\ts1\ng1\t10\n")
     (candidate / "counts.tsv").write_text("gene_id\ts1\ng1\t10\n")
     (candidate / "unexpected.tsv").write_text("gene_id\ts1\ng1\t10\n")
@@ -48,13 +52,15 @@ def test_legacy_verification_compares_counts_de_decisions_and_figures(tmp_path: 
         row["bam"] = f"{row['sample_id']}.bam"
     with samples_path.open("w", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fields, delimiter="\t", lineterminator="\n")
-        writer.writeheader(); writer.writerows(rows)
+        writer.writeheader()
+        writer.writerows(rows)
     project = load_project(study / "project.yaml")
     candidate = project.result_root
     inputs = candidate / "inputs"
     inputs.mkdir(parents=True)
     shutil.copy2(study / "counts.tsv", inputs / "counts.tsv")
-    (candidate / "figures").mkdir(); (candidate / "tables").mkdir()
+    (candidate / "figures").mkdir()
+    (candidate / "tables").mkdir()
     (candidate / "figures" / "index.json").write_text('{"figures": []}\n')
     (candidate / "tables" / "index.json").write_text('{"tables": []}\n')
 
@@ -63,24 +69,43 @@ def test_legacy_verification_compares_counts_de_decisions_and_figures(tmp_path: 
     reference = tmp_path / "reference"
     count_cache = reference / ".cache" / "counts"
     de_cache = reference / ".cache" / "de"
-    count_cache.mkdir(parents=True); de_cache.mkdir(parents=True)
+    count_cache.mkdir(parents=True)
+    de_cache.mkdir(parents=True)
     sample_ids = [row["sample_id"] for row in rows]
     with (count_cache / "gene_counts.tsv").open("w", newline="") as handle:
         handle.write("# featureCounts fixture\n")
-        writer = csv.DictWriter(handle, fieldnames=["Geneid", "Chr", "Start", "End", "Strand", "Length", *[f"/old/{sample}.bam" for sample in sample_ids]], delimiter="\t", lineterminator="\n")
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=[
+                "Geneid",
+                "Chr",
+                "Start",
+                "End",
+                "Strand",
+                "Length",
+                *[f"/old/{sample}.bam" for sample in sample_ids],
+            ],
+            delimiter="\t",
+            lineterminator="\n",
+        )
         writer.writeheader()
         for row in counts:
-            writer.writerow({
-                "Geneid": row["gene_id"], "Chr": "1", "Start": "1", "End": "2", "Strand": "+", "Length": "2",
-                **{f"/old/{sample}.bam": row[sample] for sample in sample_ids},
-            })
+            writer.writerow(
+                {
+                    "Geneid": row["gene_id"],
+                    "Chr": "1",
+                    "Start": "1",
+                    "End": "2",
+                    "Strand": "+",
+                    "Length": "2",
+                    **{f"/old/{sample}.bam": row[sample] for sample in sample_ids},
+                }
+            )
     (de_cache / "de_raw.tsv").write_text(
-        "gene_id\tbaseMean\tlog2FoldChange\tstat\tpvalue\tpadj\n"
-        "g1\t10\t1.2\t3\t0.01\t0.02\n"
+        "gene_id\tbaseMean\tlog2FoldChange\tstat\tpvalue\tpadj\n" "g1\t10\t1.2\t3\t0.01\t0.02\n"
     )
     (de_cache / "de_shrunken.tsv").write_text(
-        "gene_id\tbaseMean\tlog2FoldChange\tpvalue\tpadj\n"
-        "g1\t10\t1.1\t0.01\t0.02\n"
+        "gene_id\tbaseMean\tlog2FoldChange\tpvalue\tpadj\n" "g1\t10\t1.1\t0.01\t0.02\n"
     )
     for contrast in project.contrast_rows:
         table = candidate / "contrasts" / contrast["contrast_id"] / "analyses" / "de" / "tables"

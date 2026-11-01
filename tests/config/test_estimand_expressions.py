@@ -29,9 +29,7 @@ def test_parses_a_simple_difference():
 
 
 def test_parses_numeric_coefficients_for_a_marginal_effect():
-    parsed = parse_expression(
-        "0.5*(a2,b1) + 0.5*(a2,b2) - 0.5*(a1,b1) - 0.5*(a1,b2)", arity=2
-    )
+    parsed = parse_expression("0.5*(a2,b1) + 0.5*(a2,b2) - 0.5*(a1,b1) - 0.5*(a1,b2)", arity=2)
     assert parsed.cell_weights == {
         ("a2", "b1"): 0.5,
         ("a2", "b2"): 0.5,

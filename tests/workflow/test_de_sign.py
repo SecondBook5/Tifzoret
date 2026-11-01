@@ -11,7 +11,6 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-import pytest
 
 from _factorial_support import read_tsv_rows, require_r, stage_family
 
@@ -37,7 +36,7 @@ def test_de_sign_convention_numerator_minus_denominator(tmp_path):
         tmp_path,
         ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "03_differential" / "family_fit.R",
         TEMPLATE,
-        scenario="positive_interaction"
+        scenario="positive_interaction",
     )
 
     # Extract the two-cell estimand est_arm_a1 (comparing a1|b2 vs a1|b1).
@@ -46,18 +45,35 @@ def test_de_sign_convention_numerator_minus_denominator(tmp_path):
     fixture = tmp_path / "fx"
     outdir = tmp_path / "est" / estimand_id
     result = subprocess.run(
-        ["Rscript", "--vanilla", str(ESTIMAND_R),
-         "--project-config", str(tmp_path / "project" / "project.yaml"),
-         "--counts", str(fixture / "counts.tsv"),
-         "--samples", str(fixture / "samples.tsv"),
-         "--annotation", str(fixture / "annotation.tsv"),
-         "--families", str(tmp_path / "families.tsv"),
-         "--estimands", str(tmp_path / "estimands.tsv"),
-         "--cell-weights", str(tmp_path / "estimand_cell_weights.tsv"),
-         "--family-dir", str(family_dir),
-         "--estimand-id", estimand_id,
-         "--outdir", str(outdir)],
-        capture_output=True, text=True, cwd=tmp_path)
+        [
+            "Rscript",
+            "--vanilla",
+            str(ESTIMAND_R),
+            "--project-config",
+            str(tmp_path / "project" / "project.yaml"),
+            "--counts",
+            str(fixture / "counts.tsv"),
+            "--samples",
+            str(fixture / "samples.tsv"),
+            "--annotation",
+            str(fixture / "annotation.tsv"),
+            "--families",
+            str(tmp_path / "families.tsv"),
+            "--estimands",
+            str(tmp_path / "estimands.tsv"),
+            "--cell-weights",
+            str(tmp_path / "estimand_cell_weights.tsv"),
+            "--family-dir",
+            str(family_dir),
+            "--estimand-id",
+            estimand_id,
+            "--outdir",
+            str(outdir),
+        ],
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+    )
     assert result.returncode == 0, result.stderr
 
     # Read the DE results.
@@ -67,24 +83,17 @@ def test_de_sign_convention_numerator_minus_denominator(tmp_path):
     # The sign convention test doesn't require statistical significance - it tests
     # whether positive log2FC means up-in-numerator and negative means down-in-numerator.
     nonzero_rows = [
-        row for row in rows
-        if row["log2_fold_change"] not in ("NA", "") and float(row["log2_fold_change"]) != 0
+        row for row in rows if row["log2_fold_change"] not in ("NA", "") and float(row["log2_fold_change"]) != 0
     ]
     assert len(nonzero_rows) > 0, "No genes with non-zero log2FC found"
 
     # Sort by log2_fold_change to find clear up/down genes.
-    sorted_rows = sorted(
-        nonzero_rows,
-        key=lambda r: float(r["log2_fold_change"]),
-        reverse=True
-    )
+    sorted_rows = sorted(nonzero_rows, key=lambda r: float(r["log2_fold_change"]), reverse=True)
 
     # Test a gene with positive log2FC (higher in numerator).
     up_gene = sorted_rows[0]  # Gene with highest log2FC
     lfc_up = float(up_gene["log2_fold_change"])
-    assert lfc_up > 0, (
-        f"Gene {up_gene['gene_id']} should have positive log2FC but got {lfc_up}"
-    )
+    assert lfc_up > 0, f"Gene {up_gene['gene_id']} should have positive log2FC but got {lfc_up}"
     # The sign convention is: positive log2FC = numerator - denominator, meaning
     # the gene is higher in the numerator. The "direction" column reflects this
     # for significant genes, but for non-significant genes it's "not_significant".
@@ -98,9 +107,7 @@ def test_de_sign_convention_numerator_minus_denominator(tmp_path):
     # Test a gene with negative log2FC (lower in numerator).
     down_gene = sorted_rows[-1]  # Gene with lowest (most negative) log2FC
     lfc_down = float(down_gene["log2_fold_change"])
-    assert lfc_down < 0, (
-        f"Gene {down_gene['gene_id']} should have negative log2FC but got {lfc_down}"
-    )
+    assert lfc_down < 0, f"Gene {down_gene['gene_id']} should have negative log2FC but got {lfc_down}"
     # Same check: if direction is set, it must match the sign.
     if down_gene["direction"] != "not_significant":
         assert down_gene["direction"] in ("down_in_numerator", "significant_down"), (

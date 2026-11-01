@@ -58,9 +58,7 @@ def test_a_declared_unit_difference_exports_native_pairwise_levels(tmp_path):
     levels = sorted(
         {
             line.split("\t")[columns.index(factor)]
-            for line in (config_path.parent / "samples.tsv")
-            .read_text(encoding="utf-8")
-            .splitlines()[1:]
+            for line in (config_path.parent / "samples.tsv").read_text(encoding="utf-8").splitlines()[1:]
             if line.strip()
         }
     )
@@ -99,9 +97,7 @@ def test_estimand_rows_and_cell_weights_are_exported(tmp_path):
     levels = sorted(
         {
             line.split("\t")[columns.index(factor)]
-            for line in (config_path.parent / "samples.tsv")
-            .read_text(encoding="utf-8")
-            .splitlines()[1:]
+            for line in (config_path.parent / "samples.tsv").read_text(encoding="utf-8").splitlines()[1:]
             if line.strip()
         }
     )
@@ -140,9 +136,7 @@ def test_term_tests_are_derived_with_real_degrees_of_freedom(tmp_path):
     levels = sorted(
         {
             line.split("\t")[columns.index(factor)]
-            for line in (config_path.parent / "samples.tsv")
-            .read_text(encoding="utf-8")
-            .splitlines()[1:]
+            for line in (config_path.parent / "samples.tsv").read_text(encoding="utf-8").splitlines()[1:]
             if line.strip()
         }
     )
@@ -179,9 +173,7 @@ def test_an_invalid_expression_is_a_load_error(tmp_path):
             "fam_a": {
                 "design": f"~ {factor}",
                 "cells": [factor],
-                "estimands": [
-                    {"id": "est_bad", "role": "primary", "expression": "(nonexistent_level)"}
-                ],
+                "estimands": [{"id": "est_bad", "role": "primary", "expression": "(nonexistent_level)"}],
             }
         }
 
@@ -196,9 +188,7 @@ def test_an_estimand_id_colliding_with_a_contrast_id_is_a_load_error(tmp_path):
     levels = sorted(
         {
             line.split("\t")[columns.index(factor)]
-            for line in (config_path.parent / "samples.tsv")
-            .read_text(encoding="utf-8")
-            .splitlines()[1:]
+            for line in (config_path.parent / "samples.tsv").read_text(encoding="utf-8").splitlines()[1:]
             if line.strip()
         }
     )
@@ -236,9 +226,9 @@ def test_an_unknown_analysis_key_is_still_rejected(tmp_path):
 def test_project_de_settings_reach_the_desugared_families(tmp_path):
     config_path = _write(
         _project(tmp_path),
-        lambda data: data["analysis"].setdefault("settings", {}).update(
-            {"de": {"filter": "total_count", "shrinkage": "ashr"}}
-        ),
+        lambda data: data["analysis"]
+        .setdefault("settings", {})
+        .update({"de": {"filter": "total_count", "shrinkage": "ashr"}}),
     )
     project = load_project(config_path)
     assert project.families
@@ -249,9 +239,7 @@ def test_project_de_settings_reach_the_desugared_families(tmp_path):
 def test_a_shrinkage_the_engine_cannot_run_fails_validation(tmp_path):
     config_path = _write(
         _project(tmp_path),
-        lambda data: data["analysis"].setdefault("settings", {}).update(
-            {"de": {"shrinkage": "normal"}}
-        ),
+        lambda data: data["analysis"].setdefault("settings", {}).update({"de": {"shrinkage": "normal"}}),
     )
     with pytest.raises(ProjectValidationError):
         load_project(config_path)

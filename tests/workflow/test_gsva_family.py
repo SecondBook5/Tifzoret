@@ -38,8 +38,12 @@ def _family(gene_sets: dict[str, list[str]], requested: list[str]) -> dict:
 
 
 SETS = {
-    "HALLMARK_A": [], "HALLMARK_B": [], "HALLMARK_C": [],
-    "REACTOME_X": [], "REACTOME_Y": [], "GO_BP_Z": [],
+    "HALLMARK_A": [],
+    "HALLMARK_B": [],
+    "HALLMARK_C": [],
+    "REACTOME_X": [],
+    "REACTOME_Y": [],
+    "GO_BP_Z": [],
 }
 
 

@@ -46,10 +46,22 @@ def test_the_dag_builds_for_the_minimal_template(tmp_path, target):
     project = tmp_path / "project"
     shutil.copytree(TEMPLATE, project)
     result = subprocess.run(
-        [sys.executable, "-m", "snakemake", "--snakefile", str(WORKFLOW / "Snakefile"),
-         "--configfile", str(project / "project.yaml"), target, "--quiet"],
-        capture_output=True, text=True, cwd=tmp_path,
-        env={"PYTHONPATH": str(ROOT / "src"), "PATH": "/usr/bin:/bin"})
+        [
+            sys.executable,
+            "-m",
+            "snakemake",
+            "--snakefile",
+            str(WORKFLOW / "Snakefile"),
+            "--configfile",
+            str(project / "project.yaml"),
+            target,
+            "--quiet",
+        ],
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+        env={"PYTHONPATH": str(ROOT / "src"), "PATH": "/usr/bin:/bin"},
+    )
     assert result.returncode == 0, result.stdout + result.stderr
 
 
@@ -68,18 +80,17 @@ def test_the_dag_builds_with_a_declared_family(tmp_path):
         "fam_a": {
             "design": f"~ {factor}",
             "cells": [factor],
-            "estimands": [
-                {"id": "est_declared", "role": "primary",
-                 "expression": f"({levels[1]}) - ({levels[0]})"}
-            ],
+            "estimands": [{"id": "est_declared", "role": "primary", "expression": f"({levels[1]}) - ({levels[0]})"}],
         }
     }
     data["analysis"].setdefault("modules", {})["factorial"] = False
     config_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
     result = subprocess.run(
-        [sys.executable, "-m", "tifzoret", "dry-run", str(config_path),
-         "--no-conda", "--cores", "1"],
-        capture_output=True, text=True, check=False)
+        [sys.executable, "-m", "tifzoret", "dry-run", str(config_path), "--no-conda", "--cores", "1"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
     assert result.returncode == 0, result.stdout + result.stderr
     assert "family_fit" in result.stdout or "family_fit" in result.stderr
 
@@ -109,12 +120,9 @@ def test_de_patterns_declare_exactly_what_estimand_r_writes():
     declares (which Snakemake would not own, and so would not regenerate).
     """
     declares_object = "objects/" in _de_patterns_block()
-    writes_object = "saveRDS" in (
-        WORKFLOW / "scripts" / "03_differential" / "estimand.R"
-    ).read_text(encoding="utf-8")
+    writes_object = "saveRDS" in (WORKFLOW / "scripts" / "03_differential" / "estimand.R").read_text(encoding="utf-8")
     assert declares_object == writes_object, (
-        f"DE_PATTERNS declares an objects/ output: {declares_object}; "
-        f"estimand.R calls saveRDS: {writes_object}"
+        f"DE_PATTERNS declares an objects/ output: {declares_object}; " f"estimand.R calls saveRDS: {writes_object}"
     )
 
 
@@ -125,7 +133,7 @@ def test_the_canonical_fit_is_the_family_fit():
     extract from a shared dispersion and covariance -- so a per-estimand copy of
     the same object would be both redundant and a second source of truth.
     """
-    assert "saveRDS(dds, file.path(dirs$objects, \"deseq2.rds\"))" in (
+    assert 'saveRDS(dds, file.path(dirs$objects, "deseq2.rds"))' in (
         WORKFLOW / "scripts" / "03_differential" / "family_fit.R"
     ).read_text(encoding="utf-8")
     advanced = (WORKFLOW / "rules" / "advanced.smk").read_text(encoding="utf-8")

@@ -51,7 +51,12 @@ def _positions(recipe: dict[str, object]) -> tuple[int, int, list[tuple[int, int
         column = int(panel.get("column", index % columns + 1))
         positions.append((row, column))
     rows = max(row + int(panel.get("row_span", 1)) - 1 for (row, _), panel in zip(positions, panels, strict=True))
-    columns = max(columns, max(column + int(panel.get("column_span", 1)) - 1 for (_, column), panel in zip(positions, panels, strict=True)))
+    columns = max(
+        columns,
+        max(
+            column + int(panel.get("column_span", 1)) - 1 for (_, column), panel in zip(positions, panels, strict=True)
+        ),
+    )
     return rows, columns, positions
 
 
@@ -81,9 +86,7 @@ def _axis_sizes(panel_meta, count, pos_key, span_key, size_key):
     return sizes
 
 
-def _label_overlay(
-    width: float, height: float, label: str, x: float, y_top: float
-) -> PageObject:
+def _label_overlay(width: float, height: float, label: str, x: float, y_top: float) -> PageObject:
     buffer = io.BytesIO()
     drawing = canvas.Canvas(buffer, pagesize=(width, height))
     drawing.setFont("Helvetica-Bold", 14)
@@ -109,9 +112,7 @@ def assemble(
     is missing."""
     project = load_project(project_config)
     if results.resolve() != project.result_root.resolve():
-        raise ValueError(
-            f"assembly results root {results} does not match resolved project root {project.result_root}"
-        )
+        raise ValueError(f"assembly results root {results} does not match resolved project root {project.result_root}")
     if project.recipe_config is None:
         raise RuntimeError("project has no validated figure recipe")
     recipe = project.recipe_config["figure_sets"][figure_set]
@@ -138,16 +139,21 @@ def assemble(
         if not source_pdf.is_file() or not source_png.is_file():
             raise FileNotFoundError(f"panel {panel['id']}: expected {source_pdf} and {source_png}")
         source_page = PdfReader(str(source_pdf)).pages[0]
-        panel_meta.append({
-            "panel": panel, "resolved": resolved,
-            "row": row, "column": column,
-            "row_span": int(panel.get("row_span", 1)),
-            "column_span": int(panel.get("column_span", 1)),
-            "source_pdf": source_pdf, "source_png": source_png,
-            "source_page": source_page,
-            "sw": float(source_page.mediabox.width),
-            "sh": float(source_page.mediabox.height),
-        })
+        panel_meta.append(
+            {
+                "panel": panel,
+                "resolved": resolved,
+                "row": row,
+                "column": column,
+                "row_span": int(panel.get("row_span", 1)),
+                "column_span": int(panel.get("column_span", 1)),
+                "source_pdf": source_pdf,
+                "source_png": source_png,
+                "source_page": source_page,
+                "sw": float(source_page.mediabox.width),
+                "sh": float(source_page.mediabox.height),
+            }
+        )
 
     # Content-proportional grid drawn at ONE shared scale. Each column takes the
     # width of its widest panel and each row the height of its tallest (deficits
@@ -193,9 +199,7 @@ def assemble(
         source_page = meta["source_page"]
         source_width, source_height = meta["sw"], meta["sh"]
         constructor_defaults = (
-            (project.panel_config or {}).get("constructor_defaults", {}).get(
-                resolved.constructor, {}
-            )
+            (project.panel_config or {}).get("constructor_defaults", {}).get(resolved.constructor, {})
             if resolved.constructor
             else {}
         )
@@ -216,11 +220,13 @@ def assemble(
             displayed_dir.mkdir(parents=True, exist_ok=True)
             staged_data = displayed_dir / f"{data_index:02d}_{data_path.name}"
             shutil.copy2(data_path, staged_data)
-            displayed_records.append({
-                "source": str(data_path),
-                "staged": str(staged_data),
-                "sha256": _sha256(data_path),
-            })
+            displayed_records.append(
+                {
+                    "source": str(data_path),
+                    "staged": str(staged_data),
+                    "sha256": _sha256(data_path),
+                }
+            )
         panel_record = {
             "id": panel["id"],
             "constructor": resolved.constructor,
@@ -240,9 +246,13 @@ def assemble(
             # A panel with no declared displayed-data source cannot be covered by
             # the Source Data bundle, so it is a publication-blocking degradation
             # (not a standing caveat): strict mode must fail rather than ship it.
-            "warnings": [] if displayed_records else [
-                {"message": "No displayed-data path was declared for this legacy source panel.",
-                 "severity": "degradation"}
+            "warnings": []
+            if displayed_records
+            else [
+                {
+                    "message": "No displayed-data path was declared for this legacy source panel.",
+                    "severity": "degradation",
+                }
             ],
         }
         (staged_dir / "panel.json").write_text(
@@ -305,12 +315,21 @@ def assemble(
                 fill="black",
                 font=font,
             )
-        placements.append({
-            "id": panel["id"], "constructor": resolved.constructor, "variant": resolved.variant,
-            "contrast": resolved.contrast, "source_pdf": str(source_pdf), "source_png": str(source_png),
-            "row": row, "column": column, "row_span": row_span, "column_span": column_span,
-            "pdf_box_points": [x, y, panel_w, panel_h],
-        })
+        placements.append(
+            {
+                "id": panel["id"],
+                "constructor": resolved.constructor,
+                "variant": resolved.variant,
+                "contrast": resolved.contrast,
+                "source_pdf": str(source_pdf),
+                "source_png": str(source_png),
+                "row": row,
+                "column": column,
+                "row_span": row_span,
+                "column_span": column_span,
+                "pdf_box_points": [x, y, panel_w, panel_h],
+            }
+        )
     writer = PdfWriter()
     writer.add_page(output_page)
     pdf.parent.mkdir(parents=True, exist_ok=True)
@@ -319,25 +338,42 @@ def assemble(
     png.parent.mkdir(parents=True, exist_ok=True)
     review.save(png, dpi=(review_dpi, review_dpi))
     metadata.parent.mkdir(parents=True, exist_ok=True)
-    metadata.write_text(json.dumps({
-        "schema_version": 1, "figure_set": figure_set,
-        "title": recipe.get("title"), "description": recipe.get("description"),
-        "dimensions": {
-            "width": round(page_width / 72 / unit_scale, 3),
-            "height": round(page_height / 72 / unit_scale, 3),
-            "units": units,
-            "declared_width": recipe["width"],
-            "declared_height": recipe["height"],
-        },
-        "shared_legends": recipe.get("shared_legends", False), "review_dpi": review_dpi,
-        "panels": placements,
-    }, indent=2) + "\n", encoding="utf-8")
+    metadata.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "figure_set": figure_set,
+                "title": recipe.get("title"),
+                "description": recipe.get("description"),
+                "dimensions": {
+                    "width": round(page_width / 72 / unit_scale, 3),
+                    "height": round(page_height / 72 / unit_scale, 3),
+                    "units": units,
+                    "declared_width": recipe["width"],
+                    "declared_height": recipe["height"],
+                },
+                "shared_legends": recipe.get("shared_legends", False),
+                "review_dpi": review_dpi,
+                "panels": placements,
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
     panel_index.parent.mkdir(parents=True, exist_ok=True)
-    panel_index.write_text(json.dumps({
-        "schema_version": 1,
-        "figure_set": figure_set,
-        "panels": panel_records,
-    }, indent=2) + "\n", encoding="utf-8")
+    panel_index.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "figure_set": figure_set,
+                "panels": panel_records,
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
 
 
 def main() -> None:
@@ -352,8 +388,13 @@ def main() -> None:
     parser.add_argument("--panel-index", type=Path, required=True)
     args = parser.parse_args()
     assemble(
-        args.project_config.resolve(), args.results.resolve(), args.figure_set,
-        args.pdf.resolve(), args.png.resolve(), args.metadata.resolve(), args.panel_index.resolve(),
+        args.project_config.resolve(),
+        args.results.resolve(),
+        args.figure_set,
+        args.pdf.resolve(),
+        args.png.resolve(),
+        args.metadata.resolve(),
+        args.panel_index.resolve(),
     )
 
 

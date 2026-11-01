@@ -29,9 +29,7 @@ def design_variables(design: str) -> list[str]:
     return [token for token in dict.fromkeys(tokens) if token not in {"I", "log", "log2"}]
 
 
-def build_families(
-    families_config: dict, *, known_ids: set[str]
-) -> tuple[list[Family], list[str]]:
+def build_families(families_config: dict, *, known_ids: set[str]) -> tuple[list[Family], list[str]]:
     """Build validated ``Family`` objects from ``analysis.families``.
 
     Performs only the checks that need no sample table: syntax, arity,
@@ -48,21 +46,15 @@ def build_families(
         if cells:
             for column in cells:
                 if column not in variables:
-                    errors.append(
-                        f"family {family_id}: cell column {column!r} is absent from design {design!r}"
-                    )
+                    errors.append(f"family {family_id}: cell column {column!r} is absent from design {design!r}")
         shrinkage = str(raw.get("shrinkage", SHRINKAGE_CHOICES[0]))
         if shrinkage not in SHRINKAGE_CHOICES:
             errors.append(
-                f"family {family_id}: shrinkage {shrinkage!r} must be one of "
-                f"{', '.join(SHRINKAGE_CHOICES)}"
+                f"family {family_id}: shrinkage {shrinkage!r} must be one of " f"{', '.join(SHRINKAGE_CHOICES)}"
             )
         gene_filter = str(raw.get("filter", FILTER_CHOICES[0]))
         if gene_filter not in FILTER_CHOICES:
-            errors.append(
-                f"family {family_id}: filter {gene_filter!r} must be one of "
-                f"{', '.join(FILTER_CHOICES)}"
-            )
+            errors.append(f"family {family_id}: filter {gene_filter!r} must be one of " f"{', '.join(FILTER_CHOICES)}")
         raw_estimands = raw.get("estimands") or []
         declared = bool(raw.get("_declared", True))
         if declared and not raw_estimands:
@@ -76,30 +68,21 @@ def build_families(
                 continue
             if estimand_id in seen:
                 errors.append(
-                    f"family {family_id}: estimand id {estimand_id!r} collides with "
-                    "another estimand or contrast id"
+                    f"family {family_id}: estimand id {estimand_id!r} collides with " "another estimand or contrast id"
                 )
             seen.add(estimand_id)
             role = str(entry.get("role", "")).strip()
             if role == "primary":
                 primaries += 1
             elif role:
-                errors.append(
-                    f"estimand {estimand_id}: role {role!r} must be 'primary' or absent"
-                )
+                errors.append(f"estimand {estimand_id}: role {role!r} must be 'primary' or absent")
             try:
                 parsed = parse_expression(str(entry.get("expression", "")), len(cells))
             except EstimandSyntaxError as error:
                 errors.append(f"estimand {estimand_id}: {error}")
                 continue
-            if (
-                parsed.atom_kind == "cell"
-                and abs(parsed.weight_sum) > WEIGHT_SUM_TOLERANCE
-            ):
-                errors.append(
-                    f"estimand {estimand_id}: cell weights must sum to zero, got "
-                    f"{parsed.weight_sum:g}"
-                )
+            if parsed.atom_kind == "cell" and abs(parsed.weight_sum) > WEIGHT_SUM_TOLERANCE:
+                errors.append(f"estimand {estimand_id}: cell weights must sum to zero, got " f"{parsed.weight_sum:g}")
             estimands.append(
                 Estimand(
                     id=estimand_id,
@@ -114,10 +97,7 @@ def build_families(
                 f"family {family_id}: a declared family requires exactly one "
                 f"role: primary estimand, found {primaries}"
             )
-        reference_levels = {
-            str(key): str(value)
-            for key, value in (raw.get("reference_levels") or {}).items()
-        }
+        reference_levels = {str(key): str(value) for key, value in (raw.get("reference_levels") or {}).items()}
         replicate_unit = raw.get("replicate_unit")
         families.append(
             Family(
@@ -231,11 +211,7 @@ def derive_term_tests(design: str, cells: Sequence[str], family_id: str) -> list
         for combo in combinations(order, size):
             subset = set(combo)
             dropped = [term for term in cell_terms if term & subset]
-            test_id = (
-                "any_effect"
-                if subset == cell_set
-                else "_".join(sorted(combo, key=order.index)) + "_any"
-            )
+            test_id = "any_effect" if subset == cell_set else "_".join(sorted(combo, key=order.index)) + "_any"
             emit(test_id, dropped)
 
     for term in cell_terms:
@@ -245,6 +221,8 @@ def derive_term_tests(design: str, cells: Sequence[str], family_id: str) -> list
         emit(_term_label(term, order).replace(":", "_") + "_interaction", dropped)
 
     return tests
+
+
 def desugar_contrast_rows(
     global_design: str,
     contrast_rows: Sequence[dict[str, str]],
@@ -266,7 +244,8 @@ def desugar_contrast_rows(
     """
     errors: list[str] = []
     family_defaults = {
-        key: str(value) for key, value in (defaults or {}).items()
+        key: str(value)
+        for key, value in (defaults or {}).items()
         if key in ("shrinkage", "filter") and value is not None
     }
     # Group by exact design string, not by family_id, to prevent collisions
@@ -300,9 +279,7 @@ def desugar_contrast_rows(
         raw_references = str(row.get("reference_levels", "")).strip()
         for piece in (part for part in raw_references.split(";") if part.strip()):
             if "=" not in piece:
-                errors.append(
-                    f"contrast {contrast_id}: reference_levels entry {piece!r} must be factor=level"
-                )
+                errors.append(f"contrast {contrast_id}: reference_levels entry {piece!r} must be factor=level")
                 continue
             key, value = piece.split("=", 1)
             references[key.strip()] = value.strip()
@@ -320,9 +297,7 @@ def desugar_contrast_rows(
             if not reduced:
                 errors.append(f"contrast {contrast_id}: omnibus row requires a reduced formula")
                 continue
-            bucket["term_tests"].append(
-                {"id": contrast_id, "reduced": reduced, "df": 0}
-            )
+            bucket["term_tests"].append({"id": contrast_id, "reduced": reduced, "df": 0})
             if factor and factor not in bucket["cells"]:
                 bucket["cells"].append(factor)
             continue
@@ -330,21 +305,15 @@ def desugar_contrast_rows(
         if row_type == "coefficient":
             coefficient = str(row.get("coefficient", "")).strip()
             if not coefficient:
-                errors.append(
-                    f"contrast {contrast_id}: coefficient row requires a coefficient"
-                )
+                errors.append(f"contrast {contrast_id}: coefficient row requires a coefficient")
                 continue
-            bucket["estimands"].append(
-                {"id": contrast_id, "label": contrast_id, "expression": f"coef({coefficient})"}
-            )
+            bucket["estimands"].append({"id": contrast_id, "label": contrast_id, "expression": f"coef({coefficient})"})
             continue
 
         numerator = str(row.get("numerator", "")).strip()
         denominator = str(row.get("denominator", "")).strip()
         if not factor or not numerator or not denominator:
-            errors.append(
-                f"contrast {contrast_id}: pairwise row requires factor, numerator, denominator"
-            )
+            errors.append(f"contrast {contrast_id}: pairwise row requires factor, numerator, denominator")
             continue
         if factor not in bucket["cells"]:
             bucket["cells"].append(factor)
@@ -358,9 +327,7 @@ def desugar_contrast_rows(
             {
                 "id": contrast_id,
                 "label": f"{numerator} vs {denominator}",
-                "expression": (
-                    f"({_quote_level(numerator)}) - ({_quote_level(denominator)})"
-                ),
+                "expression": (f"({_quote_level(numerator)}) - ({_quote_level(denominator)})"),
             }
         )
 
@@ -400,9 +367,7 @@ def desugar_contrast_rows(
     for design in design_order:
         family_id = family_id_map[design]
         bucket = grouped[design]
-        config[family_id] = {
-            key: value for key, value in bucket.items() if key != "term_tests"
-        }
+        config[family_id] = {key: value for key, value in bucket.items() if key != "term_tests"}
 
     families, build_errors = build_families(config, known_ids=set())
     errors.extend(build_errors)
@@ -439,8 +404,14 @@ def desugar_contrast_rows(
 
 
 FAMILY_FIELDS = (
-    "family_id", "design", "cells", "reference_levels",
-    "replicate_unit", "shrinkage", "filter", "declared",
+    "family_id",
+    "design",
+    "cells",
+    "reference_levels",
+    "replicate_unit",
+    "shrinkage",
+    "filter",
+    "declared",
 )
 ESTIMAND_FIELDS = ("family_id", "estimand_id", "label", "role", "expression", "atom_kind")
 CELL_WEIGHT_FIELDS = ("family_id", "estimand_id", "cell_key", "weight")
@@ -463,9 +434,7 @@ def compile_project_families(
     global_design = str(analysis.get("design", "")).strip()
     contrast_ids = {str(row.get("contrast_id", "")).strip() for row in contrast_rows}
 
-    declared, declared_errors = build_families(
-        analysis.get("families") or {}, known_ids=contrast_ids
-    )
+    declared, declared_errors = build_families(analysis.get("families") or {}, known_ids=contrast_ids)
     errors.extend(declared_errors)
     desugared, desugar_errors = desugar_contrast_rows(
         global_design,
@@ -537,9 +506,7 @@ def family_rows(families: Sequence[Family]) -> list[dict[str, str]]:
             "family_id": family.id,
             "design": family.design,
             "cells": CELL_KEY_SEPARATOR.join(family.cells),
-            "reference_levels": ";".join(
-                f"{key}={value}" for key, value in sorted(family.reference_levels.items())
-            ),
+            "reference_levels": ";".join(f"{key}={value}" for key, value in sorted(family.reference_levels.items())),
             "replicate_unit": family.replicate_unit or "",
             "shrinkage": family.shrinkage,
             "filter": family.filter,
@@ -577,9 +544,7 @@ def cell_weight_rows(families: Sequence[Family]) -> list[dict[str, str]]:
         for estimand in family.estimands:
             weights = estimand.expression.cell_weights or estimand.expression.coef_weights
             for key, weight in weights.items():
-                cell_key = (
-                    CELL_KEY_SEPARATOR.join(key) if isinstance(key, tuple) else str(key)
-                )
+                cell_key = CELL_KEY_SEPARATOR.join(key) if isinstance(key, tuple) else str(key)
                 rows.append(
                     {
                         "family_id": family.id,
@@ -626,8 +591,7 @@ def synthesized_contrast_rows(families: Sequence[Family], existing_ids: set[str]
             weights = estimand.expression.cell_weights
             positive = [cell for cell, weight in weights.items() if weight == 1.0]
             negative = [cell for cell, weight in weights.items() if weight == -1.0]
-            pairwise = (len(family.cells) == 1 and len(weights) == 2
-                        and len(positive) == 1 and len(negative) == 1)
+            pairwise = len(family.cells) == 1 and len(weights) == 2 and len(positive) == 1 and len(negative) == 1
             rows.append(
                 {
                     "contrast_id": estimand.id,

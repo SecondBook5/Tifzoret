@@ -42,7 +42,9 @@ def test_publication_profile_executes_to_completion(tmp_path):
         try:
             subprocess.run(
                 ["Rscript", "-e", f"library({package})"],
-                check=True, capture_output=True, timeout=120,
+                check=True,
+                capture_output=True,
+                timeout=120,
             )
         except subprocess.TimeoutExpired:
             pytest.skip(f"{package} probe timed out")
@@ -57,17 +59,19 @@ def test_publication_profile_executes_to_completion(tmp_path):
     # Use --cores 2 to allow some parallelism without overwhelming CI.
     result = subprocess.run(
         [
-            "tifzoret", "run", str(project_dir / "project.yaml"),
-            "--cores", "2", "--no-conda",
+            "tifzoret",
+            "run",
+            str(project_dir / "project.yaml"),
+            "--cores",
+            "2",
+            "--no-conda",
         ],
         capture_output=True,
         text=True,
     )
 
     # Assert the run succeeded.
-    assert result.returncode == 0, (
-        f"tifzoret run failed:\nSTDOUT:\n{result.stdout}\n\nSTDERR:\n{result.stderr}"
-    )
+    assert result.returncode == 0, f"tifzoret run failed:\nSTDOUT:\n{result.stdout}\n\nSTDERR:\n{result.stderr}"
 
     # Assert the core front-door artifacts exist.
     results = project_dir / "results" / "publication_demo" / "all"

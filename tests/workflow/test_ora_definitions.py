@@ -30,10 +30,7 @@ UTILS_R = ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "utils.R"
 def _r(code: str):
     if shutil.which("Rscript") is None:
         pytest.skip("Rscript not available")
-    wrapped = (
-        "suppressPackageStartupMessages({source(commandArgs(TRUE)[1]); library(dplyr)});"
-        + code
-    )
+    wrapped = "suppressPackageStartupMessages({source(commandArgs(TRUE)[1]); library(dplyr)});" + code
     result = subprocess.run(["Rscript", "--vanilla", "-e", wrapped, str(UTILS_R)], capture_output=True, text=True)
     if result.returncode != 0:
         pytest.fail(result.stderr)

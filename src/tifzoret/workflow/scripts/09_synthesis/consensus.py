@@ -132,9 +132,7 @@ def load_contrast(path: Path) -> tuple[str, dict[str, dict[str, Any]]]:
     return contrast_id, genes
 
 
-def build_upset(
-    membership: dict[str, dict[str, int]], contrast_ids: list[str]
-) -> list[dict[str, Any]]:
+def build_upset(membership: dict[str, dict[str, int]], contrast_ids: list[str]) -> list[dict[str, Any]]:
     """Group significant genes by the exact set of contrasts they are significant in.
 
     Returns one record per observed non-empty combination: the sorted member
@@ -159,9 +157,7 @@ def build_upset(
     return records
 
 
-def draw_upset(
-    intersections: list[dict[str, Any]], contrast_ids: list[str], stem: Path
-) -> int:
+def draw_upset(intersections: list[dict[str, Any]], contrast_ids: list[str], stem: Path) -> int:
     """Render an UpSet-style figure: intersection-size bars over a membership dot matrix."""
     shown = intersections[:MAX_INTERSECTIONS]
     figures_dir = stem.parent
@@ -177,7 +173,10 @@ def draw_upset(
 
     n = len(shown)
     figure, (bar_axis, dot_axis) = plt.subplots(
-        2, 1, figsize=(max(6.0, 0.5 * n + 2.2), 5.6), sharex=True,
+        2,
+        1,
+        figsize=(max(6.0, 0.5 * n + 2.2), 5.6),
+        sharex=True,
         gridspec_kw={"height_ratios": [3, max(1.2, 0.42 * len(contrast_ids))], "hspace": 0.05},
     )
     positions = np.arange(n)
@@ -195,7 +194,10 @@ def draw_upset(
         for col_index, members in enumerate(member_sets):
             on = cid in members
             dot_axis.plot(
-                col_index, y, "o", markersize=9,
+                col_index,
+                y,
+                "o",
+                markersize=9,
                 color=NAVY if on else "#D5DADE",
                 markeredgecolor="none",
             )
@@ -218,9 +220,7 @@ def draw_upset(
     return len(shown)
 
 
-def draw_sign_heatmap(
-    genes: list[dict[str, Any]], contrast_ids: list[str], stem: Path
-) -> int:
+def draw_sign_heatmap(genes: list[dict[str, Any]], contrast_ids: list[str], stem: Path) -> int:
     """Render the top consensus genes as a signed-direction heatmap (gene x contrast)."""
     figures_dir = stem.parent
     figures_dir.mkdir(parents=True, exist_ok=True)
@@ -298,11 +298,7 @@ def main() -> None:
         n_up = sum(1 for s in significant if s > 0)
         n_down = sum(1 for s in significant if s < 0)
         n_sig = len(significant)
-        lfcs = [
-            per_contrast[cid][gene_id]["log2_fold_change"]
-            for cid in contrast_ids
-            if gene_id in per_contrast[cid]
-        ]
+        lfcs = [per_contrast[cid][gene_id]["log2_fold_change"] for cid in contrast_ids if gene_id in per_contrast[cid]]
         finite_lfcs = [v for v in lfcs if not np.isnan(v)]
         mean_abs_lfc = float(np.mean([abs(v) for v in finite_lfcs])) if finite_lfcs else float("nan")
         sign_consistent = n_sig > 0 and (n_up == 0 or n_down == 0)
@@ -325,8 +321,15 @@ def main() -> None:
         membership_rows.append(row)
 
     membership_fields = [
-        "gene_id", "gene_symbol", "n_significant", "n_up", "n_down",
-        "sign_consistent", "consensus_score", "mean_abs_log2fc", *contrast_ids,
+        "gene_id",
+        "gene_symbol",
+        "n_significant",
+        "n_up",
+        "n_down",
+        "sign_consistent",
+        "consensus_score",
+        "mean_abs_log2fc",
+        *contrast_ids,
     ]
     membership_rows.sort(
         key=lambda r: (-r["consensus_score"], -r["n_significant"], -_safe(r["mean_abs_log2fc"]), r["gene_symbol"])
@@ -334,32 +337,29 @@ def main() -> None:
     write_tsv(tables_dir / "consensus_membership.tsv", membership_fields, membership_rows)
 
     # Consensus genes: significant (in a consistent direction) in >= min_contrasts.
-    consensus_rows = [
-        r for r in membership_rows if r["consensus_score"] >= min_contrasts
-    ]
+    consensus_rows = [r for r in membership_rows if r["consensus_score"] >= min_contrasts]
     write_tsv(tables_dir / "consensus_genes.tsv", membership_fields, consensus_rows)
 
     # Pairwise contrast overlap (Jaccard of significant sets + sign agreement).
     overlap_rows: list[dict[str, Any]] = []
-    sig_sets = {
-        cid: {gid for gid in all_gene_ids if membership_signs[gid][cid] != 0}
-        for cid in contrast_ids
-    }
+    sig_sets = {cid: {gid for gid in all_gene_ids if membership_signs[gid][cid] != 0} for cid in contrast_ids}
     for a, b in combinations(contrast_ids, 2):
         set_a, set_b = sig_sets[a], sig_sets[b]
         shared = set_a & set_b
         union = set_a | set_b
         agree = sum(1 for gid in shared if membership_signs[gid][a] == membership_signs[gid][b])
-        overlap_rows.append({
-            "contrast_a": a,
-            "contrast_b": b,
-            "n_a": len(set_a),
-            "n_b": len(set_b),
-            "intersection": len(shared),
-            "union": len(union),
-            "jaccard": (len(shared) / len(union)) if union else 0.0,
-            "sign_agreement": (agree / len(shared)) if shared else float("nan"),
-        })
+        overlap_rows.append(
+            {
+                "contrast_a": a,
+                "contrast_b": b,
+                "n_a": len(set_a),
+                "n_b": len(set_b),
+                "intersection": len(shared),
+                "union": len(union),
+                "jaccard": (len(shared) / len(union)) if union else 0.0,
+                "sign_agreement": (agree / len(shared)) if shared else float("nan"),
+            }
+        )
     overlap_rows.sort(key=lambda r: (-r["jaccard"], r["contrast_a"], r["contrast_b"]))
     write_tsv(
         tables_dir / "contrast_overlap.tsv",
@@ -377,10 +377,7 @@ def main() -> None:
 
     # Figures.
     drawn_intersections = draw_upset(intersections, contrast_ids, figures_dir / "consensus_upset")
-    heatmap_genes = [
-        {**r, "_signs": membership_signs[r["gene_id"]]}
-        for r in consensus_rows[:top_genes]
-    ]
+    heatmap_genes = [{**r, "_signs": membership_signs[r["gene_id"]]} for r in consensus_rows[:top_genes]]
     drawn_genes = draw_sign_heatmap(heatmap_genes, contrast_ids, figures_dir / "consensus_sign_heatmap")
 
     discordant = sum(1 for r in membership_rows if r["n_up"] > 0 and r["n_down"] > 0)
@@ -399,7 +396,9 @@ def main() -> None:
     }
     outdir.mkdir(parents=True, exist_ok=True)
     (outdir / "consensus_summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
-    print(f"Computed cross-contrast consensus over {len(contrast_ids)} contrasts, {len(consensus_rows)} consensus genes")
+    print(
+        f"Computed cross-contrast consensus over {len(contrast_ids)} contrasts, {len(consensus_rows)} consensus genes"
+    )
 
 
 def _safe(value: float) -> float:

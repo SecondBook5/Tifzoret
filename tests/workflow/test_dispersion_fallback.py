@@ -103,11 +103,13 @@ cat(jsonlite::toJSON(result, auto_unbox = TRUE))
 def _rscript_has_deseq2() -> bool:
     if shutil.which("Rscript") is None:
         return False
-    return subprocess.run(
-        ["Rscript", "--vanilla", "-e",
-         'quit(status = as.integer(!requireNamespace("DESeq2", quietly = TRUE)))'],
-        capture_output=True,
-    ).returncode == 0
+    return (
+        subprocess.run(
+            ["Rscript", "--vanilla", "-e", 'quit(status = as.integer(!requireNamespace("DESeq2", quietly = TRUE)))'],
+            capture_output=True,
+        ).returncode
+        == 0
+    )
 
 
 @pytest.mark.skipif(not _rscript_has_deseq2(), reason="DESeq2 not available for this Rscript")
@@ -116,10 +118,11 @@ def test_dispersion_fallback_engages_only_when_the_trend_cannot_be_fitted(tmp_pa
     probe.write_text(PROBE_R, encoding="utf-8")
     proc = subprocess.run(
         ["Rscript", "--vanilla", str(probe), str(UTILS_R)],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     assert proc.returncode == 0, proc.stdout + proc.stderr
-    report = json.loads(proc.stdout[proc.stdout.index("{"):])
+    report = json.loads(proc.stdout[proc.stdout.index("{") :])
 
     # Premise: deterministic counts really are the hard case. Without this the
     # "gene-wise" assertion below could pass on data that never needed a fallback.
@@ -127,8 +130,7 @@ def test_dispersion_fallback_engages_only_when_the_trend_cannot_be_fitted(tmp_pa
         "deterministic counts no longer break the parametric fit -- this fixture "
         "has stopped exercising the failure it exists to cover"
     )
-    assert "all gene-wise dispersion estimates are within" in report["bare_message"], (
-        report["bare_message"])
+    assert "all gene-wise dispersion estimates are within" in report["bare_message"], report["bare_message"]
 
     # The helper recovers, reports which path ran, and returns a usable fit.
     assert report["deterministic_fit"] == "gene-wise", report
@@ -140,5 +142,4 @@ def test_dispersion_fallback_engages_only_when_the_trend_cannot_be_fitted(tmp_pa
     assert report["dispersed_fit"] == "parametric", report
 
     # Only the one DESeq2 message is caught; anything else must still surface.
-    assert report["unrelated_still_raises"], (
-        "an unrelated fit failure was swallowed by the dispersion fallback")
+    assert report["unrelated_still_raises"], "an unrelated fit failure was swallowed by the dispersion fallback"

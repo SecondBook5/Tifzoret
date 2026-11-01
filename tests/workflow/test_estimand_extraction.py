@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-import csv
 import json
 import math
 import subprocess
 from pathlib import Path
 
-import pytest
 
-from _factorial_support import ESTIMANDS, read_tsv_rows, require_r, stage_family
+from _factorial_support import read_tsv_rows, require_r, stage_family
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "03_differential" / "estimand.R"
@@ -22,18 +20,35 @@ def _extract(tmp_path: Path, estimand_id: str, scenario="positive_interaction"):
     fixture = tmp_path / "fx"
     outdir = tmp_path / "est" / estimand_id
     result = subprocess.run(
-        ["Rscript", "--vanilla", str(SCRIPT),
-         "--project-config", str(tmp_path / "project" / "project.yaml"),
-         "--counts", str(fixture / "counts.tsv"),
-         "--samples", str(fixture / "samples.tsv"),
-         "--annotation", str(fixture / "annotation.tsv"),
-         "--families", str(tmp_path / "families.tsv"),
-         "--estimands", str(tmp_path / "estimands.tsv"),
-         "--cell-weights", str(tmp_path / "estimand_cell_weights.tsv"),
-         "--family-dir", str(family_dir),
-         "--estimand-id", estimand_id,
-         "--outdir", str(outdir)],
-        capture_output=True, text=True, cwd=tmp_path)
+        [
+            "Rscript",
+            "--vanilla",
+            str(SCRIPT),
+            "--project-config",
+            str(tmp_path / "project" / "project.yaml"),
+            "--counts",
+            str(fixture / "counts.tsv"),
+            "--samples",
+            str(fixture / "samples.tsv"),
+            "--annotation",
+            str(fixture / "annotation.tsv"),
+            "--families",
+            str(tmp_path / "families.tsv"),
+            "--estimands",
+            str(tmp_path / "estimands.tsv"),
+            "--cell-weights",
+            str(tmp_path / "estimand_cell_weights.tsv"),
+            "--family-dir",
+            str(family_dir),
+            "--estimand-id",
+            estimand_id,
+            "--outdir",
+            str(outdir),
+        ],
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+    )
     assert result.returncode == 0, result.stderr
     return outdir, family_dir
 
@@ -44,11 +59,25 @@ def test_emits_the_existing_de_results_contract(tmp_path):
     rows = read_tsv_rows(outdir / "tables" / "de_results.tsv")
     assert rows
     for column in (
-        "gene_id", "gene_symbol", "base_mean", "log2_fold_change",
-        "log2_fold_change_raw", "lfc_se", "statistic", "p_value",
-        "adjusted_p_value", "negative_log10_p", "direction",
-        "significance_class", "contrast_id",
-        "ci_low", "ci_high", "shrinkage", "family_id", "estimand_id", "estimand_role",
+        "gene_id",
+        "gene_symbol",
+        "base_mean",
+        "log2_fold_change",
+        "log2_fold_change_raw",
+        "lfc_se",
+        "statistic",
+        "p_value",
+        "adjusted_p_value",
+        "negative_log10_p",
+        "direction",
+        "significance_class",
+        "contrast_id",
+        "ci_low",
+        "ci_high",
+        "shrinkage",
+        "family_id",
+        "estimand_id",
+        "estimand_role",
     ):
         assert column in rows[0], column
 
@@ -80,20 +109,18 @@ def test_composite_estimand_se_equals_the_exported_covariance(tmp_path):
     and NOT equal to the naive independent-sum."""
     require_r("DESeq2", "apeglm")
     outdir, family_dir = _extract(tmp_path, "est_composite")
-    contrast = {
-        row["estimand_id"]: row
-        for row in read_tsv_rows(family_dir / "tables" / "contrast_matrix.tsv")
-    }["est_composite"]
+    contrast = {row["estimand_id"]: row for row in read_tsv_rows(family_dir / "tables" / "contrast_matrix.tsv")}[
+        "est_composite"
+    ]
     coefficients = [
-        key for key in contrast
+        key
+        for key in contrast
         if key not in {"estimand_id", "label", "role", "atom_kind", "expression", "cell_weights"}
     ]
     weights = {name: float(contrast[name]) for name in coefficients}
     sigma: dict[tuple[str, str, str], float] = {}
     for row in read_tsv_rows(family_dir / "tables" / "coefficient_covariance.tsv"):
-        sigma[(row["gene_id"], row["coefficient_row"], row["coefficient_col"])] = float(
-            row["covariance"]
-        )
+        sigma[(row["gene_id"], row["coefficient_row"], row["coefficient_col"])] = float(row["covariance"])
     results = {row["gene_id"]: row for row in read_tsv_rows(outdir / "tables" / "de_results.tsv")}
     checked = 0
     for gene_id in {key[0] for key in sigma}:
@@ -146,7 +173,8 @@ def test_reparameterized_shrinkage_does_not_move_inference(tmp_path):
     if summary["shrinkage_applied"] == "apeglm":
         assert summary["reparameterized"] is True
         moved = [
-            row for row in rows
+            row
+            for row in rows
             if row["log2_fold_change"] not in ("NA", "")
             and row["log2_fold_change_raw"] not in ("NA", "")
             and abs(float(row["log2_fold_change"]) - float(row["log2_fold_change_raw"])) > 1e-9
@@ -167,13 +195,20 @@ def test_every_de_figure_and_displayed_table_is_produced(tmp_path):
     require_r("DESeq2", "apeglm")
     outdir, _ = _extract(tmp_path, "est_interaction")
     for relative in (
-        "tables/volcano_displayed.tsv", "tables/ma_displayed.tsv",
-        "tables/de_heatmap_displayed.tsv", "tables/pvalue_distribution_displayed.tsv",
-        "tables/lfc_distribution_displayed.tsv", "tables/de_pca_coordinates.tsv",
+        "tables/volcano_displayed.tsv",
+        "tables/ma_displayed.tsv",
+        "tables/de_heatmap_displayed.tsv",
+        "tables/pvalue_distribution_displayed.tsv",
+        "tables/lfc_distribution_displayed.tsv",
+        "tables/de_pca_coordinates.tsv",
         "tables/de_pca_ellipses.tsv",
-        "figures/volcano.png", "figures/ma.png", "figures/de_heatmap.png",
-        "figures/de_pca.png", "figures/pvalue_distribution.png",
-        "figures/lfc_distribution.png", "figures/de_overview.png",
+        "figures/volcano.png",
+        "figures/ma.png",
+        "figures/de_heatmap.png",
+        "figures/de_pca.png",
+        "figures/pvalue_distribution.png",
+        "figures/lfc_distribution.png",
+        "figures/de_overview.png",
     ):
         assert (outdir / relative).is_file(), relative
 
@@ -196,8 +231,7 @@ def test_the_crossover_gene_is_found_by_the_interaction_and_missed_by_sig_either
     assert signal
     found = [gene for gene in signal if significant(interaction[gene])]
     sig_either = [
-        gene for gene in signal
-        if (gene in a1 and significant(a1[gene])) or (gene in a2 and significant(a2[gene]))
+        gene for gene in signal if (gene in a1 and significant(a1[gene])) or (gene in a2 and significant(a2[gene]))
     ]
     assert len(found) > len(sig_either)
 

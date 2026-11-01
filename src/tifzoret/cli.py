@@ -72,9 +72,7 @@ def command_validate(args: argparse.Namespace) -> int:
     return 0
 
 
-def _snakemake(
-    args: argparse.Namespace, dry_run: bool, targets: tuple[str, ...] = ()
-) -> int:
+def _snakemake(args: argparse.Namespace, dry_run: bool, targets: tuple[str, ...] = ()) -> int:
     """Invoke Snakemake against the packaged workflow for a validated project.
 
     The project is validated first, then Snakemake runs with the study's config
@@ -219,9 +217,7 @@ def command_verify(args: argparse.Namespace) -> int:
     """
     project = load_project(args.project)
     candidate = Path(args.candidate).expanduser().resolve() if args.candidate else project.result_root
-    result = verify_project(
-        project, args.reference, candidate, atol=args.atol, rtol=args.rtol, scope=args.scope
-    )
+    result = verify_project(project, args.reference, candidate, atol=args.atol, rtol=args.rtol, scope=args.scope)
     output = Path(args.output).expanduser().resolve()
     write_verification(result, output)
     print(f"Verification {'passed' if result.passed else 'failed'}: {output}")
@@ -310,17 +306,19 @@ def build_parser() -> argparse.ArgumentParser:
     migrate_parser.add_argument("--force", action="store_true")
     migrate_parser.set_defaults(handler=command_migrate_config)
 
-    prepare_parser = commands.add_parser(
-        "prepare", help="validate and materialize canonical inputs only"
-    )
+    prepare_parser = commands.add_parser("prepare", help="validate and materialize canonical inputs only")
     prepare_parser.add_argument("project")
     prepare_parser.add_argument("--cores", type=int, default=1)
     prepare_parser.add_argument("--snakemake", default="snakemake")
     prepare_parser.add_argument("--no-conda", action="store_true")
-    prepare_parser.add_argument("--conda-prefix", default=os.environ.get("TIFZORET_CONDA_PREFIX"),
-        help="reuse (or build) conda environments under this directory; default $TIFZORET_CONDA_PREFIX")
-    prepare_parser.add_argument("--unlock", action="store_true",
-        help="clear a stale Snakemake lock left by an interrupted run, then continue")
+    prepare_parser.add_argument(
+        "--conda-prefix",
+        default=os.environ.get("TIFZORET_CONDA_PREFIX"),
+        help="reuse (or build) conda environments under this directory; default $TIFZORET_CONDA_PREFIX",
+    )
+    prepare_parser.add_argument(
+        "--unlock", action="store_true", help="clear a stale Snakemake lock left by an interrupted run, then continue"
+    )
     prepare_parser.set_defaults(handler=command_prepare)
 
     report_parser = commands.add_parser("report", help="build the navigable HTML report")
@@ -328,10 +326,14 @@ def build_parser() -> argparse.ArgumentParser:
     report_parser.add_argument("--cores", type=int, default=1)
     report_parser.add_argument("--snakemake", default="snakemake")
     report_parser.add_argument("--no-conda", action="store_true")
-    report_parser.add_argument("--conda-prefix", default=os.environ.get("TIFZORET_CONDA_PREFIX"),
-        help="reuse (or build) conda environments under this directory; default $TIFZORET_CONDA_PREFIX")
-    report_parser.add_argument("--unlock", action="store_true",
-        help="clear a stale Snakemake lock left by an interrupted run, then continue")
+    report_parser.add_argument(
+        "--conda-prefix",
+        default=os.environ.get("TIFZORET_CONDA_PREFIX"),
+        help="reuse (or build) conda environments under this directory; default $TIFZORET_CONDA_PREFIX",
+    )
+    report_parser.add_argument(
+        "--unlock", action="store_true", help="clear a stale Snakemake lock left by an interrupted run, then continue"
+    )
     report_parser.set_defaults(handler=command_report)
 
     assemble_parser = commands.add_parser("assemble", help="assemble configured publication figures")
@@ -339,19 +341,21 @@ def build_parser() -> argparse.ArgumentParser:
     assemble_parser.add_argument("--cores", type=int, default=1)
     assemble_parser.add_argument("--snakemake", default="snakemake")
     assemble_parser.add_argument("--no-conda", action="store_true")
-    assemble_parser.add_argument("--conda-prefix", default=os.environ.get("TIFZORET_CONDA_PREFIX"),
-        help="reuse (or build) conda environments under this directory; default $TIFZORET_CONDA_PREFIX")
-    assemble_parser.add_argument("--unlock", action="store_true",
-        help="clear a stale Snakemake lock left by an interrupted run, then continue")
+    assemble_parser.add_argument(
+        "--conda-prefix",
+        default=os.environ.get("TIFZORET_CONDA_PREFIX"),
+        help="reuse (or build) conda environments under this directory; default $TIFZORET_CONDA_PREFIX",
+    )
+    assemble_parser.add_argument(
+        "--unlock", action="store_true", help="clear a stale Snakemake lock left by an interrupted run, then continue"
+    )
     assemble_parser.set_defaults(handler=command_assemble)
 
     figures_parser = commands.add_parser(
         "figures", help="initialize, build, and review hypothesis-driven publication figures"
     )
     figure_commands = figures_parser.add_subparsers(dest="figures_command", required=True)
-    figures_init = figure_commands.add_parser(
-        "init", help="scaffold hypothesis, program, and constructor recipe files"
-    )
+    figures_init = figure_commands.add_parser("init", help="scaffold hypothesis, program, and constructor recipe files")
     figures_init.add_argument("project")
     figures_init.add_argument("--force", action="store_true")
     figures_init.set_defaults(handler=command_figures_init)
@@ -368,10 +372,14 @@ def build_parser() -> argparse.ArgumentParser:
     figures_build.add_argument("--cores", type=int, default=1)
     figures_build.add_argument("--snakemake", default="snakemake")
     figures_build.add_argument("--no-conda", action="store_true")
-    figures_build.add_argument("--conda-prefix", default=os.environ.get("TIFZORET_CONDA_PREFIX"),
-        help="reuse (or build) conda environments under this directory; default $TIFZORET_CONDA_PREFIX")
-    figures_build.add_argument("--unlock", action="store_true",
-        help="clear a stale Snakemake lock left by an interrupted run, then continue")
+    figures_build.add_argument(
+        "--conda-prefix",
+        default=os.environ.get("TIFZORET_CONDA_PREFIX"),
+        help="reuse (or build) conda environments under this directory; default $TIFZORET_CONDA_PREFIX",
+    )
+    figures_build.add_argument(
+        "--unlock", action="store_true", help="clear a stale Snakemake lock left by an interrupted run, then continue"
+    )
     figures_build.set_defaults(handler=command_figures_build)
     figures_gallery = figure_commands.add_parser(
         "gallery", help="create an HTML/contact-sheet review of all built variants"
@@ -400,16 +408,26 @@ def build_parser() -> argparse.ArgumentParser:
     collection_run.set_defaults(handler=command_collection_run)
 
     for name, dry_run in (("dry-run", True), ("run", False)):
-        help_text = "Print the dependency graph and planned commands without executing" if dry_run else "Execute the full analysis workflow"
+        help_text = (
+            "Print the dependency graph and planned commands without executing"
+            if dry_run
+            else "Execute the full analysis workflow"
+        )
         run_parser = commands.add_parser(name, help=help_text)
         run_parser.add_argument("project")
         run_parser.add_argument("--cores", type=int, default=1)
         run_parser.add_argument("--snakemake", default="snakemake")
         run_parser.add_argument("--no-conda", action="store_true")
-        run_parser.add_argument("--conda-prefix", default=os.environ.get("TIFZORET_CONDA_PREFIX"),
-            help="reuse (or build) conda environments under this directory; default $TIFZORET_CONDA_PREFIX")
-        run_parser.add_argument("--unlock", action="store_true",
-            help="clear a stale Snakemake lock left by an interrupted run, then continue")
+        run_parser.add_argument(
+            "--conda-prefix",
+            default=os.environ.get("TIFZORET_CONDA_PREFIX"),
+            help="reuse (or build) conda environments under this directory; default $TIFZORET_CONDA_PREFIX",
+        )
+        run_parser.add_argument(
+            "--unlock",
+            action="store_true",
+            help="clear a stale Snakemake lock left by an interrupted run, then continue",
+        )
         run_parser.set_defaults(handler=lambda args, dry_run=dry_run: _snakemake(args, dry_run))
     return parser
 

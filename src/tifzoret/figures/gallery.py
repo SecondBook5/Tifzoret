@@ -59,7 +59,11 @@ def build_gallery(project: "ResolvedProject", output: str | Path | None = None) 
     cards = []
     for record in records:
         status = "selected" if record["selected"] else "available" if record["available"] else "not built"
-        image = f'<img src="{html.escape(record.get("review_image", ""))}" alt="review image">' if record["available"] else '<div class="missing">Not built</div>'
+        image = (
+            f'<img src="{html.escape(record.get("review_image", ""))}" alt="review image">'
+            if record["available"]
+            else '<div class="missing">Not built</div>'
+        )
         displayed = "".join(f"<li>{html.escape(value)}</li>" for value in record["displayed_data"])
         cards.append(
             f'<article class="card {status.replace(" ", "-")}">{image}'
@@ -73,5 +77,8 @@ def build_gallery(project: "ResolvedProject", output: str | Path | None = None) 
 <body><header><h1>Tifzoret publication figure gallery</h1><p>{html.escape(project.project_id)} · generated from registered constructors. Statistical results are unchanged; this page reviews presentation variants.</p><p><a href="contact_sheet.png">Open contact sheet</a></p></header><main class="grid">{''.join(cards)}</main></body></html>"""
     index = outdir / "index.html"
     index.write_text(page, encoding="utf-8")
-    (outdir / "gallery.json").write_text(json.dumps({"schema_version": 1, "project": project.project_id, "panels": records}, indent=2) + "\n", encoding="utf-8")
+    (outdir / "gallery.json").write_text(
+        json.dumps({"schema_version": 1, "project": project.project_id, "panels": records}, indent=2) + "\n",
+        encoding="utf-8",
+    )
     return index

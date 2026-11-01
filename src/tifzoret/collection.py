@@ -107,7 +107,9 @@ def run_collection(collection: ResolvedCollection) -> Path:
         }
         if leave_one_out and len(values) > 2:
             loo = {
-                study_id: _combine([(other_z, other_weight) for other_id, other_z, other_weight in values if other_id != study_id])[0]
+                study_id: _combine(
+                    [(other_z, other_weight) for other_id, other_z, other_weight in values if other_id != study_id]
+                )[0]
                 for study_id, _, _ in values
             }
             result["leave_one_out_min_z"] = min(loo.values())
@@ -115,7 +117,11 @@ def run_collection(collection: ResolvedCollection) -> Path:
             result["leave_one_out_direction_stable"] = all(value * z > 0 for value in loo.values())
         rows.append(result)
     _bh(rows)
-    fields = list(rows[0]) if rows else ["gene_id", "gene_symbol", "studies", "meta_z", "meta_pvalue", "meta_padj", "direction"]
+    fields = (
+        list(rows[0])
+        if rows
+        else ["gene_id", "gene_symbol", "studies", "meta_z", "meta_pvalue", "meta_padj", "direction"]
+    )
     table = output / "meta_analysis.tsv"
     with table.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=fields, delimiter="\t", lineterminator="\n", extrasaction="ignore")

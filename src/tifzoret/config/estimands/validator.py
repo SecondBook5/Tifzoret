@@ -51,14 +51,10 @@ def validate_family_design(family: Family, sample_rows: Sequence[dict[str, str]]
 
     for column in family.cells:
         if column not in columns:
-            errors.append(
-                f"family {family.id}: cell column {column!r} is absent from samples.tsv"
-            )
+            errors.append(f"family {family.id}: cell column {column!r} is absent from samples.tsv")
     for variable in design_variables(family.design):
         if variable not in columns:
-            errors.append(
-                f"family {family.id}: design variable {variable!r} is absent from samples.tsv"
-            )
+            errors.append(f"family {family.id}: design variable {variable!r} is absent from samples.tsv")
     if errors:
         return errors
 
@@ -75,9 +71,7 @@ def validate_family_design(family: Family, sample_rows: Sequence[dict[str, str]]
                         f"separator {CELL_KEY_SEPARATOR!r}; the level must be renamed"
                     )
             if cell not in membership:
-                observed = ", ".join(
-                    CELL_KEY_SEPARATOR.join(key) for key in sorted(membership)
-                )
+                observed = ", ".join(CELL_KEY_SEPARATOR.join(key) for key in sorted(membership))
                 errors.append(
                     f"estimand {estimand.id}: cell "
                     f"({CELL_KEY_SEPARATOR.join(cell)}) is empty or references an "
@@ -89,19 +83,14 @@ def validate_family_design(family: Family, sample_rows: Sequence[dict[str, str]]
         rank = int(np.linalg.matrix_rank(matrix))
         if rank < matrix.shape[1]:
             errors.append(
-                f"family {family.id}: cell-mean design is rank-deficient "
-                f"(rank {rank} < {matrix.shape[1]} cells)"
+                f"family {family.id}: cell-mean design is rank-deficient " f"(rank {rank} < {matrix.shape[1]} cells)"
             )
         # Skip confounding validation for coefficient-only families (cells=()).
         # With a single degenerate cell containing all samples, both confounding
         # branches are vacuous: every nuisance level trivially occurs in the only
         # cell, so the check cannot say anything meaningful.
         if family.cells:
-            nuisance = [
-                variable
-                for variable in design_variables(family.design)
-                if variable not in set(family.cells)
-            ]
+            nuisance = [variable for variable in design_variables(family.design) if variable not in set(family.cells)]
             cell_index = {cell: position for position, cell in enumerate(cells)}
             for variable in nuisance:
                 per_cell: dict[tuple[str, ...], set[str]] = {}
@@ -115,12 +104,8 @@ def validate_family_design(family: Family, sample_rows: Sequence[dict[str, str]]
                     value = str(row[variable])
                     per_cell.setdefault(key, set()).add(value)
                     per_value.setdefault(value, set()).add(key)
-                constant_within_cells = per_cell and all(
-                    len(values) == 1 for values in per_cell.values()
-                )
-                determines_cell = per_value and all(
-                    len(keys) == 1 for keys in per_value.values()
-                )
+                constant_within_cells = per_cell and all(len(values) == 1 for values in per_cell.values())
+                determines_cell = per_value and all(len(keys) == 1 for keys in per_value.values())
                 if constant_within_cells and len(per_cell) > 1:
                     errors.append(
                         f"family {family.id}: nuisance covariate {variable!r} is perfectly "
@@ -153,10 +138,7 @@ def validate_family_design(family: Family, sample_rows: Sequence[dict[str, str]]
 
     if family.replicate_unit:
         if family.replicate_unit not in columns:
-            errors.append(
-                f"family {family.id}: replicate_unit {family.replicate_unit!r} is "
-                "absent from samples.tsv"
-            )
+            errors.append(f"family {family.id}: replicate_unit {family.replicate_unit!r} is " "absent from samples.tsv")
         else:
             per_cell_units: dict[tuple[str, ...], list[str]] = {}
             for row in sample_rows:
@@ -180,27 +162,20 @@ def resolve_term_test_df(family: Family, sample_rows: Sequence[dict[str, str]]) 
     """Recompute each derived term test's df from observed level counts."""
     from .compiler import parse_formula_terms
 
-    levels = {
-        column: max(1, len(_observed_levels(sample_rows, column)))
-        for column in family.cells
-    }
+    levels = {column: max(1, len(_observed_levels(sample_rows, column))) for column in family.cells}
     cell_set = set(family.cells)
     all_terms = parse_formula_terms(family.design)
     resolved: list[TermTest] = []
     for test in family.term_tests:
         kept = set(parse_formula_terms(test.reduced))
-        dropped = [
-            term for term in all_terms if term <= cell_set and term and term not in kept
-        ]
+        dropped = [term for term in all_terms if term <= cell_set and term and term not in kept]
         df = 0
         for term in dropped:
             contribution = 1
             for factor in term:
                 contribution *= levels.get(factor, 2) - 1
             df += contribution
-        resolved.append(
-            TermTest(id=test.id, family_id=test.family_id, reduced=test.reduced, df=df)
-        )
+        resolved.append(TermTest(id=test.id, family_id=test.family_id, reduced=test.reduced, df=df))
     return tuple(resolved)
 
 

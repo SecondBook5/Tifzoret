@@ -270,8 +270,7 @@ def test_analysis_set_selects_a_subset_of_count_columns(tmp_path):
     data["inputs"]["analysis_set"] = "primary"
     data["analysis"]["contrasts"] = "primary_contrast.tsv"
     (config.parent / "primary_contrast.tsv").write_text(
-        "contrast_id\tfactor\tnumerator\tdenominator\n"
-        "treatment_a_vs_control\tcondition\ttreatment_a\tcontrol\n"
+        "contrast_id\tfactor\tnumerator\tdenominator\n" "treatment_a_vs_control\tcondition\ttreatment_a\tcontrol\n"
     )
     config.write_text(yaml.safe_dump(data, sort_keys=False))
     project = load_project(config)
@@ -328,8 +327,14 @@ def test_publication_profile_validates_cross_file_contracts(tmp_path):
     assert project.panel_config["gsea_programs"] == ["contractile"]
     publication_dry_run = subprocess.run(
         [
-            "snakemake", "--snakefile", str(ROOT / "src" / "tifzoret" / "workflow" / "Snakefile"),
-            "--configfile", str(config), "--cores", "1", "--dry-run",
+            "snakemake",
+            "--snakefile",
+            str(ROOT / "src" / "tifzoret" / "workflow" / "Snakefile"),
+            "--configfile",
+            str(config),
+            "--cores",
+            "1",
+            "--dry-run",
             str(project.result_root / "manifest.json"),
         ],
         cwd=config.parent,
@@ -340,27 +345,35 @@ def test_publication_profile_validates_cross_file_contracts(tmp_path):
     assert "contrast_publication" in publication_dry_run.stdout
     assert "assemble_figure" in publication_dry_run.stdout
     data["analysis"]["profile"] = "full"
-    data["analysis"]["settings"].update({
-        "sva": {"minimum_recommended_samples": 10},
-        "wgcna": {
-            "top_variable_genes": 100,
-            "minimum_module_size": 5,
-            "minimum_recommended_samples": 15,
-        },
-        "mediation": {
-            "mediator_pathway": "CONTRACTILE_PROGRAM",
-            "outcome_pathways": ["IMMUNE_PROGRAM"],
-            "simulations": 100,
-            "minimum_recommended_samples": 20,
-        },
-    })
+    data["analysis"]["settings"].update(
+        {
+            "sva": {"minimum_recommended_samples": 10},
+            "wgcna": {
+                "top_variable_genes": 100,
+                "minimum_module_size": 5,
+                "minimum_recommended_samples": 15,
+            },
+            "mediation": {
+                "mediator_pathway": "CONTRACTILE_PROGRAM",
+                "outcome_pathways": ["IMMUNE_PROGRAM"],
+                "simulations": 100,
+                "minimum_recommended_samples": 20,
+            },
+        }
+    )
     config.write_text(yaml.safe_dump(data, sort_keys=False))
     full = load_project(config)
     assert {"sva", "wgcna", "mediation", "multilayer"}.issubset(full.modules)
     full_dry_run = subprocess.run(
         [
-            "snakemake", "--snakefile", str(ROOT / "src" / "tifzoret" / "workflow" / "Snakefile"),
-            "--configfile", str(config), "--cores", "1", "--dry-run",
+            "snakemake",
+            "--snakefile",
+            str(ROOT / "src" / "tifzoret" / "workflow" / "Snakefile"),
+            "--configfile",
+            str(config),
+            "--cores",
+            "1",
+            "--dry-run",
             str(full.result_root / "manifest.json"),
         ],
         cwd=config.parent,
@@ -507,20 +520,34 @@ def test_materialize_stages_inline_companions(tmp_path):
     inputs = project.result_root / "inputs"
     subprocess.run(
         [
-            sys.executable, str(MATERIALIZE),
-            "--project-config", str(project.config_path),
-            "--counts", str(inputs / "counts.tsv"),
-            "--samples", str(inputs / "samples.tsv"),
-            "--annotation", str(inputs / "annotation.tsv"),
-            "--contrasts", str(inputs / "contrasts.tsv"),
-            "--families", str(inputs / "families.tsv"),
-            "--estimands", str(inputs / "estimands.tsv"),
-            "--cell-weights", str(inputs / "estimand_cell_weights.tsv"),
-            "--term-tests", str(inputs / "term_tests.tsv"),
-            "--manifest", str(inputs / "input_manifest.json"),
-            "--panels", str(project.hypothesis_panels),
-            "--claims", str(project.hypotheses),
-            "--recipe", str(project.figure_recipe),
+            sys.executable,
+            str(MATERIALIZE),
+            "--project-config",
+            str(project.config_path),
+            "--counts",
+            str(inputs / "counts.tsv"),
+            "--samples",
+            str(inputs / "samples.tsv"),
+            "--annotation",
+            str(inputs / "annotation.tsv"),
+            "--contrasts",
+            str(inputs / "contrasts.tsv"),
+            "--families",
+            str(inputs / "families.tsv"),
+            "--estimands",
+            str(inputs / "estimands.tsv"),
+            "--cell-weights",
+            str(inputs / "estimand_cell_weights.tsv"),
+            "--term-tests",
+            str(inputs / "term_tests.tsv"),
+            "--manifest",
+            str(inputs / "input_manifest.json"),
+            "--panels",
+            str(project.hypothesis_panels),
+            "--claims",
+            str(project.hypotheses),
+            "--recipe",
+            str(project.figure_recipe),
         ],
         check=True,
     )
@@ -593,12 +620,20 @@ def _dry_run_rules(config: Path) -> str:
     project = load_project(config)
     proc = subprocess.run(
         [
-            "snakemake", "--snakefile",
+            "snakemake",
+            "--snakefile",
             str(ROOT / "src" / "tifzoret" / "workflow" / "Snakefile"),
-            "--configfile", str(config), "--cores", "1", "--dry-run",
+            "--configfile",
+            str(config),
+            "--cores",
+            "1",
+            "--dry-run",
             str(project.result_root / "manifest.json"),
         ],
-        cwd=config.parent, check=True, capture_output=True, text=True,
+        cwd=config.parent,
+        check=True,
+        capture_output=True,
+        text=True,
     )
     return proc.stdout
 
@@ -611,13 +646,18 @@ def test_opt_in_modules_wire_into_the_dag(tmp_path):
     data = yaml.safe_load(config.read_text())
     data["analysis"]["batch"] = "batch"
     data["analysis"]["modules"] = {
-        "wgcna": True, "batch": True, "de_confirm": True,
-        "deconvolution": True, "curvature": True,
+        "wgcna": True,
+        "batch": True,
+        "de_confirm": True,
+        "deconvolution": True,
+        "curvature": True,
     }
     data["analysis"]["settings"] = {
         "wgcna": {
-            "top_variable_genes": 100, "minimum_module_size": 5,
-            "minimum_recommended_samples": 5, "network_neighbors": 5,
+            "top_variable_genes": 100,
+            "minimum_module_size": 5,
+            "minimum_recommended_samples": 5,
+            "network_neighbors": 5,
         },
         "de": {"shrinkage": "ashr", "confirm_method": "edger"},
         "deconvolution": {"method": "nnls", "min_genes": 3},
@@ -634,8 +674,7 @@ def test_opt_in_modules_wire_into_the_dag(tmp_path):
     project = load_project(config)
     assert {"batch", "de_confirm", "deconvolution", "curvature", "wgcna"}.issubset(project.modules)
     stdout = _dry_run_rules(config)
-    for rule in ("study_batch", "study_deconvolution", "contrast_de_confirm",
-                 "contrast_curvature", "contrast_wgcna"):
+    for rule in ("study_batch", "study_deconvolution", "contrast_de_confirm", "contrast_curvature", "contrast_wgcna"):
         assert rule in stdout
 
 
@@ -772,8 +811,10 @@ def test_wave2_opt_in_modules_wire_into_the_dag(tmp_path):
     data = yaml.safe_load(config.read_text())
     data["analysis"]["batch"] = "batch"
     data["analysis"]["modules"] = {
-        "consensus": True, "spia": True,
-        "variance_partition": True, "enrichment_map": True,
+        "consensus": True,
+        "spia": True,
+        "variance_partition": True,
+        "enrichment_map": True,
     }
     data["analysis"]["settings"] = {
         "consensus": {"min_contrasts": 2},
@@ -788,8 +829,7 @@ def test_wave2_opt_in_modules_wire_into_the_dag(tmp_path):
     assert {"consensus", "spia", "variance_partition", "enrichment_map"}.issubset(project.modules)
     assert project.config["resources"]["go_domains"] == ["BP", "CC", "MF"]
     stdout = _dry_run_rules(config)
-    for rule in ("study_consensus", "contrast_spia",
-                 "study_variance_partition", "contrast_enrichment_map"):
+    for rule in ("study_consensus", "contrast_spia", "study_variance_partition", "contrast_enrichment_map"):
         assert rule in stdout
     # The GO CC/MF + Reactome breadth is emitted as an additive faceted view
     # whose outputs the front-door index collects; a missing producer here is
@@ -802,8 +842,7 @@ def test_consensus_requires_two_pairwise_contrasts(tmp_path):
     """A single pairwise contrast cannot form a cross-contrast consensus."""
     config = project_copy(tmp_path)
     (config.parent / "contrasts.tsv").write_text(
-        "contrast_id\tfactor\tnumerator\tdenominator\n"
-        "treatment_a_vs_control\tcondition\ttreatment_a\tcontrol\n"
+        "contrast_id\tfactor\tnumerator\tdenominator\n" "treatment_a_vs_control\tcondition\ttreatment_a\tcontrol\n"
     )
     data = yaml.safe_load(config.read_text())
     data["analysis"]["modules"] = {"consensus": True}

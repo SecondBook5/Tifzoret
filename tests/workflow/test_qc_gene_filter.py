@@ -82,14 +82,23 @@ def qc_outputs(tmp_path_factory) -> Path:
     outdir = root / "qc"
     subprocess.run(
         [
-            "Rscript", "--vanilla", str(QC_R),
-            "--project-config", str(config_path),
-            "--counts", str(project_dir / "counts.tsv"),
-            "--samples", str(project_dir / "samples.tsv"),
-            "--annotation", str(project_dir / "annotation.tsv"),
-            "--outdir", str(outdir),
+            "Rscript",
+            "--vanilla",
+            str(QC_R),
+            "--project-config",
+            str(config_path),
+            "--counts",
+            str(project_dir / "counts.tsv"),
+            "--samples",
+            str(project_dir / "samples.tsv"),
+            "--annotation",
+            str(project_dir / "annotation.tsv"),
+            "--outdir",
+            str(outdir),
         ],
-        check=True, capture_output=True, text=True,
+        check=True,
+        capture_output=True,
+        text=True,
     )
     return outdir
 
@@ -126,14 +135,12 @@ def test_the_vst_object_holds_only_genes_with_enough_reads(qc_outputs):
 
 def test_library_metrics_still_describe_the_unfiltered_matrix(qc_outputs):
     with (qc_outputs / "tables" / "library_metrics.tsv").open(newline="") as handle:
-        reported = {row["sample_id"]: int(float(row["detected_genes"])) for row in csv.DictReader(handle, delimiter="\t")}
+        reported = {
+            row["sample_id"]: int(float(row["detected_genes"])) for row in csv.DictReader(handle, delimiter="\t")
+        }
     with (qc_outputs.parent / "project" / "counts.tsv").open(newline="") as handle:
         table = list(csv.DictReader(handle, delimiter="\t"))
-    expected = {
-        sample: sum(1 for row in table if float(row[sample]) > 0)
-        for sample in table[0]
-        if sample != "gene_id"
-    }
+    expected = {sample: sum(1 for row in table if float(row[sample]) > 0) for sample in table[0] if sample != "gene_id"}
     assert reported == expected
     # the 7 near-empty genes carry one read in every sample, so they are *detected*
     # even though the transform excludes them

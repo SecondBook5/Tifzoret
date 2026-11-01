@@ -30,7 +30,10 @@ def make_project(tmp_path: Path, **counting) -> SimpleNamespace:
     gtf.write_text("gtf")
     settings = {"strandedness": "reverse", "threads": 8, "paired_end": True, **counting}
     return SimpleNamespace(
-        bam_paths=(bam,), gtf=gtf, sample_rows=[{"sample_id": "a"}], source_kind="bam",
+        bam_paths=(bam,),
+        gtf=gtf,
+        sample_rows=[{"sample_id": "a"}],
+        source_kind="bam",
         config={"counting": settings, "analysis": {"design": "~ condition"}},
     )
 
@@ -96,7 +99,10 @@ def test_the_cache_lives_under_the_runs_cache_folder(tmp_path, mat):
 
 def test_a_second_run_does_not_count_again(tmp_path, mat, monkeypatch):
     project = make_project(tmp_path)
-    counts, annotation = tmp_path / "results" / "inputs" / "counts.tsv", tmp_path / "results" / "inputs" / "annotation.tsv"
+    counts, annotation = (
+        tmp_path / "results" / "inputs" / "counts.tsv",
+        tmp_path / "results" / "inputs" / "annotation.tsv",
+    )
     calls = {"count": 0}
 
     def fake_featurecounts(proj, output, mode):

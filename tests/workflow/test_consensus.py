@@ -41,23 +41,36 @@ def test_consensus_scores_agreement_and_flags_discordance(tmp_path: Path) -> Non
     de_b = tmp_path / "de_b.tsv"
     outdir = tmp_path / "out"
     # G1 up in both, G3 down in both (both consensus); G2 up then down (discordant).
-    _de_results(de_a, "cond_a", [
-        {"gene_id": "G1", "gene_symbol": "Aaa", "direction": "up_in_numerator", "log2_fold_change": 2.0},
-        {"gene_id": "G2", "gene_symbol": "Bbb", "direction": "up_in_numerator", "log2_fold_change": 1.5},
-        {"gene_id": "G3", "gene_symbol": "Ccc", "direction": "down_in_numerator", "log2_fold_change": -2.0},
-    ])
-    _de_results(de_b, "cond_b", [
-        {"gene_id": "G1", "gene_symbol": "Aaa", "direction": "up_in_numerator", "log2_fold_change": 1.8},
-        {"gene_id": "G2", "gene_symbol": "Bbb", "direction": "down_in_numerator", "log2_fold_change": -1.2},
-        {"gene_id": "G3", "gene_symbol": "Ccc", "direction": "down_in_numerator", "log2_fold_change": -1.9},
-    ])
+    _de_results(
+        de_a,
+        "cond_a",
+        [
+            {"gene_id": "G1", "gene_symbol": "Aaa", "direction": "up_in_numerator", "log2_fold_change": 2.0},
+            {"gene_id": "G2", "gene_symbol": "Bbb", "direction": "up_in_numerator", "log2_fold_change": 1.5},
+            {"gene_id": "G3", "gene_symbol": "Ccc", "direction": "down_in_numerator", "log2_fold_change": -2.0},
+        ],
+    )
+    _de_results(
+        de_b,
+        "cond_b",
+        [
+            {"gene_id": "G1", "gene_symbol": "Aaa", "direction": "up_in_numerator", "log2_fold_change": 1.8},
+            {"gene_id": "G2", "gene_symbol": "Bbb", "direction": "down_in_numerator", "log2_fold_change": -1.2},
+            {"gene_id": "G3", "gene_symbol": "Ccc", "direction": "down_in_numerator", "log2_fold_change": -1.9},
+        ],
+    )
 
     subprocess.run(
         [
-            sys.executable, str(SCRIPT),
-            "--project-config", str(PROJECT),
-            "--de", str(de_b), str(de_a),  # deliberately reversed: output order must be deterministic
-            "--outdir", str(outdir),
+            sys.executable,
+            str(SCRIPT),
+            "--project-config",
+            str(PROJECT),
+            "--de",
+            str(de_b),
+            str(de_a),  # deliberately reversed: output order must be deterministic
+            "--outdir",
+            str(outdir),
         ],
         check=True,
     )

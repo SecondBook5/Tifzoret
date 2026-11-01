@@ -26,14 +26,15 @@ DEFAULTS = mi.DEFAULT_PROVISIONAL_SYMBOL_PATTERNS
 
 # --- _is_provisional -------------------------------------------------------
 
+
 @pytest.mark.parametrize(
     "symbol, expected",
     [
-        ("Gm12345", True),          # Ensembl/MGI predicted gene
-        ("LOC108167921", True),     # NCBI uncharacterised locus
-        ("2610305D13Rik", True),    # RIKEN cDNA clone
-        ("Rik", True),              # bare Rik suffix
-        ("Prox1", False),           # curated symbol
+        ("Gm12345", True),  # Ensembl/MGI predicted gene
+        ("LOC108167921", True),  # NCBI uncharacterised locus
+        ("2610305D13Rik", True),  # RIKEN cDNA clone
+        ("Rik", True),  # bare Rik suffix
+        ("Prox1", False),  # curated symbol
         ("Foxc2", False),
         ("ENSMUSG00000000001", False),
     ],
@@ -43,6 +44,7 @@ def test_is_provisional(symbol, expected):
 
 
 # --- _resolve_symbol -------------------------------------------------------
+
 
 def test_resolve_gtf_name_wins():
     assert mi._resolve_symbol("ENSMUSG1", "Prox1", "IgnoredSecondary", DEFAULTS) == (
@@ -83,6 +85,7 @@ def test_resolve_nothing_recovered_retains_accession():
 
 # --- _load_symbol_map ------------------------------------------------------
 
+
 def test_load_symbol_map_missing_raises(tmp_path):
     with pytest.raises(FileNotFoundError):
         mi._load_symbol_map(tmp_path / "does_not_exist.tsv")
@@ -94,10 +97,10 @@ def test_load_symbol_map_dedup_lexically_smallest(tmp_path):
         "# org.Mm.eg.db export, pinned\n"
         "gene_id\tsymbol\n"
         "ENSMUSG3\tFoxc2\n"
-        "ENSMUSG4\t\n"          # blank symbol skipped
-        "\tOrphan\n"            # blank id skipped
+        "ENSMUSG4\t\n"  # blank symbol skipped
+        "\tOrphan\n"  # blank id skipped
         "ENSMUSG5\tZeb1\n"
-        "ENSMUSG5\tAaa1\n"      # duplicate id -> lexically smallest (Aaa1) wins
+        "ENSMUSG5\tAaa1\n"  # duplicate id -> lexically smallest (Aaa1) wins
     )
     mapping = mi._load_symbol_map(path)
     assert mapping == {"ENSMUSG3": "Foxc2", "ENSMUSG5": "Aaa1"}
@@ -136,8 +139,8 @@ def test_write_annotation_disabled_is_legacy_seven_columns(tmp_path):
     header, rows = _read(out)
     assert header == mi.ANNOTATION_BASE_FIELDS
     symbols = {r[0]: r[1] for r in rows}
-    assert symbols["ENSMUSG001"] == "Prox1"          # gtf gene_name
-    assert symbols["ENSMUSG002"] == "ENSMUSG002"     # no name -> accession fallback
+    assert symbols["ENSMUSG001"] == "Prox1"  # gtf gene_name
+    assert symbols["ENSMUSG002"] == "ENSMUSG002"  # no name -> accession fallback
 
 
 def test_write_annotation_disabled_none_and_empty_dict_are_identical(tmp_path):
@@ -156,8 +159,8 @@ def test_write_annotation_enabled_resolves_and_adds_audit_columns(tmp_path, caps
     secondary = tmp_path / "secondary.tsv"
     secondary.write_text(
         "gene_id\tsymbol\n"
-        "ENSMUSG003\tFoxc2\n"       # real curated name -> adopted
-        "ENSMUSG004\tGm12345\n"     # placeholder -> recorded, not promoted
+        "ENSMUSG003\tFoxc2\n"  # real curated name -> adopted
+        "ENSMUSG004\tGm12345\n"  # placeholder -> recorded, not promoted
     )
     out = tmp_path / "annotation.tsv"
     mi.write_annotation(
@@ -208,7 +211,7 @@ def test_write_annotation_enabled_without_secondary_map(tmp_path):
     assert header == [*mi.ANNOTATION_BASE_FIELDS, *mi.ANNOTATION_RESOLUTION_FIELDS]
     by_id = {r[0]: r for r in rows}
     assert by_id["ENSMUSG001"][1] == "Prox1"
-    assert by_id["ENSMUSG003"][1] == "ENSMUSG003"   # no secondary map -> accession retained
+    assert by_id["ENSMUSG003"][1] == "ENSMUSG003"  # no secondary map -> accession retained
     assert by_id["ENSMUSG003"][7] == "ensembl_id"
 
 
@@ -226,6 +229,7 @@ def test_write_annotation_enabled_missing_secondary_map_raises(tmp_path):
 
 
 # --- _symbol_resolution_settings -------------------------------------------
+
 
 def _fake_project(reference, config_dir):
     return SimpleNamespace(config={"reference": reference}, config_path=config_dir / "project.yaml")
@@ -266,6 +270,7 @@ def test_settings_secondary_map_none_stays_none(tmp_path):
 
 # --- schema acceptance -----------------------------------------------------
 
+
 def test_schema_accepts_and_constrains_symbol_resolution():
     from jsonschema import Draft202012Validator
 
@@ -290,8 +295,4 @@ def test_schema_accepts_and_constrains_symbol_resolution():
     assert list(validator.iter_errors({"genome_build": "GRCm39", "symbol_resolution": {}}))
 
     # Unknown keys inside the block are rejected (additionalProperties: false).
-    assert list(
-        validator.iter_errors(
-            {"genome_build": "GRCm39", "symbol_resolution": {"enabled": True, "bogus": 1}}
-        )
-    )
+    assert list(validator.iter_errors({"genome_build": "GRCm39", "symbol_resolution": {"enabled": True, "bogus": 1}}))

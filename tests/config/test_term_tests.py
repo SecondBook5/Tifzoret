@@ -36,9 +36,7 @@ def test_expands_a_three_way_crossing():
 
 
 def test_formats_terms_back_to_a_formula():
-    assert format_formula(parse_formula_terms("~ factor_a * factor_b")) == (
-        "~ factor_a + factor_b + factor_a:factor_b"
-    )
+    assert format_formula(parse_formula_terms("~ factor_a * factor_b")) == ("~ factor_a + factor_b + factor_a:factor_b")
 
 
 def test_formats_an_empty_term_list_as_intercept_only():
@@ -68,18 +66,14 @@ def test_the_any_effect_test_drops_every_cell_term():
 
 
 def test_nuisance_terms_appear_in_every_reduced_model():
-    tests = derive_term_tests(
-        "~ factor_a * factor_b + nuisance_z", ["factor_a", "factor_b"], "fam_a"
-    )
+    tests = derive_term_tests("~ factor_a * factor_b + nuisance_z", ["factor_a", "factor_b"], "fam_a")
     assert len(tests) == 4
     for test in tests:
         assert "nuisance_z" in test.reduced
 
 
 def test_nuisance_only_reduced_model_is_not_intercept_only():
-    tests = derive_term_tests(
-        "~ factor_a * factor_b + nuisance_z", ["factor_a", "factor_b"], "fam_a"
-    )
+    tests = derive_term_tests("~ factor_a * factor_b + nuisance_z", ["factor_a", "factor_b"], "fam_a")
     any_effect = next(t for t in tests if t.id == "any_effect")
     assert any_effect.reduced == "~ nuisance_z"
 

@@ -1,4 +1,5 @@
 """Keep the navigation docs honest: they exist and cover every stage."""
+
 from pathlib import Path
 
 DOCS = Path(__file__).resolve().parents[1] / "docs"
@@ -12,8 +13,11 @@ def test_nav_docs_exist():
 
 def test_engine_map_lists_every_stage():
     text = (DOCS / "engine-map.md").read_text(encoding="utf-8")
-    stems = [p.name for p in list(SCRIPTS.rglob("*.R")) + list(SCRIPTS.rglob("*.py"))
-             if p.name != "utils.R" and "report_assets" not in p.parts and "__pycache__" not in p.parts]
+    stems = [
+        p.name
+        for p in list(SCRIPTS.rglob("*.R")) + list(SCRIPTS.rglob("*.py"))
+        if p.name != "utils.R" and "report_assets" not in p.parts and "__pycache__" not in p.parts
+    ]
     missing = [s for s in stems if s not in text]
     assert not missing, f"engine-map.md does not mention: {missing}"
 

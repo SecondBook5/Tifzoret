@@ -47,7 +47,9 @@ def test_default_figures_fill_an_otherwise_empty_report(tmp_path):
     assert figures["assembled"] == []
     panels = figures["panels"]
     assert [p["label"] for p in panels] == [
-        "PCA and sample correlation", "DE overview", "GSVA pathway heatmap",
+        "PCA and sample correlation",
+        "DE overview",
+        "GSVA pathway heatmap",
     ]
     assert [p["contrast"] for p in panels] == [None, "treated_vs_control", "treated_vs_control"]
     # "heatmap" must not be mistaken for a DE "ma" plot.

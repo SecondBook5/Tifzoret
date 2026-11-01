@@ -29,7 +29,12 @@ def test_display_labels_follow_condition_and_replicate_number(tmp_path):
     result = subprocess.run(["Rscript", "--vanilla", str(script)], capture_output=True, text=True, cwd=tmp_path)
     assert result.returncode == 0, result.stderr
     assert json.loads((tmp_path / "out.json").read_text(encoding="utf-8")) == [
-        "Control 1", "Control 5", "Treated 2", "Control 3", "KO 4"]
+        "Control 1",
+        "Control 5",
+        "Treated 2",
+        "Control 3",
+        "KO 4",
+    ]
 
 
 def test_sample_axes_do_not_bypass_the_display_labels():

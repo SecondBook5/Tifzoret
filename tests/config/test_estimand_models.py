@@ -70,11 +70,7 @@ def test_rejects_an_unknown_filter_choice():
 
 def test_rejects_cell_arity_mismatch_with_a_useful_message():
     _, errors = build_families(
-        _config(
-            estimands=[
-                {"id": "est_bad", "role": "primary", "expression": "(a2,b2,c2) - (a1,b1,c1)"}
-            ]
-        ),
+        _config(estimands=[{"id": "est_bad", "role": "primary", "expression": "(a2,b2,c2) - (a1,b1,c1)"}]),
         known_ids=set(),
     )
     assert any("arity" in error for error in errors)
@@ -82,9 +78,7 @@ def test_rejects_cell_arity_mismatch_with_a_useful_message():
 
 def test_rejects_cell_weights_that_do_not_sum_to_zero():
     _, errors = build_families(
-        _config(
-            estimands=[{"id": "est_bad", "role": "primary", "expression": "(a2,b2) + (a1,b1)"}]
-        ),
+        _config(estimands=[{"id": "est_bad", "role": "primary", "expression": "(a2,b2) + (a1,b1)"}]),
         known_ids=set(),
     )
     assert any("sum to zero" in error for error in errors)
@@ -92,11 +86,7 @@ def test_rejects_cell_weights_that_do_not_sum_to_zero():
 
 def test_coef_expressions_are_exempt_from_sum_to_zero():
     families, errors = build_families(
-        _config(
-            estimands=[
-                {"id": "est_slope", "role": "primary", "expression": "coef(covariate_x)"}
-            ]
-        ),
+        _config(estimands=[{"id": "est_slope", "role": "primary", "expression": "coef(covariate_x)"}]),
         known_ids=set(),
     )
     assert errors == []
@@ -142,9 +132,7 @@ def test_rejects_duplicate_estimand_ids_across_families():
 
 
 def test_rejects_a_cell_column_absent_from_the_design():
-    _, errors = build_families(
-        _config(design="~ factor_a", cells=["factor_a", "factor_b"]), known_ids=set()
-    )
+    _, errors = build_families(_config(design="~ factor_a", cells=["factor_a", "factor_b"]), known_ids=set())
     assert any("factor_b" in error and "design" in error for error in errors)
 
 
@@ -154,9 +142,7 @@ def test_rejects_an_empty_estimand_list():
 
 
 def test_accumulates_every_error_rather_than_raising_on_the_first():
-    _, errors = build_families(
-        _config(shrinkage="magic", filter="magic", estimands=[]), known_ids=set()
-    )
+    _, errors = build_families(_config(shrinkage="magic", filter="magic", estimands=[]), known_ids=set())
     assert len(errors) >= 3
 
 
@@ -166,9 +152,7 @@ def test_supports_a_single_factor_family():
             "fam_k1": {
                 "design": "~ factor_a",
                 "cells": ["factor_a"],
-                "estimands": [
-                    {"id": "est_pair", "role": "primary", "expression": "(a2) - (a1)"}
-                ],
+                "estimands": [{"id": "est_pair", "role": "primary", "expression": "(a2) - (a1)"}],
             }
         },
         known_ids=set(),

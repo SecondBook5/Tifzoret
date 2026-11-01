@@ -136,7 +136,11 @@ def repository_revision(start: Path) -> dict[str, object]:
         try:
             result = subprocess.run(
                 ["git", "-C", str(start), *args],
-                text=True, encoding="utf-8", errors="replace", capture_output=True, check=False,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                capture_output=True,
+                check=False,
             )
         except OSError:
             return None
@@ -263,9 +267,7 @@ def main() -> None:
     unique_inputs = list(dict.fromkeys(path.resolve() for path in input_paths))
     known_checksums = prepared_checksums(results)
     result_paths = sorted(
-        path
-        for path in results.rglob("*")
-        if path.is_file() and path != output and not path.name.endswith(".log")
+        path for path in results.rglob("*") if path.is_file() and path != output and not path.name.endswith(".log")
     )
     manifest = {
         "schema_version": 2,

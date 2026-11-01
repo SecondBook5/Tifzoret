@@ -43,9 +43,7 @@ def test_factorial_is_an_opt_in_module_off_in_every_profile():
     assert "factorial" in OPT_IN_MODULES
     assert "factorial" in ALL_MODULES
     for profile in ("standard", "publication", "full"):
-        modules = resolve_modules(
-            {"analysis": {"profile": profile, "modules": {}}}
-        )
+        modules = resolve_modules({"analysis": {"profile": profile, "modules": {}}})
         assert modules["factorial"] is False
 
 
@@ -124,13 +122,14 @@ def test_factorial_wires_into_the_dag(tmp_path):
     load_project(config_path)
 
     proc = subprocess.run(
-        [sys.executable, "-m", "tifzoret", "dry-run", str(config_path),
-         "--no-conda", "--cores", "1"],
-        check=False, capture_output=True, text=True,
+        [sys.executable, "-m", "tifzoret", "dry-run", str(config_path), "--no-conda", "--cores", "1"],
+        check=False,
+        capture_output=True,
+        text=True,
     )
     assert proc.returncode == 0, proc.stderr or proc.stdout
     planned = {
-        line.strip()[len("rule "):-1]
+        line.strip()[len("rule ") : -1]
         for line in proc.stdout.splitlines()
         if line.strip().startswith("rule ") and line.strip().endswith(":")
     }
@@ -146,12 +145,13 @@ def test_factorial_wires_into_the_dag(tmp_path):
 @pytest.mark.parametrize(
     "constructor_id, source, table",
     [
-        ("effect_vs_effect", "factorial/figures/effect_vs_effect",
-         "factorial/tables/effect_vs_effect_displayed.tsv"),
-        ("interaction_profile", "factorial/figures/interaction_profile",
-         "factorial/tables/interaction_profile_displayed.tsv"),
-        ("group_expression", "factorial/figures/group_expression",
-         "factorial/tables/group_expression_displayed.tsv"),
+        ("effect_vs_effect", "factorial/figures/effect_vs_effect", "factorial/tables/effect_vs_effect_displayed.tsv"),
+        (
+            "interaction_profile",
+            "factorial/figures/interaction_profile",
+            "factorial/tables/interaction_profile_displayed.tsv",
+        ),
+        ("group_expression", "factorial/figures/group_expression", "factorial/tables/group_expression_displayed.tsv"),
     ],
 )
 def test_factorial_constructors_are_study_level(constructor_id, source, table):
@@ -173,8 +173,7 @@ def _write_tsv(path: Path, header: list[str], rows: list[list]) -> None:
         writer.writerows(rows)
 
 
-_DEFAULT_PALETTE = {"wt_no": "#A6CEE3", "wt_yes": "#1F78B4",
-                    "mut_no": "#FB9A99", "mut_yes": "#E31A1C"}
+_DEFAULT_PALETTE = {"wt_no": "#A6CEE3", "wt_yes": "#1F78B4", "mut_no": "#FB9A99", "mut_yes": "#E31A1C"}
 _OMIT = object()
 
 
@@ -182,8 +181,7 @@ _OMIT = object()
 # ``~ genotype * tumor``. These are opaque labels to factorial.R -- it only joins
 # contrast_matrix columns to coefficient_covariance keys -- so they stay fixed
 # even when the fixture renames factor levels.
-_COEFFICIENTS = ("Intercept", "genotype_mut_vs_wt", "tumor_yes_vs_no",
-                 "genotypemut.tumoryes")
+_COEFFICIENTS = ("Intercept", "genotype_mut_vs_wt", "tumor_yes_vs_no", "genotypemut.tumoryes")
 
 # One family, three estimands, expressed as contrast vectors over _COEFFICIENTS:
 #   arm A = tumor effect in the WT (reference) genotype  -> tumor_yes_vs_no
@@ -223,9 +221,12 @@ def _sigma(scale: float) -> dict[tuple[str, str], float]:
     """A 4x4 covariance keyed by coefficient-name pairs, scaled by ``scale``."""
     intercept, genotype, tumor, interaction = _COEFFICIENTS
     base = {
-        (intercept, intercept): 0.04, (genotype, genotype): 0.05,
-        (tumor, tumor): _S33, (interaction, interaction): _S44,
-        (tumor, interaction): _S34, (interaction, tumor): _S34,
+        (intercept, intercept): 0.04,
+        (genotype, genotype): 0.05,
+        (tumor, tumor): _S33,
+        (interaction, interaction): _S44,
+        (tumor, interaction): _S34,
+        (interaction, tumor): _S34,
     }
     full = {}
     for row in _COEFFICIENTS:
@@ -265,10 +266,7 @@ def _render_fixture(tmp_path: Path, genotypes=("wt", "mut"), palette=_OMIT) -> P
     for g in genotypes:
         for t in tumors:
             for rep in (1, 2, 3):
-                samples.append(
-                    {"sample_id": f"{g}_{t}_{rep}", "genotype": g, "tumor": t,
-                     "condition": f"{g}_{t}"}
-                )
+                samples.append({"sample_id": f"{g}_{t}_{rep}", "genotype": g, "tumor": t, "condition": f"{g}_{t}"})
     sample_ids = [s["sample_id"] for s in samples]
 
     samples_tsv = tmp_path / "samples.tsv"
@@ -286,8 +284,7 @@ def _render_fixture(tmp_path: Path, genotypes=("wt", "mut"), palette=_OMIT) -> P
     genes = ["Int1", "Int2", "Shared", "Flat", "Extra1", "Extra2", "Noisy"]
 
     def expr(gene: str, s: dict[str, str], rep_noise: float) -> float:
-        base = {"Int1": 6.0, "Int2": 7.0, "Shared": 8.0, "Flat": 5.0,
-                "Extra1": 6.5, "Extra2": 7.5, "Noisy": 6.0}[gene]
+        base = {"Int1": 6.0, "Int2": 7.0, "Shared": 8.0, "Flat": 5.0, "Extra1": 6.5, "Extra2": 7.5, "Noisy": 6.0}[gene]
         val = base
         if gene in ("Int1", "Int2"):
             # tumor raises it in mut, lowers it in wt -> non-parallel lines
@@ -312,15 +309,23 @@ def _render_fixture(tmp_path: Path, genotypes=("wt", "mut"), palette=_OMIT) -> P
     # SE is DERIVED from that gene's shared covariance S, so arm and interaction
     # SEs are mutually consistent rather than independently invented.
     # ----------------------------------------------------------------------- #
-    de_header = ["gene_id", "gene_symbol", "base_mean", "log2_fold_change",
-                 "lfc_se", "statistic", "adjusted_p_value", "significance_class"]
+    de_header = [
+        "gene_id",
+        "gene_symbol",
+        "base_mean",
+        "log2_fold_change",
+        "lfc_se",
+        "statistic",
+        "adjusted_p_value",
+        "significance_class",
+    ]
 
     # Tumor response per gene in the WT arm and the MUT arm. The interaction
     # fold-change is exactly the difference, because the interaction estimand IS
     # arm B - arm A as a contrast vector.
     arm_lfc = {
-        "Int1": (-2.0, 2.5),   # opposite directions -> delta +4.5
-        "Int2": (-1.9, 2.4),   # opposite directions -> delta +4.3
+        "Int1": (-2.0, 2.5),  # opposite directions -> delta +4.5
+        "Int2": (-1.9, 2.4),  # opposite directions -> delta +4.3
         "Shared": (2.0, 2.0),  # same in both arms   -> delta 0
         "Flat": (0.05, 0.05),
         "Extra1": (0.1, 1.2),
@@ -336,14 +341,12 @@ def _render_fixture(tmp_path: Path, genotypes=("wt", "mut"), palette=_OMIT) -> P
         rows = []
         for gene in genes:
             lfc_wt, lfc_mut = arm_lfc[gene]
-            value = {"tumor_in_wt": lfc_wt, "tumor_in_mut": lfc_mut,
-                     "tumor_by_genotype": lfc_mut - lfc_wt}[estimand]
+            value = {"tumor_in_wt": lfc_wt, "tumor_in_mut": lfc_mut, "tumor_by_genotype": lfc_mut - lfc_wt}[estimand]
             sigma = gene_sigma(gene)
             se = _quadratic(vector, vector, sigma) ** 0.5
             statistic = value / se if se > 0 else 0.0
             padj = 0.0001 if abs(statistic) >= 3.0 else 0.6
-            cls = ("significant_up" if value >= 1.0 else
-                   "significant_down" if value <= -1.0 else "ns")
+            cls = "significant_up" if value >= 1.0 else "significant_down" if value <= -1.0 else "ns"
             rows.append([f"ENSG_{gene}", gene, 500.0, value, se, statistic, padj, cls])
         return rows
 
@@ -356,14 +359,12 @@ def _render_fixture(tmp_path: Path, genotypes=("wt", "mut"), palette=_OMIT) -> P
 
     # contrast_matrix.tsv: one row per estimand, provenance columns then one
     # column per coefficient -- the layout family_fit.R writes.
-    provenance = ["estimand_id", "label", "role", "atom_kind", "expression",
-                  "cell_weights"]
+    provenance = ["estimand_id", "label", "role", "atom_kind", "expression", "cell_weights"]
     _write_tsv(
         tmp_path / "contrast_matrix.tsv",
         [*provenance, *_COEFFICIENTS],
         [
-            [estimand, estimand, "primary", "difference", f"<{estimand}>", "",
-             *_CONTRAST_VECTORS[estimand]]
+            [estimand, estimand, "primary", "difference", f"<{estimand}>", "", *_CONTRAST_VECTORS[estimand]]
             for estimand in ("tumor_in_wt", "tumor_in_mut", "tumor_by_genotype")
         ],
     )
@@ -374,9 +375,7 @@ def _render_fixture(tmp_path: Path, genotypes=("wt", "mut"), palette=_OMIT) -> P
         sigma = gene_sigma(gene)
         for row_name in _COEFFICIENTS:
             for col_name in _COEFFICIENTS:
-                covariance_rows.append(
-                    [f"ENSG_{gene}", row_name, col_name, sigma[(row_name, col_name)]]
-                )
+                covariance_rows.append([f"ENSG_{gene}", row_name, col_name, sigma[(row_name, col_name)]])
     _write_tsv(
         tmp_path / "coefficient_covariance.tsv",
         ["gene_id", "coefficient_row", "coefficient_col", "covariance"],
@@ -388,51 +387,79 @@ def _render_fixture(tmp_path: Path, genotypes=("wt", "mut"), palette=_OMIT) -> P
         figures["palette"] = palette
 
     project = tmp_path / "project.yaml"
-    project.write_text(yaml.safe_dump({
-        "version": 2,
-        "project": {"id": "factorial_demo", "title": "Factorial demo"},
-        "species": {"provider": "custom", "scientific_name": "synthetic",
-                    "taxonomy_id": None},
-        "reference": {"genome_build": "synthetic", "annotation_release": None},
-        "inputs": {"kind": "counts", "counts": "counts.tsv",
-                   "samples": "samples.tsv", "annotation": "annotation.tsv"},
-        "analysis": {
-            "design": "~ genotype * tumor",
-            "contrasts": "contrasts.tsv",
-            "profile": "full",
-            "settings": {"factorial": {
-                "factors": ["genotype", "tumor"],
-                "family": "fam_tumor_genotype",
-                "arms": ["tumor_in_wt", "tumor_in_mut"],
-                "interaction": "tumor_by_genotype",
-                "top_genes": 4,
-            }},
-        },
-        "resources": {"cache": "~/.cache/tifzoret/resources", "offline": False,
-                      "refresh": False,
-                      "gene_sets": {"gmt": "gene_sets.gmt", "min_size": 4,
-                                    "max_size": 100}},
-        "figures": figures,
-        "output": {"root": "results"},
-    }, sort_keys=False), encoding="utf-8")
+    project.write_text(
+        yaml.safe_dump(
+            {
+                "version": 2,
+                "project": {"id": "factorial_demo", "title": "Factorial demo"},
+                "species": {"provider": "custom", "scientific_name": "synthetic", "taxonomy_id": None},
+                "reference": {"genome_build": "synthetic", "annotation_release": None},
+                "inputs": {
+                    "kind": "counts",
+                    "counts": "counts.tsv",
+                    "samples": "samples.tsv",
+                    "annotation": "annotation.tsv",
+                },
+                "analysis": {
+                    "design": "~ genotype * tumor",
+                    "contrasts": "contrasts.tsv",
+                    "profile": "full",
+                    "settings": {
+                        "factorial": {
+                            "factors": ["genotype", "tumor"],
+                            "family": "fam_tumor_genotype",
+                            "arms": ["tumor_in_wt", "tumor_in_mut"],
+                            "interaction": "tumor_by_genotype",
+                            "top_genes": 4,
+                        }
+                    },
+                },
+                "resources": {
+                    "cache": "~/.cache/tifzoret/resources",
+                    "offline": False,
+                    "refresh": False,
+                    "gene_sets": {"gmt": "gene_sets.gmt", "min_size": 4, "max_size": 100},
+                },
+                "figures": figures,
+                "output": {"root": "results"},
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
 
     outdir = tmp_path / "out"
     subprocess.run(
         [
-            "Rscript", "--vanilla", str(FACTORIAL_R),
-            "--project-config", str(project),
-            "--vst-expression", str(vst),
-            "--samples", str(samples_tsv),
-            "--de-arm-a", str(de_arm_a),
-            "--de-arm-b", str(de_arm_b),
-            "--de-interaction", str(de_interaction),
-            "--contrast-matrix", str(tmp_path / "contrast_matrix.tsv"),
-            "--covariance", str(tmp_path / "coefficient_covariance.tsv"),
-            "--arms", "tumor_in_wt,tumor_in_mut",
-            "--interaction", "tumor_by_genotype",
-            "--outdir", str(outdir),
+            "Rscript",
+            "--vanilla",
+            str(FACTORIAL_R),
+            "--project-config",
+            str(project),
+            "--vst-expression",
+            str(vst),
+            "--samples",
+            str(samples_tsv),
+            "--de-arm-a",
+            str(de_arm_a),
+            "--de-arm-b",
+            str(de_arm_b),
+            "--de-interaction",
+            str(de_interaction),
+            "--contrast-matrix",
+            str(tmp_path / "contrast_matrix.tsv"),
+            "--covariance",
+            str(tmp_path / "coefficient_covariance.tsv"),
+            "--arms",
+            "tumor_in_wt,tumor_in_mut",
+            "--interaction",
+            "tumor_by_genotype",
+            "--outdir",
+            str(outdir),
         ],
-        check=True, capture_output=True, text=True,
+        check=True,
+        capture_output=True,
+        text=True,
     )
     return outdir
 
@@ -469,9 +496,9 @@ def test_factorial_render_produces_all_views_and_tables(tmp_path):
     # The covariance term was actually resolved for every gene, not silently
     # dropped -- otherwise the audit column would be all-NA and the identity test
     # below would be vacuous.
-    assert summary["covariance_genes"] == len(
-        {"Int1", "Int2", "Shared", "Flat", "Extra1", "Extra2", "Noisy"}
-    ), summary["covariance_genes"]
+    assert summary["covariance_genes"] == len({"Int1", "Int2", "Shared", "Flat", "Extra1", "Extra2", "Noisy"}), summary[
+        "covariance_genes"
+    ]
     # The two opposite-direction genes must be picked as top-interaction genes.
     assert "Int1" in summary["selected_genes"]
     assert "Int2" in summary["selected_genes"]
@@ -513,9 +540,7 @@ def test_factorial_survives_invalid_regex_levels_and_sparse_palette(tmp_path):
 
     with (outdir / "tables" / "group_expression_displayed.tsv").open() as handle:
         expression = list(csv.DictReader(handle, delimiter="\t"))
-    assert {row["group"] for row in expression} == {
-        "dose[hi_no", "dose[hi_yes", "dose[lo_no", "dose[lo_yes"
-    }
+    assert {row["group"] for row in expression} == {"dose[hi_no", "dose[hi_yes", "dose[lo_no", "dose[lo_yes"}
 
 
 def test_interaction_synthesis_carries_the_covariance_terms(tmp_path):
@@ -542,9 +567,18 @@ def test_interaction_synthesis_carries_the_covariance_terms(tmp_path):
         rows = list(csv.DictReader(handle, delimiter="\t"))
     assert rows, "interaction_synthesis.tsv is empty"
 
-    required = {"gene_id", "gene_symbol", "arm_a_lfc", "arm_a_se", "arm_b_lfc",
-                "arm_b_se", "interaction_lfc", "interaction_se", "se_naive",
-                "cov_arm_a_arm_b"}
+    required = {
+        "gene_id",
+        "gene_symbol",
+        "arm_a_lfc",
+        "arm_a_se",
+        "arm_b_lfc",
+        "arm_b_se",
+        "interaction_lfc",
+        "interaction_se",
+        "se_naive",
+        "cov_arm_a_arm_b",
+    }
     assert required <= set(rows[0]), sorted(required - set(rows[0]))
 
     by_gene = {row["gene_symbol"]: row for row in rows}
@@ -554,7 +588,7 @@ def test_interaction_synthesis_carries_the_covariance_terms(tmp_path):
         arm_b_se = float(row["arm_b_se"])
         interaction_se = float(row["interaction_se"])
         covariance = float(row["cov_arm_a_arm_b"])
-        naive = (arm_a_se ** 2 + arm_b_se ** 2) ** 0.5
+        naive = (arm_a_se**2 + arm_b_se**2) ** 0.5
 
         # (1) The cross term is present and genuinely non-zero -- a zero here
         # would make the remaining assertions pass trivially.
@@ -563,15 +597,14 @@ def test_interaction_synthesis_carries_the_covariance_terms(tmp_path):
         # (2) The covariance-aware SE is NOT the independent sum. With the
         # fixture's negative cross term the naive value is strictly larger, so a
         # naive statistic would understate this interaction.
-        assert abs(interaction_se - naive) > 1e-6, (
-            f"{gene}: interaction_se {interaction_se} == naive {naive}")
+        assert abs(interaction_se - naive) > 1e-6, f"{gene}: interaction_se {interaction_se} == naive {naive}"
         assert interaction_se < naive, f"{gene}: {interaction_se} !< {naive}"
 
         # (3) The exact identity, recomputable by a reader from these columns.
-        reconstructed = (naive ** 2 - 2 * covariance) ** 0.5
+        reconstructed = (naive**2 - 2 * covariance) ** 0.5
         assert abs(reconstructed - interaction_se) < 1e-6, (
-            f"{gene}: sqrt(naive^2 - 2*cov) = {reconstructed} != "
-            f"interaction_se = {interaction_se}")
+            f"{gene}: sqrt(naive^2 - 2*cov) = {reconstructed} != " f"interaction_se = {interaction_se}"
+        )
         # ...and the script publishes that reconstruction itself.
         assert abs(float(row["se_reconstructed"]) - interaction_se) < 1e-6
 
@@ -592,9 +625,9 @@ def test_gene_selection_comes_from_the_interaction_statistic(tmp_path):
 
     summary = json.loads((outdir / "factorial_summary.json").read_text())
     selected = summary["selected_genes"]
-    assert summary["selection_method"] == (
-        "top interaction |statistic| from the covariance-aware family fit"
-    ), summary["selection_method"]
+    assert summary["selection_method"] == ("top interaction |statistic| from the covariance-aware family fit"), summary[
+        "selection_method"
+    ]
 
     with (outdir / "tables" / "effect_vs_effect_displayed.tsv").open() as handle:
         effect = list(csv.DictReader(handle, delimiter="\t"))
@@ -604,8 +637,7 @@ def test_gene_selection_comes_from_the_interaction_statistic(tmp_path):
     # it can only be the statistic's doing.
     assert abs(float(by_gene["Noisy"]["delta"])) > abs(float(by_gene["Int1"]["delta"]))
     # ...and really does lose on the covariance-aware statistic.
-    assert abs(float(by_gene["Noisy"]["interaction_z"])) < abs(
-        float(by_gene["Int1"]["interaction_z"]))
+    assert abs(float(by_gene["Noisy"]["interaction_z"])) < abs(float(by_gene["Int1"]["interaction_z"]))
 
     assert "Int1" in selected and "Int2" in selected, selected
     assert "Noisy" not in selected, selected
@@ -616,10 +648,8 @@ def test_gene_selection_comes_from_the_interaction_statistic(tmp_path):
     # the covariance-aware one.
     row = by_gene["Int1"]
     assert abs(float(row["interaction_z"])) > abs(float(row["interaction_z_naive"]))
-    assert abs(float(row["interaction_z"])
-               - float(row["interaction_lfc"]) / float(row["interaction_se"])) < 1e-6
+    assert abs(float(row["interaction_z"]) - float(row["interaction_lfc"]) / float(row["interaction_se"])) < 1e-6
 
     # Rows are ordered by the same statistic the selection uses.
-    magnitudes = [abs(float(r["interaction_z"])) for r in effect
-                  if r["interaction_z"] not in ("", "NA")]
+    magnitudes = [abs(float(r["interaction_z"])) for r in effect if r["interaction_z"] not in ("", "NA")]
     assert magnitudes == sorted(magnitudes, reverse=True), magnitudes

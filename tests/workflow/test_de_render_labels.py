@@ -26,9 +26,7 @@ def _labels(tmp_path: Path) -> dict:
         'jsonlite::write_json(out, "out.json", auto_unbox = TRUE)\n',
         encoding="utf-8",
     )
-    result = subprocess.run(
-        ["Rscript", "--vanilla", str(script)], capture_output=True, text=True, cwd=tmp_path
-    )
+    result = subprocess.run(["Rscript", "--vanilla", str(script)], capture_output=True, text=True, cwd=tmp_path)
     assert result.returncode == 0, result.stderr
     return json.loads((tmp_path / "out.json").read_text(encoding="utf-8"))
 

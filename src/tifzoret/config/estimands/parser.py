@@ -20,8 +20,7 @@ _LEVEL = r"""(?:'[^']*'|"[^"]*"|[^,()'"]+)"""
 _CELL = rf"\(\s*{_LEVEL}(?:\s*,\s*{_LEVEL})*\s*\)"
 _COEF = r"coef\(\s*[^)]+\s*\)"
 _TERM = re.compile(
-    rf"^\s*(?:(?P<number>[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)\s*\*\s*)?"
-    rf"(?P<atom>{_CELL}|{_COEF})\s*$"
+    rf"^\s*(?:(?P<number>[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)\s*\*\s*)?" rf"(?P<atom>{_CELL}|{_COEF})\s*$"
 )
 
 
@@ -119,21 +118,15 @@ def parse_expression(text: str, arity: int) -> ParsedExpression:
             inner = atom[atom.index("(") + 1 : atom.rindex(")")]
             levels = tuple(_unquote(part) for part in _split_levels(inner))
             if len(levels) != arity:
-                raise EstimandSyntaxError(
-                    f"cell {atom!r} has arity {len(levels)}, expected {arity}"
-                )
+                raise EstimandSyntaxError(f"cell {atom!r} has arity {len(levels)}, expected {arity}")
             if any(not level for level in levels):
                 raise EstimandSyntaxError(f"cell {atom!r} has an empty level")
             cell_weights[levels] = cell_weights.get(levels, 0.0) + weight
     if cell_weights and coef_weights:
-        raise EstimandSyntaxError(
-            "estimand expression mixed cell and coef() atoms; use one form"
-        )
+        raise EstimandSyntaxError("estimand expression mixed cell and coef() atoms; use one form")
     if not cell_weights and not coef_weights:
         raise EstimandSyntaxError("estimand expression is empty")
-    return ParsedExpression(
-        source=source, cell_weights=cell_weights, coef_weights=coef_weights
-    )
+    return ParsedExpression(source=source, cell_weights=cell_weights, coef_weights=coef_weights)
 
 
 def _split_levels(inner: str) -> list[str]:

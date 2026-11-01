@@ -98,8 +98,13 @@ def _panel_group(constructor: str | None) -> str | None:
 # Display labels for enrichment source/provider chips. ``custom`` is derived per row
 # from the set-name prefix so GMT collections (Reactome/Hallmark) are visible instead of
 # being hidden under a generic "custom" bucket.
-_SOURCE_LABELS = {"go": "GO", "kegg": "KEGG", "msigdb": "MSigDB",
-                  "configured_gene_program": "Gene program", "string": "STRING"}
+_SOURCE_LABELS = {
+    "go": "GO",
+    "kegg": "KEGG",
+    "msigdb": "MSigDB",
+    "configured_gene_program": "Gene program",
+    "string": "STRING",
+}
 
 
 def _relabel_source(raw: str, set_label: str) -> str:
@@ -116,6 +121,7 @@ def _relabel_source(raw: str, set_label: str) -> str:
             return upper.split("_")[0].title()
         return "Custom" if low == "custom" else value
     return _SOURCE_LABELS.get(low, value)
+
 
 # Rows kept for the very large enrichment/ranking tables. The full TSV is always
 # linked (and travels with the results tree), but embedding every row of several
@@ -196,9 +202,12 @@ def _spec(**kw):
 
 TABLE_SPECS = [
     _spec(
-        group="de", group_label="Differential expression",
+        group="de",
+        group_label="Differential expression",
         group_blurb="Per-gene DESeq2 effects. Every gene is here — search a symbol or Ensembl ID.",
-        analysis="de", filename="de_results.tsv", label="DE genes",
+        analysis="de",
+        filename="de_results.tsv",
+        label="DE genes",
         columns=[
             ("gene_symbol", "Gene", "text"),
             ("gene_id", "Ensembl ID", "text"),
@@ -211,12 +220,17 @@ TABLE_SPECS = [
             ("significance_class", "Class", "chip"),
             ("gene_biotype", "Biotype", "chip"),
         ],
-        search=["gene_symbol", "gene_id"], sort=("adjusted_p_value", "asc"), cap=None,
+        search=["gene_symbol", "gene_id"],
+        sort=("adjusted_p_value", "asc"),
+        cap=None,
     ),
     _spec(
-        group="enrichment", group_label="Enrichment",
+        group="enrichment",
+        group_label="Enrichment",
         group_blurb="Over-representation and gene-set enrichment. Search a term or a gene inside a set.",
-        analysis="ontology", filename="ontology.tsv", label="GO (BP) / KEGG — ORA",
+        analysis="ontology",
+        filename="ontology.tsv",
+        label="GO (BP) / KEGG — ORA",
         columns=[
             ("term_label", "Term", "text"),
             ("provider", "Provider", "chip"),
@@ -229,11 +243,17 @@ TABLE_SPECS = [
             ("overlap_genes", "Overlap genes", "list"),
         ],
         search=["term_label", "description", "overlap_genes"],
-        sort=("adjusted_p_value", "asc"), cap="adjusted_p_value", facet="provider",
+        sort=("adjusted_p_value", "asc"),
+        cap="adjusted_p_value",
+        facet="provider",
     ),
     _spec(
-        group="enrichment", group_label="Enrichment", group_blurb=None,
-        analysis="pathways", filename="fgsea.tsv", label="GSEA (fgsea)",
+        group="enrichment",
+        group_label="Enrichment",
+        group_blurb=None,
+        analysis="pathways",
+        filename="fgsea.tsv",
+        label="GSEA (fgsea)",
         columns=[
             ("pathway_label", "Gene set", "text"),
             ("gene_set_source", "Source", "chip"),
@@ -245,12 +265,18 @@ TABLE_SPECS = [
             ("size", "Size", "int"),
             ("leadingEdge", "Leading edge", "list"),
         ],
-        search=["pathway_label", "leadingEdge"], sort=("padj", "asc"),
-        cap="padj", facet="gene_set_source",
+        search=["pathway_label", "leadingEdge"],
+        sort=("padj", "asc"),
+        cap="padj",
+        facet="gene_set_source",
     ),
     _spec(
-        group="enrichment", group_label="Enrichment", group_blurb=None,
-        analysis="pathways", filename="ora.tsv", label="ORA (MSigDB)",
+        group="enrichment",
+        group_label="Enrichment",
+        group_blurb=None,
+        analysis="pathways",
+        filename="ora.tsv",
+        label="ORA (MSigDB)",
         columns=[
             ("term_label", "Gene set", "text"),
             ("provider", "Provider", "chip"),
@@ -262,11 +288,17 @@ TABLE_SPECS = [
             ("overlap_genes", "Overlap genes", "list"),
         ],
         search=["term_label", "description", "overlap_genes"],
-        sort=("adjusted_p_value", "asc"), cap="adjusted_p_value", facet="provider",
+        sort=("adjusted_p_value", "asc"),
+        cap="adjusted_p_value",
+        facet="provider",
     ),
     _spec(
-        group="enrichment", group_label="Enrichment", group_blurb=None,
-        analysis="pathways", filename="gsva_differential.tsv", label="GSVA (differential)",
+        group="enrichment",
+        group_label="Enrichment",
+        group_blurb=None,
+        analysis="pathways",
+        filename="gsva_differential.tsv",
+        label="GSVA (differential)",
         columns=[
             ("pathway_label", "Gene set", "text"),
             ("gene_set_source", "Source", "chip"),
@@ -276,12 +308,17 @@ TABLE_SPECS = [
             ("P.Value", "p", "sci"),
             ("adj.P.Val", "FDR", "sci"),
         ],
-        search=["pathway_label"], sort=("adj.P.Val", "asc"), cap=None,
+        search=["pathway_label"],
+        sort=("adj.P.Val", "asc"),
+        cap=None,
     ),
     _spec(
-        group="networks", group_label="Networks (STRING)",
+        group="networks",
+        group_label="Networks (STRING)",
         group_blurb="STRING functional enrichment of the up/down interaction neighborhoods.",
-        analysis="networks", filename="string_enrichment.tsv", label="STRING enrichment",
+        analysis="networks",
+        filename="string_enrichment.tsv",
+        label="STRING enrichment",
         columns=[
             ("description", "Term", "text"),
             ("category", "Category", "chip"),
@@ -290,13 +327,18 @@ TABLE_SPECS = [
             ("fdr", "FDR", "sci"),
             ("input_genes", "Input genes", "list"),
         ],
-        search=["description", "term", "input_genes"], sort=("fdr", "asc"),
-        cap="fdr", facet="category",
+        search=["description", "term", "input_genes"],
+        sort=("fdr", "asc"),
+        cap="fdr",
+        facet="category",
     ),
     _spec(
-        group="regulators", group_label="Regulators",
+        group="regulators",
+        group_label="Regulators",
         group_blurb="Transcription-factor activity inferred from regulon expression.",
-        analysis="regulators", filename="regulator_differential.tsv", label="Regulator activity",
+        analysis="regulators",
+        filename="regulator_differential.tsv",
+        label="Regulator activity",
         columns=[
             ("regulator", "Regulator", "text"),
             ("method", "Method", "chip"),
@@ -305,12 +347,17 @@ TABLE_SPECS = [
             ("P.Value", "p", "sci"),
             ("adj.P.Val", "FDR", "sci"),
         ],
-        search=["regulator"], sort=("adj.P.Val", "asc"), cap=None,
+        search=["regulator"],
+        sort=("adj.P.Val", "asc"),
+        cap=None,
     ),
     _spec(
-        group="composition", group_label="Cell state",
+        group="composition",
+        group_label="Cell state",
         group_blurb="Relative cell-state / program signature scores (not cell fractions).",
-        analysis="composition", filename="cell_state_differential.tsv", label="Cell-state signatures",
+        analysis="composition",
+        filename="cell_state_differential.tsv",
+        label="Cell-state signatures",
         columns=[
             ("label", "Signature", "text"),
             ("category", "Category", "chip"),
@@ -320,12 +367,17 @@ TABLE_SPECS = [
             ("adj.P.Val", "FDR", "sci"),
             ("matched_genes", "Matched genes", "list"),
         ],
-        search=["label", "description", "matched_genes"], sort=("adj.P.Val", "asc"), cap=None,
+        search=["label", "description", "matched_genes"],
+        sort=("adj.P.Val", "asc"),
+        cap=None,
     ),
     _spec(
-        group="hypotheses", group_label="Hypotheses",
+        group="hypotheses",
+        group_label="Hypotheses",
         group_blurb="Evidence scored against the study's pre-registered hypotheses.",
-        analysis="hypotheses", filename="hypothesis_evidence.tsv", label="Hypothesis evidence",
+        analysis="hypotheses",
+        filename="hypothesis_evidence.tsv",
+        label="Hypothesis evidence",
         columns=[
             ("hypothesis_id", "Hypothesis", "text"),
             ("evidence_type", "Evidence", "chip"),
@@ -336,7 +388,9 @@ TABLE_SPECS = [
             ("direction", "Dir", "direction"),
             ("support", "Support", "chip"),
         ],
-        search=["hypothesis_id", "item"], sort=("fdr", "asc"), cap=None,
+        search=["hypothesis_id", "item"],
+        sort=("fdr", "asc"),
+        cap=None,
     ),
 ]
 
@@ -364,10 +418,10 @@ def _read_table(path: Path, spec: dict) -> dict | None:
         search_pos = [index[k] for k in spec.get("search", []) if k in index]
         # Enrichment source/provider chips are humanized, and GMT "custom" sets are
         # resolved to their collection (Reactome/Hallmark) from the set-name prefix.
-        source_idx = next((j for j, c in enumerate(columns)
-                           if c[0] in ("gene_set_source", "provider", "source")), None)
-        label_pos = next((index[k] for k in ("pathway_label", "term_label", "description", "label")
-                          if k in index), None)
+        source_idx = next((j for j, c in enumerate(columns) if c[0] in ("gene_set_source", "provider", "source")), None)
+        label_pos = next(
+            (index[k] for k in ("pathway_label", "term_label", "description", "label") if k in index), None
+        )
         rows = []
         for raw in reader:
             if not raw:
@@ -430,9 +484,13 @@ def _read_generic(path: Path, label: str) -> dict | None:
     blobs = [" ".join(str(x) for x in row[:1]).lower() for row in rows]
     return {
         "columns": [{"key": k, "label": k, "kind": kinds[i]} for i, k in enumerate(header)],
-        "rows": rows, "search_blobs": blobs,
-        "sort": {"col": 0, "dir": "asc"}, "facet_col": None,
-        "total": len(rows), "shown": len(rows), "capped": False,
+        "rows": rows,
+        "search_blobs": blobs,
+        "sort": {"col": 0, "dir": "asc"},
+        "facet_col": None,
+        "total": len(rows),
+        "shown": len(rows),
+        "capped": False,
     }
 
 
@@ -461,19 +519,26 @@ def _collect_tables(root: Path) -> list[dict]:
             note = (
                 f"Top {table['shown']:,} of {table['total']:,} by "
                 f"{next(c['label'] for c in table['columns'] if c['key'] == spec['sort'][0])}"
-                if table["capped"] else f"All {table['total']:,} rows"
+                if table["capped"]
+                else f"All {table['total']:,} rows"
             )
-            table.update({
-                "id": f"{spec['analysis']}::{spec['filename']}::{contrast_id}",
-                "label": spec["label"],
-                "contrast": contrast_id,
-                "note": note,
-                "full_tsv": _rel(path, root),
-            })
+            table.update(
+                {
+                    "id": f"{spec['analysis']}::{spec['filename']}::{contrast_id}",
+                    "label": spec["label"],
+                    "contrast": contrast_id,
+                    "note": note,
+                    "full_tsv": _rel(path, root),
+                }
+            )
             group = group_index.get(spec["group"])
             if group is None:
-                group = {"key": spec["group"], "label": spec["group_label"],
-                         "blurb": spec.get("group_blurb"), "tables": []}
+                group = {
+                    "key": spec["group"],
+                    "label": spec["group_label"],
+                    "blurb": spec.get("group_blurb"),
+                    "tables": [],
+                }
                 group_index[spec["group"]] = group
                 groups.append(group)
             table.pop("search_blobs_dup", None)
@@ -481,10 +546,18 @@ def _collect_tables(root: Path) -> list[dict]:
     # Sample QC: small per-sample library metrics, contrast-independent.
     qc = _read_generic(root / "qc" / "tables" / "library_metrics.tsv", "Library metrics")
     if qc is not None:
-        qc.update({"id": "qc::library_metrics", "label": "Library metrics",
-                   "contrast": None, "note": f"All {qc['total']:,} samples", "full_tsv": _rel(root / "qc" / "tables" / "library_metrics.tsv", root)})
-        groups.append({"key": "qc", "label": "Sample QC",
-                       "blurb": "Per-sample sequencing and alignment metrics.", "tables": [qc]})
+        qc.update(
+            {
+                "id": "qc::library_metrics",
+                "label": "Library metrics",
+                "contrast": None,
+                "note": f"All {qc['total']:,} samples",
+                "full_tsv": _rel(root / "qc" / "tables" / "library_metrics.tsv", root),
+            }
+        )
+        groups.append(
+            {"key": "qc", "label": "Sample QC", "blurb": "Per-sample sequencing and alignment metrics.", "tables": [qc]}
+        )
     return groups
 
 
@@ -532,20 +605,22 @@ def _default_figure_panels(root: Path) -> list[dict]:
             continue
         scope, _, figure = entry_id.partition("__")
         label = _DEFAULT_FIGURE_LABELS.get(figure) or _humanize(figure or scope)
-        panels.append({
-            "label": label,
-            "constructor": figure or scope,
-            "constructor_label": label,
-            "variant_label": None,
-            "group": _DEFAULT_FIGURE_GROUPS.get(figure) or _panel_group(figure),
-            "description": "Default figure from this analysis; no publication figure recipe was configured.",
-            "contrast": None if scope == "qc" else scope,
-            "selected": False,
-            "available": True,
-            "png": image,
-            "png_href": png,
-            "pdf_href": pdf,
-        })
+        panels.append(
+            {
+                "label": label,
+                "constructor": figure or scope,
+                "constructor_label": label,
+                "variant_label": None,
+                "group": _DEFAULT_FIGURE_GROUPS.get(figure) or _panel_group(figure),
+                "description": "Default figure from this analysis; no publication figure recipe was configured.",
+                "contrast": None if scope == "qc" else scope,
+                "selected": False,
+                "available": True,
+                "png": image,
+                "png_href": png,
+                "pdf_href": pdf,
+            }
+        )
     return panels
 
 
@@ -566,14 +641,17 @@ def _collect_figures(root: Path, recipe: dict | None) -> dict:
             png = next((a["path"] for a in entry.get("artifacts", []) if a["path"].endswith(".png")), None)
             pdf = next((a["path"] for a in entry.get("artifacts", []) if a["path"].endswith(".pdf")), None)
             recipe_set = (recipe or {}).get("figure_sets", {}).get(set_id, {}) if recipe else {}
-            assembled.append({
-                "id": entry["id"],
-                "label": recipe_set.get("title") or _humanize(set_id),
-                "set": set_id,
-                "description": recipe_set.get("description"),
-                "png": _data_uri(root / png) if png else None,
-                "png_href": png, "pdf_href": pdf,
-            })
+            assembled.append(
+                {
+                    "id": entry["id"],
+                    "label": recipe_set.get("title") or _humanize(set_id),
+                    "set": set_id,
+                    "description": recipe_set.get("description"),
+                    "png": _data_uri(root / png) if png else None,
+                    "png_href": png,
+                    "pdf_href": pdf,
+                }
+            )
     panels: list[dict] = []
     gallery_path = root / "publication" / "gallery" / "gallery.json"
     if gallery_path.is_file():
@@ -587,20 +665,22 @@ def _collect_figures(root: Path, recipe: dict | None) -> dict:
             image = _data_uri(gallery_dir / review) if review else None
             if image is None and panel.get("source_png"):
                 image = _data_uri(panel["source_png"])
-            panels.append({
-                "label": panel.get("variant_label") or panel.get("constructor_label") or panel.get("constructor"),
-                "constructor": panel.get("constructor"),
-                "constructor_label": panel.get("constructor_label"),
-                "variant_label": panel.get("variant_label"),
-                "group": _panel_group(panel.get("constructor")),
-                "description": panel.get("description"),
-                "contrast": panel.get("contrast"),
-                "selected": bool(panel.get("selected")),
-                "available": bool(panel.get("available", True)),
-                "png": image,
-                "png_href": _rel(panel.get("source_png", ""), root),
-                "pdf_href": _rel(panel.get("source_pdf", ""), root),
-            })
+            panels.append(
+                {
+                    "label": panel.get("variant_label") or panel.get("constructor_label") or panel.get("constructor"),
+                    "constructor": panel.get("constructor"),
+                    "constructor_label": panel.get("constructor_label"),
+                    "variant_label": panel.get("variant_label"),
+                    "group": _panel_group(panel.get("constructor")),
+                    "description": panel.get("description"),
+                    "contrast": panel.get("contrast"),
+                    "selected": bool(panel.get("selected")),
+                    "available": bool(panel.get("available", True)),
+                    "png": image,
+                    "png_href": _rel(panel.get("source_png", ""), root),
+                    "pdf_href": _rel(panel.get("source_pdf", ""), root),
+                }
+            )
     if not assembled and not panels:
         # No publication recipe or gallery: show the default per-analysis figures the
         # front door already promoted into figures/index.json, so the report is not empty.
@@ -620,8 +700,7 @@ def _scrub_environment(environment: object) -> object:
     if not isinstance(environment, dict):
         return environment
     return {
-        key: (Path(value).name if isinstance(value, str) and value else value)
-        for key, value in environment.items()
+        key: (Path(value).name if isinstance(value, str) and value else value) for key, value in environment.items()
     }
 
 
@@ -634,8 +713,20 @@ def _provenance(root: Path) -> dict:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
         return {}
-    keep = ("generated_utc", "profile", "modules", "species", "reference", "random_seeds",
-            "platform", "repository", "environment", "tools", "resource_snapshots", "warnings")
+    keep = (
+        "generated_utc",
+        "profile",
+        "modules",
+        "species",
+        "reference",
+        "random_seeds",
+        "platform",
+        "repository",
+        "environment",
+        "tools",
+        "resource_snapshots",
+        "warnings",
+    )
     prov = {k: manifest.get(k) for k in keep if k in manifest}
     if "environment" in prov:
         prov["environment"] = _scrub_environment(prov["environment"])
@@ -655,6 +746,7 @@ def build_payload(project, root: Path) -> dict:
     row_total = sum(t["total"] for g in groups for t in g["tables"])
     try:
         import tifzoret
+
         version = getattr(tifzoret, "__version__", None)
     except Exception:  # pragma: no cover - defensive
         version = None
@@ -675,8 +767,12 @@ def build_payload(project, root: Path) -> dict:
             },
         },
         "contrasts": [
-            {"contrast_id": r["contrast_id"], "numerator": r["numerator"],
-             "denominator": r["denominator"], "factor": r["factor"]}
+            {
+                "contrast_id": r["contrast_id"],
+                "numerator": r["numerator"],
+                "denominator": r["denominator"],
+                "factor": r["factor"],
+            }
             for r in project.contrast_rows
         ],
         "figures": figures,

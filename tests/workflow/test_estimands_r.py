@@ -6,7 +6,6 @@ import json
 import subprocess
 from pathlib import Path
 
-import pytest
 
 from _factorial_support import build_fixture, require_r
 
@@ -18,19 +17,21 @@ ESTIMANDS_R = SCRIPTS / "estimands.R"
 def _run_r(body: str, tmp_path: Path) -> dict:
     script = tmp_path / "probe.R"
     script.write_text(
-        "suppressPackageStartupMessages({library(jsonlite)})\n"
-        f'source("{ESTIMANDS_R.as_posix()}")\n' + body,
+        "suppressPackageStartupMessages({library(jsonlite)})\n" f'source("{ESTIMANDS_R.as_posix()}")\n' + body,
         encoding="utf-8",
     )
-    result = subprocess.run(
-        ["Rscript", "--vanilla", str(script)], capture_output=True, text=True, cwd=tmp_path
-    )
+    result = subprocess.run(["Rscript", "--vanilla", str(script)], capture_output=True, text=True, cwd=tmp_path)
     assert result.returncode == 0, result.stderr
     return json.loads((tmp_path / "out.json").read_text(encoding="utf-8"))
 
 
-def _write_inputs(tmp_path: Path, weights: dict[str, float], cells="factor_a|factor_b",
-                  design="~ factor_a * factor_b", atom_kind="cell") -> None:
+def _write_inputs(
+    tmp_path: Path,
+    weights: dict[str, float],
+    cells="factor_a|factor_b",
+    design="~ factor_a * factor_b",
+    atom_kind="cell",
+) -> None:
     (tmp_path / "families.tsv").write_text(
         "family_id\tdesign\tcells\treference_levels\treplicate_unit\tshrinkage\tfilter\tdeclared\n"
         f"fam_a\t{design}\t{cells}\t\t\tapeglm\tdesign_aware\ttrue\n",
@@ -44,9 +45,7 @@ def _write_inputs(tmp_path: Path, weights: dict[str, float], cells="factor_a|fac
     lines = ["family_id\testimand_id\tcell_key\tweight"]
     for key, weight in weights.items():
         lines.append(f"fam_a\test_x\t{key}\t{weight!r}")
-    (tmp_path / "estimand_cell_weights.tsv").write_text(
-        "\n".join(lines) + "\n", encoding="utf-8"
-    )
+    (tmp_path / "estimand_cell_weights.tsv").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def test_reads_a_family_spec(tmp_path):
@@ -202,9 +201,7 @@ def test_an_unknown_coefficient_name_is_a_hard_error(tmp_path):
         'compile_contrast_vector(c(spec, est), w, md, ~ factor_a * factor_b, c("Intercept"))\n',
         encoding="utf-8",
     )
-    result = subprocess.run(
-        ["Rscript", "--vanilla", str(script)], capture_output=True, text=True, cwd=tmp_path
-    )
+    result = subprocess.run(["Rscript", "--vanilla", str(script)], capture_output=True, text=True, cwd=tmp_path)
     assert result.returncode != 0
     assert "not_a_coefficient" in result.stderr
 
@@ -225,9 +222,7 @@ def test_malformed_cell_key_arity_is_a_hard_error(tmp_path):
     )
     # Cell key with 3 parts (a2|extra|b2) instead of 2
     (tmp_path / "estimand_cell_weights.tsv").write_text(
-        "family_id\testimand_id\tcell_key\tweight\n"
-        "fam_a\test_x\ta2|extra|b2\t1.0\n"
-        "fam_a\test_x\ta1|b1\t-1.0\n",
+        "family_id\testimand_id\tcell_key\tweight\n" "fam_a\test_x\ta2|extra|b2\t1.0\n" "fam_a\test_x\ta1|b1\t-1.0\n",
         encoding="utf-8",
     )
     script = tmp_path / "probe.R"
@@ -240,9 +235,7 @@ def test_malformed_cell_key_arity_is_a_hard_error(tmp_path):
         'compile_contrast_vector(c(spec, est), w, md, ~ factor_a * factor_b, c("Intercept"))\n',
         encoding="utf-8",
     )
-    result = subprocess.run(
-        ["Rscript", "--vanilla", str(script)], capture_output=True, text=True, cwd=tmp_path
-    )
+    result = subprocess.run(["Rscript", "--vanilla", str(script)], capture_output=True, text=True, cwd=tmp_path)
     assert result.returncode != 0
     assert "arity" in result.stderr
     assert "a2|extra|b2" in result.stderr
@@ -259,58 +252,57 @@ def test_contrast_alignment_matches_deseq2_results_on_saturated_model(tmp_path):
     script = tmp_path / "check.R"
     script.write_text(
         f'source("{ESTIMANDS_R.as_posix()}")\n'
-        'suppressPackageStartupMessages(library(DESeq2))\n'
+        "suppressPackageStartupMessages(library(DESeq2))\n"
         'md <- read.delim("fx/samples.tsv", stringsAsFactors = FALSE)\n'
-        'rownames(md) <- md$sample_id\n'
-        'md$factor_a <- factor(md$factor_a); md$factor_b <- factor(md$factor_b)\n'
+        "rownames(md) <- md$sample_id\n"
+        "md$factor_a <- factor(md$factor_a); md$factor_b <- factor(md$factor_b)\n"
         'cts <- as.matrix(read.delim("fx/counts.tsv", row.names = 1))\n'
-        'dds <- DESeqDataSetFromMatrix(cts[, rownames(md)], md, ~ factor_a * factor_b)\n'
-        'dds <- DESeq(dds, quiet = TRUE)\n'
+        "dds <- DESeqDataSetFromMatrix(cts[, rownames(md)], md, ~ factor_a * factor_b)\n"
+        "dds <- DESeq(dds, quiet = TRUE)\n"
         'spec <- read_family_spec("families.tsv", "fam_a")\n'
         'est  <- read_estimand_spec("estimands.tsv", "est_x")\n'
         'w    <- read_cell_weights("estimand_cell_weights.tsv", "est_x")\n'
-        'cvec <- compile_contrast_vector(c(spec, est), w, md, '
-        '  stats::as.formula(spec$design), resultsNames(dds))\n'
-        'res <- results(dds, contrast = cvec, independentFiltering = FALSE)\n'
+        "cvec <- compile_contrast_vector(c(spec, est), w, md, "
+        "  stats::as.formula(spec$design), resultsNames(dds))\n"
+        "res <- results(dds, contrast = cvec, independentFiltering = FALSE)\n"
         'signal_genes <- grep("^gene_signal_", rownames(res), value = TRUE)\n'
         'contrast_lfc <- median(res[signal_genes, "log2FoldChange"], na.rm = TRUE)\n'
-        '# Independent from-counts calculation\n'
-        'norm_cts <- counts(dds, normalized = TRUE)\n'
-        'cell_means <- function(a_level, b_level) {\n'
-        '  samples <- md$sample_id[md$factor_a == a_level & md$factor_b == b_level]\n'
-        '  rowMeans(norm_cts[, samples, drop = FALSE])\n'
-        '}\n'
+        "# Independent from-counts calculation\n"
+        "norm_cts <- counts(dds, normalized = TRUE)\n"
+        "cell_means <- function(a_level, b_level) {\n"
+        "  samples <- md$sample_id[md$factor_a == a_level & md$factor_b == b_level]\n"
+        "  rowMeans(norm_cts[, samples, drop = FALSE])\n"
+        "}\n"
         'mean_a2b2 <- cell_means("a2", "b2")\n'
         'mean_a2b1 <- cell_means("a2", "b1")\n'
         'mean_a1b2 <- cell_means("a1", "b2")\n'
         'mean_a1b1 <- cell_means("a1", "b1")\n'
-        'observed_lfc <- (log2(mean_a2b2) - log2(mean_a2b1)) - '
-        '                (log2(mean_a1b2) - log2(mean_a1b1))\n'
-        'observed_median <- median(observed_lfc[signal_genes], na.rm = TRUE)\n'
+        "observed_lfc <- (log2(mean_a2b2) - log2(mean_a2b1)) - "
+        "                (log2(mean_a1b2) - log2(mean_a1b1))\n"
+        "observed_median <- median(observed_lfc[signal_genes], na.rm = TRUE)\n"
         'cat(sprintf("contrast_lfc=%.6f observed_lfc=%.6f diff=%.6f\\n", '
-        '  contrast_lfc, observed_median, abs(contrast_lfc - observed_median)))\n'
-        'out <- list(\n'
-        '  contrast_lfc = contrast_lfc,\n'
-        '  observed_lfc = observed_median,\n'
-        '  diff = abs(contrast_lfc - observed_median),\n'
-        '  declared_truth = 2.0\n'
-        ')\n'
+        "  contrast_lfc, observed_median, abs(contrast_lfc - observed_median)))\n"
+        "out <- list(\n"
+        "  contrast_lfc = contrast_lfc,\n"
+        "  observed_lfc = observed_median,\n"
+        "  diff = abs(contrast_lfc - observed_median),\n"
+        "  declared_truth = 2.0\n"
+        ")\n"
         'jsonlite::write_json(out, "out.json", auto_unbox = TRUE)\n',
         encoding="utf-8",
     )
-    result = subprocess.run(
-        ["Rscript", "--vanilla", str(script)], capture_output=True, text=True, cwd=tmp_path
-    )
+    result = subprocess.run(["Rscript", "--vanilla", str(script)], capture_output=True, text=True, cwd=tmp_path)
     assert result.returncode == 0, result.stderr
     out = json.loads((tmp_path / "out.json").read_text(encoding="utf-8"))
     # The two computations must match tightly (saturated model)
-    assert out["diff"] < 1e-2, \
-        f"contrast vs observed LFC diverged: {out['contrast_lfc']} vs {out['observed_lfc']}"
+    assert out["diff"] < 1e-2, f"contrast vs observed LFC diverged: {out['contrast_lfc']} vs {out['observed_lfc']}"
     # And both should be close to the declared truth of 2.0 (looser tolerance for NB noise at n=4/cell)
-    assert abs(out["contrast_lfc"] - out["declared_truth"]) < 0.35, \
-        f"recovered LFC {out['contrast_lfc']} far from declared truth 2.0"
-    assert abs(out["observed_lfc"] - out["declared_truth"]) < 0.35, \
-        f"observed LFC {out['observed_lfc']} far from declared truth 2.0"
+    assert (
+        abs(out["contrast_lfc"] - out["declared_truth"]) < 0.35
+    ), f"recovered LFC {out['contrast_lfc']} far from declared truth 2.0"
+    assert (
+        abs(out["observed_lfc"] - out["declared_truth"]) < 0.35
+    ), f"observed LFC {out['observed_lfc']} far from declared truth 2.0"
 
 
 def test_estimands_r_is_named_in_the_engine_map():

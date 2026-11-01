@@ -8,9 +8,7 @@ from pathlib import Path
 from _factorial_support import ESTIMANDS, read_tsv_rows, require_r, stage_family
 
 ROOT = Path(__file__).resolve().parents[2]
-SCRIPT = (
-    ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "03_differential" / "family_fit.R"
-)
+SCRIPT = ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "03_differential" / "family_fit.R"
 TEMPLATE = ROOT / "src" / "tifzoret" / "templates" / "minimal"
 
 
@@ -40,9 +38,7 @@ def test_contrast_matrix_records_the_interaction_vector(tmp_path):
     require_r("DESeq2")
     rows = {
         r["estimand_id"]: r
-        for r in read_tsv_rows(
-            stage_family(tmp_path, SCRIPT, TEMPLATE) / "tables" / "contrast_matrix.tsv"
-        )
+        for r in read_tsv_rows(stage_family(tmp_path, SCRIPT, TEMPLATE) / "tables" / "contrast_matrix.tsv")
     }
     interaction = rows["est_interaction"]
     assert float(interaction["factor_aa2.factor_bb2"]) == 1.0
@@ -52,9 +48,7 @@ def test_contrast_matrix_records_the_interaction_vector(tmp_path):
 
 def test_gene_universe_records_the_filter_used(tmp_path):
     require_r("DESeq2", "edgeR")
-    rows = read_tsv_rows(
-        stage_family(tmp_path, SCRIPT, TEMPLATE) / "tables" / "tested_gene_universe.tsv"
-    )
+    rows = read_tsv_rows(stage_family(tmp_path, SCRIPT, TEMPLATE) / "tables" / "tested_gene_universe.tsv")
     assert rows
     assert {row["filter"] for row in rows} == {"design_aware"}
     assert any(row["retained"] == "TRUE" for row in rows)
@@ -63,20 +57,14 @@ def test_gene_universe_records_the_filter_used(tmp_path):
 def test_total_count_filter_is_selectable(tmp_path):
     require_r("DESeq2")
     rows = read_tsv_rows(
-        stage_family(tmp_path, SCRIPT, TEMPLATE, gene_filter="total_count")
-        / "tables"
-        / "tested_gene_universe.tsv"
+        stage_family(tmp_path, SCRIPT, TEMPLATE, gene_filter="total_count") / "tables" / "tested_gene_universe.tsv"
     )
     assert {row["filter"] for row in rows} == {"total_count"}
 
 
 def test_summary_reports_rank_and_condition_number(tmp_path):
     require_r("DESeq2")
-    summary = json.loads(
-        (stage_family(tmp_path, SCRIPT, TEMPLATE) / "family_summary.json").read_text(
-            encoding="utf-8"
-        )
-    )
+    summary = json.loads((stage_family(tmp_path, SCRIPT, TEMPLATE) / "family_summary.json").read_text(encoding="utf-8"))
     assert summary["family_id"] == "fam_a"
     assert summary["rank"] == 4
     assert summary["condition_number"] > 0
@@ -86,9 +74,7 @@ def test_summary_reports_rank_and_condition_number(tmp_path):
 
 def test_diagnostics_include_per_sample_leverage(tmp_path):
     require_r("DESeq2")
-    rows = read_tsv_rows(
-        stage_family(tmp_path, SCRIPT, TEMPLATE) / "tables" / "design_diagnostics.tsv"
-    )
+    rows = read_tsv_rows(stage_family(tmp_path, SCRIPT, TEMPLATE) / "tables" / "design_diagnostics.tsv")
     leverage = [row for row in rows if row["metric"] == "leverage"]
     assert leverage
     assert all(0.0 <= float(row["value"]) <= 1.0 + 1e-9 for row in leverage)
@@ -96,24 +82,17 @@ def test_diagnostics_include_per_sample_leverage(tmp_path):
 
 def test_cell_sizes_are_reported(tmp_path):
     require_r("DESeq2")
-    rows = read_tsv_rows(
-        stage_family(tmp_path, SCRIPT, TEMPLATE) / "tables" / "design_diagnostics.tsv"
-    )
+    rows = read_tsv_rows(stage_family(tmp_path, SCRIPT, TEMPLATE) / "tables" / "design_diagnostics.tsv")
     cells = [row for row in rows if row["metric"] == "cell_size"]
     assert len(cells) == 4
 
 
 def test_covariance_export_is_symmetric(tmp_path):
     require_r("DESeq2")
-    rows = read_tsv_rows(
-        stage_family(tmp_path, SCRIPT, TEMPLATE) / "tables" / "coefficient_covariance.tsv"
-    )
+    rows = read_tsv_rows(stage_family(tmp_path, SCRIPT, TEMPLATE) / "tables" / "coefficient_covariance.tsv")
     assert rows
     lookup = {
-        (row["gene_id"], row["coefficient_row"], row["coefficient_col"]): float(
-            row["covariance"]
-        )
-        for row in rows
+        (row["gene_id"], row["coefficient_row"], row["coefficient_col"]): float(row["covariance"]) for row in rows
     }
     gene = rows[0]["gene_id"]
     pairs = [(r, c) for (g, r, c) in lookup if g == gene]
@@ -136,10 +115,7 @@ def test_covariance_matches_deseq2_lfcse(tmp_path):
     # Load coefficient covariance
     cov_rows = read_tsv_rows(outdir / "tables" / "coefficient_covariance.tsv")
     # Load contrast matrix
-    contrast_rows = {
-        r["estimand_id"]: r
-        for r in read_tsv_rows(outdir / "tables" / "contrast_matrix.tsv")
-    }
+    contrast_rows = {r["estimand_id"]: r for r in read_tsv_rows(outdir / "tables" / "contrast_matrix.tsv")}
 
     # Find a single-coefficient estimand (one with exactly one ±1 in the contrast vector)
     # est_arm_a1 should be a simple contrast
@@ -148,7 +124,9 @@ def test_covariance_matches_deseq2_lfcse(tmp_path):
 
     # Extract contrast vector (all coefficient columns)
     coefficient_names = [
-        k for k in contrast.keys() if k not in {"estimand_id", "label", "role", "atom_kind", "expression", "cell_weights"}
+        k
+        for k in contrast.keys()
+        if k not in {"estimand_id", "label", "role", "atom_kind", "expression", "cell_weights"}
     ]
     contrast_vector = {name: float(contrast[name]) for name in coefficient_names}
 
@@ -191,10 +169,7 @@ for (gene_id in genes) {{
 
     # Build covariance matrix per gene and compute sqrt(c'Σc)
     cov_lookup = {
-        (row["gene_id"], row["coefficient_row"], row["coefficient_col"]): float(
-            row["covariance"]
-        )
-        for row in cov_rows
+        (row["gene_id"], row["coefficient_row"], row["coefficient_col"]): float(row["covariance"]) for row in cov_rows
     }
 
     discrepancies = []
@@ -230,15 +205,8 @@ def test_an_unbalanced_nuisance_design_still_fits(tmp_path):
         scenario="unbalanced_nuisance",
         design="~ factor_a * factor_b + nuisance_z",
     )
-    rows = {
-        r["estimand_id"]: r
-        for r in read_tsv_rows(outdir / "tables" / "contrast_matrix.tsv")
-    }
-    nuisance = {
-        key: float(value)
-        for key, value in rows["est_interaction"].items()
-        if key.startswith("nuisance_z")
-    }
+    rows = {r["estimand_id"]: r for r in read_tsv_rows(outdir / "tables" / "contrast_matrix.tsv")}
+    nuisance = {key: float(value) for key, value in rows["est_interaction"].items() if key.startswith("nuisance_z")}
     assert nuisance
     assert all(value == 0.0 for value in nuisance.values())
 

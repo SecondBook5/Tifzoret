@@ -21,9 +21,7 @@ def _run_r(body: str, tmp_path: Path) -> dict:
         f'source("{(SCRIPTS / "estimands.R").as_posix()}")\n' + body,
         encoding="utf-8",
     )
-    result = subprocess.run(
-        ["Rscript", "--vanilla", str(script)], capture_output=True, text=True, cwd=tmp_path
-    )
+    result = subprocess.run(["Rscript", "--vanilla", str(script)], capture_output=True, text=True, cwd=tmp_path)
     assert result.returncode == 0, result.stderr
     return json.loads((tmp_path / "out.json").read_text(encoding="utf-8"))
 
@@ -80,8 +78,8 @@ def test_condition_palette_falls_back_for_levels_the_palette_does_not_name(tmp_p
         'known <- condition_palette(cfg, c("b_x", "a_x"))\n'
         'unknown <- suppressWarnings(condition_palette(cfg, c("control", "treated")))\n'
         'warned <- tryCatch({condition_palette(cfg, "control"); FALSE}, warning = function(w) TRUE)\n'
-        'jsonlite::write_json(list(known = known, known_names = names(known), unknown = unknown,\n'
-        '                          unknown_names = names(unknown), warned = warned),\n'
+        "jsonlite::write_json(list(known = known, known_names = names(known), unknown = unknown,\n"
+        "                          unknown_names = names(unknown), warned = warned),\n"
         '                     "out.json", auto_unbox = FALSE)\n',
         tmp_path,
     )

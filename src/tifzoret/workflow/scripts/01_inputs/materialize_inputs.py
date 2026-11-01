@@ -65,9 +65,7 @@ def extracted_archive_bams(project: ResolvedProject) -> Iterator[tuple[Path, ...
     assert project.archive is not None
     member_root = project.config["inputs"].get("member_root", "").strip("/\\")
     declared = [
-        safe_archive_member(
-            f"{member_root}/{row['bam'].strip()}" if member_root else row["bam"].strip()
-        )
+        safe_archive_member(f"{member_root}/{row['bam'].strip()}" if member_root else row["bam"].strip())
         for row in project.sample_rows
     ]
     if len(declared) != len(set(declared)):
@@ -112,9 +110,7 @@ def extracted_archive_bams(project: ResolvedProject) -> Iterator[tuple[Path, ...
                             target.write(block)
                     extracted.append(destination)
         else:
-            raise RuntimeError(
-                f"unsupported archive format for {project.archive}; expected ZIP or TAR"
-            )
+            raise RuntimeError(f"unsupported archive format for {project.archive}; expected ZIP or TAR")
         yield tuple(extracted)
 
 
@@ -163,9 +159,7 @@ def materialize_estimands(
     write_tsv(term_tests_output, list(TERM_TEST_FIELDS), [dict(r) for r in project.term_test_rows])
 
 
-def materialize_companion(
-    base: Path, raw_value: Any, validated: dict[str, Any] | None, output: str | None
-) -> None:
+def materialize_companion(base: Path, raw_value: Any, validated: dict[str, Any] | None, output: str | None) -> None:
     """Stage a companion document (hypotheses/panels/recipe) into the inputs dir.
 
     ``raw_value`` is the entry as it appears in the project configuration: a path
@@ -219,7 +213,10 @@ def materialize_count_matrix(
 
 
 def materialize_rsem(
-    project: ResolvedProject, counts_output: Path, annotation_output: Path, bundle_output: Path,
+    project: ResolvedProject,
+    counts_output: Path,
+    annotation_output: Path,
+    bundle_output: Path,
 ) -> dict[str, object]:
     """Import validated gene-level RSEM files through tximport in an R process.
 
@@ -256,37 +253,64 @@ def materialize_rsem(
         # Create the ordered source manifest consumed by tximport.
         source_manifest = Path(temporary) / "samples.tsv"
         # Preserve the validated sample-to-file mapping.
-        write_tsv(source_manifest, ["sample_id", "rsem"], [
-            {"sample_id": row["sample_id"], "rsem": str(path)}
-            for row, path in zip(project.sample_rows, project.rsem_paths, strict=True)
-        ])
+        write_tsv(
+            source_manifest,
+            ["sample_id", "rsem"],
+            [
+                {"sample_id": row["sample_id"], "rsem": str(path)}
+                for row, path in zip(project.sample_rows, project.rsem_paths, strict=True)
+            ],
+        )
         # Serialize import options separately from scientific metadata.
         options = Path(temporary) / "settings.json"
         options.write_text(json.dumps(settings), encoding="utf-8")
         # Run the actual package adapter and propagate import failures.
-        subprocess.run([rscript, "--vanilla", str(Path(__file__).with_name("import_rsem.R")),
-                        str(source_manifest), str(options), str(counts_output), str(bundle_output)], check=True)
+        subprocess.run(
+            [
+                rscript,
+                "--vanilla",
+                str(Path(__file__).with_name("import_rsem.R")),
+                str(source_manifest),
+                str(options),
+                str(counts_output),
+                str(bundle_output),
+            ],
+            check=True,
+        )
     # Copy the pinned annotation without inventing gene symbols.
     shutil.copyfile(project.annotation, annotation_output)
     # List every additional canonical artifact for provenance and verification.
-    artifacts = [bundle_output, *(bundle_output.parent / name for name in (
-        "rsem_expected_counts.tsv", "rsem_effective_lengths.tsv", "rsem_tpm.tsv",
-        "rsem_gene_universe.tsv", "rsem_import_receipt.json",
-        "rsem_model_lengths.tsv", "rsem_length_adjustments.tsv"))]
+    artifacts = [
+        bundle_output,
+        *(
+            bundle_output.parent / name
+            for name in (
+                "rsem_expected_counts.tsv",
+                "rsem_effective_lengths.tsv",
+                "rsem_tpm.tsv",
+                "rsem_gene_universe.tsv",
+                "rsem_import_receipt.json",
+                "rsem_model_lengths.tsv",
+                "rsem_length_adjustments.tsv",
+            )
+        ),
+    ]
     # Require all declared import artifacts before declaring the boundary complete.
     if any(not path.is_file() for path in artifacts):
         raise RuntimeError("RSEM import did not produce its complete artifact contract")
     # Return exact source and output hashes alongside import semantics.
-    return {"kind": "rsem", "settings": settings,
-            "selected_samples": [row["sample_id"] for row in project.sample_rows],
-            "source_files": [{"path": str(path), "bytes": path.stat().st_size, "sha256": sha256(path)}
-                             for path in project.source_files],
-            "quantification_artifacts": [{"path": str(path), "sha256": sha256(path)} for path in artifacts]}
+    return {
+        "kind": "rsem",
+        "settings": settings,
+        "selected_samples": [row["sample_id"] for row in project.sample_rows],
+        "source_files": [
+            {"path": str(path), "bytes": path.stat().st_size, "sha256": sha256(path)} for path in project.source_files
+        ],
+        "quantification_artifacts": [{"path": str(path), "sha256": sha256(path)} for path in artifacts],
+    }
 
 
-def featurecounts_command(
-    project: ResolvedProject, output: Path, mode: int
-) -> list[str]:
+def featurecounts_command(project: ResolvedProject, output: Path, mode: int) -> list[str]:
     """Build the featureCounts argument list for strand ``mode`` from the counting config and BAM paths."""
     assert project.gtf is not None
     counting = project.config["counting"]
@@ -331,15 +355,11 @@ def run_featurecounts(project: ResolvedProject, output: Path, mode: int) -> str:
         check=False,
     )
     if result.returncode:
-        raise RuntimeError(
-            f"featureCounts failed in strand mode {mode}:\n{result.stdout}\n{result.stderr}"
-        )
+        raise RuntimeError(f"featureCounts failed in strand mode {mode}:\n{result.stdout}\n{result.stderr}")
     return result.stdout + result.stderr
 
 
-def infer_strand_mode(
-    project: ResolvedProject, temporary: Path
-) -> tuple[int, dict[int, float], Path, str, float]:
+def infer_strand_mode(project: ResolvedProject, temporary: Path) -> tuple[int, dict[int, float], Path, str, float]:
     """Infer the strand mode by running featureCounts across the configured test modes.
 
     Choose forward or reverse when directional assignment dominance meets the configured
@@ -365,9 +385,7 @@ def infer_strand_mode(
         if values:
             means[int(mode)] = sum(values) / len(values)
     if not {1, 2}.issubset(means):
-        raise RuntimeError(
-            "strandedness inference requires featureCounts assignment rates for modes 1 and 2"
-        )
+        raise RuntimeError("strandedness inference requires featureCounts assignment rates for modes 1 and 2")
     directional_total = means[1] + means[2]
     dominance = max(means[1], means[2]) / directional_total if directional_total else 0.0
     threshold = float(project.config["counting"]["strand_min_dominance"])
@@ -624,15 +642,17 @@ def write_annotation(
         rows = []
         for gene_id in gene_ids:
             record = annotations.get(gene_id, annotations.get(re.sub(r"\.\d+$", "", gene_id), {}))
-            rows.append({
-                "gene_id": gene_id,
-                "gene_symbol": record.get("gene_symbol", gene_id),
-                "seqname": record.get("seqname", ""),
-                "start": record.get("start", ""),
-                "end": record.get("end", ""),
-                "strand": record.get("strand", ""),
-                "gene_biotype": record.get("gene_biotype", ""),
-            })
+            rows.append(
+                {
+                    "gene_id": gene_id,
+                    "gene_symbol": record.get("gene_symbol", gene_id),
+                    "seqname": record.get("seqname", ""),
+                    "start": record.get("start", ""),
+                    "end": record.get("end", ""),
+                    "strand": record.get("strand", ""),
+                    "gene_biotype": record.get("gene_biotype", ""),
+                }
+            )
         write_tsv(output, ANNOTATION_BASE_FIELDS, rows)
         return
 
@@ -656,18 +676,20 @@ def write_annotation(
             counts["provisional"] += 1
         else:
             counts["accession_retained"] += 1
-        rows.append({
-            "gene_id": gene_id,
-            "gene_symbol": symbol,
-            "seqname": record.get("seqname", ""),
-            "start": record.get("start", ""),
-            "end": record.get("end", ""),
-            "strand": record.get("strand", ""),
-            "gene_biotype": record.get("gene_biotype", ""),
-            "symbol_source": source,
-            "provisional_name": provisional_name,
-            "provisional": "TRUE" if provisional else "FALSE",
-        })
+        rows.append(
+            {
+                "gene_id": gene_id,
+                "gene_symbol": symbol,
+                "seqname": record.get("seqname", ""),
+                "start": record.get("start", ""),
+                "end": record.get("end", ""),
+                "strand": record.get("strand", ""),
+                "gene_biotype": record.get("gene_biotype", ""),
+                "symbol_source": source,
+                "provisional_name": provisional_name,
+                "provisional": "TRUE" if provisional else "FALSE",
+            }
+        )
     write_tsv(output, [*ANNOTATION_BASE_FIELDS, *ANNOTATION_RESOLUTION_FIELDS], rows)
     print(
         f"[symbol-resolution] {len(gene_ids)} genes: gtf={counts['gtf']} "
@@ -687,9 +709,7 @@ def bam_record(sample_id: str, path: Path) -> dict[str, object]:
     )
     if quickcheck.returncode:
         raise RuntimeError(f"samtools quickcheck failed for {path}: {quickcheck.stderr}")
-    header = subprocess.run(
-        ["samtools", "view", "-H", str(path)], text=True, capture_output=True, check=True
-    ).stdout
+    header = subprocess.run(["samtools", "view", "-H", str(path)], text=True, capture_output=True, check=True).stdout
     sort_match = re.search(r"^@HD\t.*(?:^|\t)SO:([^\t\n]+)", header, flags=re.MULTILINE)
     sort_order = sort_match.group(1) if sort_match else None
     if sort_order not in {"coordinate", "unknown"}:
@@ -713,6 +733,7 @@ def counting_fingerprint(project: ResolvedProject) -> str:
     The BAMs (path, size, modification time), the GTF, the counting settings and the featureCounts
     version. Edits elsewhere in project.yaml (design, contrasts, modules, figures, hypotheses) do not
     change it, so they never trigger a recount of hours of BAM reading."""
+
     def stamp(path: Path) -> dict[str, object]:
         info = Path(path).stat()
         return {"path": str(path), "bytes": info.st_size, "mtime_ns": info.st_mtime_ns}
@@ -751,17 +772,30 @@ def load_counting_cache(cache_dir: Path, workdir: Path):
         return None
 
 
-def save_counting_cache(cache_dir: Path, mode: int, strand_rates: dict[int, float],
-                        raw_counts: Path, final_log: str, dominance: float | None) -> None:
+def save_counting_cache(
+    cache_dir: Path,
+    mode: int,
+    strand_rates: dict[int, float],
+    raw_counts: Path,
+    final_log: str,
+    dominance: float | None,
+) -> None:
     """Store the raw featureCounts result so a later run can skip the BAM reading."""
     staging = cache_dir.with_name(cache_dir.name + ".partial")
     shutil.rmtree(staging, ignore_errors=True)
     staging.mkdir(parents=True)
     shutil.copyfile(raw_counts, staging / "featurecounts.tsv")
-    (staging / "meta.json").write_text(json.dumps({
-        "mode": mode, "strand_rates": {str(key): value for key, value in strand_rates.items()},
-        "final_log": final_log, "strand_dominance": dominance,
-    }), encoding="utf-8")
+    (staging / "meta.json").write_text(
+        json.dumps(
+            {
+                "mode": mode,
+                "strand_rates": {str(key): value for key, value in strand_rates.items()},
+                "final_log": final_log,
+                "strand_dominance": dominance,
+            }
+        ),
+        encoding="utf-8",
+    )
     shutil.rmtree(cache_dir, ignore_errors=True)
     staging.rename(cache_dir)
 
@@ -794,10 +828,7 @@ def materialize_bams(
     """
     assert project.gtf is not None
     sample_ids = [row["sample_id"] for row in project.sample_rows]
-    records = [
-        bam_record(sample_id, bam)
-        for sample_id, bam in zip(sample_ids, project.bam_paths, strict=True)
-    ]
+    records = [bam_record(sample_id, bam) for sample_id, bam in zip(sample_ids, project.bam_paths, strict=True)]
     with tempfile.TemporaryDirectory(prefix="tifzoret-") as directory:
         temporary = Path(directory)
         configured = project.config["counting"]["strandedness"]
@@ -807,13 +838,13 @@ def materialize_bams(
         cached = load_counting_cache(cache_dir, temporary)
         if cached is not None:
             mode, strand_rates, raw_counts, final_log, strand_dominance = cached
-            print(f"reusing the cached featureCounts result {cache_dir} "
-                  "(set TIFZORET_RECOUNT=1 to count again)", file=sys.stderr)
+            print(
+                f"reusing the cached featureCounts result {cache_dir} " "(set TIFZORET_RECOUNT=1 to count again)",
+                file=sys.stderr,
+            )
         else:
             if configured == "infer":
-                mode, strand_rates, raw_counts, final_log, strand_dominance = infer_strand_mode(
-                    project, temporary
-                )
+                mode, strand_rates, raw_counts, final_log, strand_dominance = infer_strand_mode(project, temporary)
             else:
                 mode = STRAND_MODES[configured]
                 raw_counts = temporary / "featurecounts.tsv"
@@ -821,14 +852,8 @@ def materialize_bams(
             # Save before parsing so a later parse problem never costs the counting again.
             save_counting_cache(cache_dir, mode, strand_rates, raw_counts, final_log, strand_dominance)
         gene_ids, canonical, lengths = parse_featurecounts(raw_counts, project, counts_output)
-    write_annotation(
-        project.gtf, gene_ids, annotation_output, resolution=_symbol_resolution_settings(project)
-    )
-    abundance = (
-        write_abundance(canonical, sample_ids, lengths, abundance_outputs)
-        if abundance_outputs
-        else None
-    )
+    write_annotation(project.gtf, gene_ids, annotation_output, resolution=_symbol_resolution_settings(project))
+    abundance = write_abundance(canonical, sample_ids, lengths, abundance_outputs) if abundance_outputs else None
     return {
         "kind": project.source_kind,
         "upstream": "nf-core/rnaseq" if project.source_kind == "nfcore_rnaseq" else "aligned BAM files",
@@ -864,14 +889,11 @@ def materialize_archive(
     assert project.archive is not None
     member_root = project.config["inputs"].get("member_root", "").strip("/\\")
     member_names = [
-        f"{member_root}/{row['bam'].strip()}" if member_root else row["bam"].strip()
-        for row in project.sample_rows
+        f"{member_root}/{row['bam'].strip()}" if member_root else row["bam"].strip() for row in project.sample_rows
     ]
     with extracted_archive_bams(project) as bams:
         extracted_project = replace(project, source_root=bams[0].parent, bam_paths=bams)
-        provenance = materialize_bams(
-            extracted_project, counts_output, annotation_output, abundance_outputs
-        )
+        provenance = materialize_bams(extracted_project, counts_output, annotation_output, abundance_outputs)
     provenance["kind"] = "archive"
     provenance["upstream"] = "archive containing aligned BAM files"
     provenance["archive"] = {
@@ -927,25 +949,25 @@ def main() -> None:
     term_tests_output = Path(args.term_tests).resolve()
     manifest_output = Path(args.manifest).resolve()
     for output in (
-        counts_output, samples_output, annotation_output, contrasts_output,
-        families_output, estimands_output, cell_weights_output, term_tests_output,
+        counts_output,
+        samples_output,
+        annotation_output,
+        contrasts_output,
+        families_output,
+        estimands_output,
+        cell_weights_output,
+        term_tests_output,
         manifest_output,
     ):
         output.parent.mkdir(parents=True, exist_ok=True)
 
     materialize_samples(project, samples_output)
     materialize_contrasts(project, contrasts_output)
-    materialize_estimands(
-        project, families_output, estimands_output, cell_weights_output, term_tests_output
-    )
+    materialize_estimands(project, families_output, estimands_output, cell_weights_output, term_tests_output)
     companion_base = project.config_path.parent
     hypotheses_block = project.config.get("hypotheses", {})
-    materialize_companion(
-        companion_base, hypotheses_block.get("panels"), project.panel_config, args.panels
-    )
-    materialize_companion(
-        companion_base, hypotheses_block.get("claims"), project.hypothesis_config, args.claims
-    )
+    materialize_companion(companion_base, hypotheses_block.get("panels"), project.panel_config, args.panels)
+    materialize_companion(companion_base, hypotheses_block.get("claims"), project.hypothesis_config, args.claims)
     materialize_companion(
         companion_base,
         project.config.get("publication", {}).get("recipe"),
@@ -975,13 +997,9 @@ def main() -> None:
         # Import through the shared length-aware boundary.
         provenance = materialize_rsem(project, counts_output, annotation_output, Path(args.tximport).resolve())
     elif project.source_kind == "archive":
-        provenance = materialize_archive(
-            project, counts_output, annotation_output, abundance_outputs
-        )
+        provenance = materialize_archive(project, counts_output, annotation_output, abundance_outputs)
     else:
-        provenance = materialize_bams(
-            project, counts_output, annotation_output, abundance_outputs
-        )
+        provenance = materialize_bams(project, counts_output, annotation_output, abundance_outputs)
     manifest = {
         "schema_version": 2,
         "project_id": project.project_id,

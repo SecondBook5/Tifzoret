@@ -93,10 +93,15 @@ def _compare_tsv(reference: Path, candidate: Path, *, atol: float, rtol: float) 
             differences.append({"kind": "missing_rows", "count": len(missing), "first": missing[:10]})
         if extra:
             differences.append({"kind": "extra_rows", "count": len(extra), "first": extra[:10]})
-        pairs = ((row_key, reference_map[row_key], candidate_map[row_key]) for row_key in sorted(set(reference_map) & set(candidate_map)))
+        pairs = (
+            (row_key, reference_map[row_key], candidate_map[row_key])
+            for row_key in sorted(set(reference_map) & set(candidate_map))
+        )
     else:
         if len(reference_rows) != len(candidate_rows):
-            differences.append({"kind": "row_count", "reference": len(reference_rows), "candidate": len(candidate_rows)})
+            differences.append(
+                {"kind": "row_count", "reference": len(reference_rows), "candidate": len(candidate_rows)}
+            )
         pairs = ((str(index + 2), a, b) for index, (a, b) in enumerate(zip(reference_rows, candidate_rows)))
     differing_cells = 0
     examples: list[dict[str, str]] = []
@@ -106,18 +111,22 @@ def _compare_tsv(reference: Path, candidate: Path, *, atol: float, rtol: float) 
             if not _numeric_equal(reference_row[column], candidate_row[column], atol=atol, rtol=rtol):
                 differing_cells += 1
                 if len(examples) < 20:
-                    examples.append({
-                        "row": row_key,
-                        "column": column,
-                        "reference": reference_row[column],
-                        "candidate": candidate_row[column],
-                    })
+                    examples.append(
+                        {
+                            "row": row_key,
+                            "column": column,
+                            "reference": reference_row[column],
+                            "candidate": candidate_row[column],
+                        }
+                    )
     if differing_cells:
         differences.append({"kind": "cells", "count": differing_cells, "examples": examples})
     return {"passed": not differences, "differences": differences}
 
 
-def verify_runs(reference: str | Path, candidate: str | Path, *, atol: float = 1e-8, rtol: float = 1e-6) -> VerificationResult:
+def verify_runs(
+    reference: str | Path, candidate: str | Path, *, atol: float = 1e-8, rtol: float = 1e-6
+) -> VerificationResult:
     """Compare every TSV under two run directories cell-by-cell within tolerances.
 
     Matches tables by their path relative to each run root, reports any table
@@ -130,14 +139,8 @@ def verify_runs(reference: str | Path, candidate: str | Path, *, atol: float = 1
     if not reference_root.is_dir() or not candidate_root.is_dir():
         missing = [str(path) for path in (reference_root, candidate_root) if not path.is_dir()]
         return VerificationResult(False, {"passed": False, "error": "run directory missing", "paths": missing})
-    reference_tables = {
-        path.relative_to(reference_root): path
-        for path in reference_root.rglob("*.tsv")
-    }
-    candidate_tables = {
-        path.relative_to(candidate_root): path
-        for path in candidate_root.rglob("*.tsv")
-    }
+    reference_tables = {path.relative_to(reference_root): path for path in reference_root.rglob("*.tsv")}
+    candidate_tables = {path.relative_to(candidate_root): path for path in candidate_root.rglob("*.tsv")}
     missing = sorted(str(path) for path in set(reference_tables) - set(candidate_tables))
     extra = sorted(str(path) for path in set(candidate_tables) - set(reference_tables))
     comparisons: dict[str, Any] = {}
@@ -168,17 +171,9 @@ def _verify_legacy_counts(project: ResolvedProject, reference: Path, candidate: 
     old_header, old_rows = _read_tsv_comments(old_path)
     new_header, new_rows = _read_tsv(new_path)
     sample_ids = [row["sample_id"] for row in project.sample_rows]
-    bam_to_sample = {
-        Path(row.get("bam", "")).name: row["sample_id"]
-        for row in project.sample_rows
-        if row.get("bam")
-    }
+    bam_to_sample = {Path(row.get("bam", "")).name: row["sample_id"] for row in project.sample_rows if row.get("bam")}
     old_columns = [column for column in old_header if column not in FEATURECOUNTS_FIELDS]
-    mapping = {
-        column: bam_to_sample[Path(column).name]
-        for column in old_columns
-        if Path(column).name in bam_to_sample
-    }
+    mapping = {column: bam_to_sample[Path(column).name] for column in old_columns if Path(column).name in bam_to_sample}
     if set(mapping.values()) != set(sample_ids):
         return {
             "passed": False,
@@ -311,7 +306,11 @@ def _verify_figure_contract(candidate: Path) -> dict[str, Any]:
             missing_pairs.append(str(pdf.relative_to(candidate)))
         try:
             reader = PdfReader(str(pdf))
-            if not reader.pages or float(reader.pages[0].mediabox.width) <= 0 or float(reader.pages[0].mediabox.height) <= 0:
+            if (
+                not reader.pages
+                or float(reader.pages[0].mediabox.width) <= 0
+                or float(reader.pages[0].mediabox.height) <= 0
+            ):
                 invalid.append(str(pdf.relative_to(candidate)))
         except Exception as error:  # malformed PDFs must be reported, not abort verification
             invalid.append(f"{pdf.relative_to(candidate)}: {error}")

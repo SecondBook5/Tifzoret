@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from _factorial_support import build_fixture, fixtures, read_tsv_rows
+from _factorial_support import fixtures, read_tsv_rows
 
 ROOT = Path(__file__).resolve().parents[1]
 

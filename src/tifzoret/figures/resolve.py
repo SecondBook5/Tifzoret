@@ -31,7 +31,15 @@ def resolve_panel(project: "ResolvedProject", panel: dict[str, Any]) -> Resolved
         source = _under_results(project, panel["source"])
         source = source.with_suffix("") if source.suffix.lower() in {".pdf", ".png"} else source
         displayed = [_under_results(project, value) for value in panel.get("displayed_data", [])]
-        return ResolvedPanel(None, panel.get("variant"), panel.get("contrast"), panel.get("title", "Legacy source panel"), source, tuple(displayed), None)
+        return ResolvedPanel(
+            None,
+            panel.get("variant"),
+            panel.get("contrast"),
+            panel.get("title", "Legacy source panel"),
+            source,
+            tuple(displayed),
+            None,
+        )
 
     constructor = PANEL_REGISTRY[constructor_id]
     variant_id = panel.get("variant", constructor.default_variant)

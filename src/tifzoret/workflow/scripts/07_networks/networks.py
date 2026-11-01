@@ -217,9 +217,19 @@ def repelled_label_positions(
 
 
 NODE_FIELDS = [
-    "gene_symbol", "preferredName", "stringId", "queryItem", "seed_group",
-    "log2_fold_change", "padj", "stat", "leading_edge_frequency",
-    "degree", "degree_centrality", "betweenness_centrality", "community",
+    "gene_symbol",
+    "preferredName",
+    "stringId",
+    "queryItem",
+    "seed_group",
+    "log2_fold_change",
+    "padj",
+    "stat",
+    "leading_edge_frequency",
+    "degree",
+    "degree_centrality",
+    "betweenness_centrality",
+    "community",
 ]
 
 
@@ -258,11 +268,19 @@ def network_for_direction(
         }
         for symbol in symbols
     ]
-    mapping = parse_response(cached_post(
-        "get_string_ids",
-        {"identifiers": "\r".join(symbols), "species": taxonomy, "limit": 1, "echo_query": 1},
-        cache_dir, offline, refresh,
-    )) if symbols else []
+    mapping = (
+        parse_response(
+            cached_post(
+                "get_string_ids",
+                {"identifiers": "\r".join(symbols), "species": taxonomy, "limit": 1, "echo_query": 1},
+                cache_dir,
+                offline,
+                refresh,
+            )
+        )
+        if symbols
+        else []
+    )
     mapping_by_query = {row.get("queryItem", ""): row for row in mapping}
     for row in input_rows:
         mapped = mapping_by_query.get(row["gene_symbol"])
@@ -293,13 +311,20 @@ def network_for_direction(
             continue
         score = float(row.get("score", 0))
         graph.add_edge(source, target, score=score)
-        edge_rows.append({
-            "source": source, "target": target, "combined_score": score,
-            "neighborhood_score": row.get("nscore", ""), "fusion_score": row.get("fscore", ""),
-            "cooccurrence_score": row.get("pscore", ""), "coexpression_score": row.get("ascore", ""),
-            "experimental_score": row.get("escore", ""), "database_score": row.get("dscore", ""),
-            "textmining_score": row.get("tscore", ""),
-        })
+        edge_rows.append(
+            {
+                "source": source,
+                "target": target,
+                "combined_score": score,
+                "neighborhood_score": row.get("nscore", ""),
+                "fusion_score": row.get("fscore", ""),
+                "cooccurrence_score": row.get("pscore", ""),
+                "coexpression_score": row.get("ascore", ""),
+                "experimental_score": row.get("escore", ""),
+                "database_score": row.get("dscore", ""),
+                "textmining_score": row.get("tscore", ""),
+            }
+        )
     communities: dict[str, int] = {}
     if graph.number_of_edges():
         groups = nx.community.louvain_communities(graph, weight="score", seed=seed)
@@ -315,21 +340,23 @@ def network_for_direction(
             continue
         name = row["preferred_name"]
         in_graph = name in graph
-        node_rows.append({
-            "gene_symbol": row["gene_symbol"],
-            "preferredName": name,
-            "stringId": row["string_id"],
-            "queryItem": row["gene_symbol"],
-            "seed_group": seed_group,
-            "log2_fold_change": row["log2_fold_change"],
-            "padj": row["padj"],
-            "stat": row["stat"],
-            "leading_edge_frequency": "",
-            "degree": graph.degree(name) if in_graph else 0,
-            "degree_centrality": degree.get(name, 0.0),
-            "betweenness_centrality": betweenness.get(name, 0.0),
-            "community": communities.get(name, 0),
-        })
+        node_rows.append(
+            {
+                "gene_symbol": row["gene_symbol"],
+                "preferredName": name,
+                "stringId": row["string_id"],
+                "queryItem": row["gene_symbol"],
+                "seed_group": seed_group,
+                "log2_fold_change": row["log2_fold_change"],
+                "padj": row["padj"],
+                "stat": row["stat"],
+                "leading_edge_frequency": "",
+                "degree": graph.degree(name) if in_graph else 0,
+                "degree_centrality": degree.get(name, 0.0),
+                "betweenness_centrality": betweenness.get(name, 0.0),
+                "community": communities.get(name, 0),
+            }
+        )
     node_rows.sort(key=lambda r: (-int(r["degree"]), r["preferredName"]))
     connected = set(graph)
     for row in input_rows:
@@ -341,43 +368,120 @@ def network_for_direction(
     display_graph = graph.subgraph(selected).copy()
     display_nodes = [row for row in node_rows if row["preferredName"] in display_graph]
     display_edges = [row for row in edge_rows if row["source"] in display_graph and row["target"] in display_graph]
-    write_tsv(tables / f"string_{prefix}_input_genes.tsv", ["gene_symbol", "direction", "log2_fold_change", "mapped", "string_id", "preferred_name", "connected"], input_rows)
-    write_tsv(tables / f"string_{prefix}_unmapped_genes.tsv", ["gene_symbol", "direction", "log2_fold_change", "mapped", "string_id", "preferred_name", "connected"], unmapped)
-    write_tsv(tables / f"string_{prefix}_unconnected_genes.tsv", ["gene_symbol", "direction", "log2_fold_change", "mapped", "string_id", "preferred_name", "connected"], unconnected)
+    write_tsv(
+        tables / f"string_{prefix}_input_genes.tsv",
+        ["gene_symbol", "direction", "log2_fold_change", "mapped", "string_id", "preferred_name", "connected"],
+        input_rows,
+    )
+    write_tsv(
+        tables / f"string_{prefix}_unmapped_genes.tsv",
+        ["gene_symbol", "direction", "log2_fold_change", "mapped", "string_id", "preferred_name", "connected"],
+        unmapped,
+    )
+    write_tsv(
+        tables / f"string_{prefix}_unconnected_genes.tsv",
+        ["gene_symbol", "direction", "log2_fold_change", "mapped", "string_id", "preferred_name", "connected"],
+        unconnected,
+    )
     write_tsv(tables / f"string_{prefix}_nodes.tsv", NODE_FIELDS, node_rows)
-    write_tsv(tables / f"string_{prefix}_edges.tsv", ["source", "target", "combined_score", "neighborhood_score", "fusion_score", "cooccurrence_score", "coexpression_score", "experimental_score", "database_score", "textmining_score"], edge_rows)
+    write_tsv(
+        tables / f"string_{prefix}_edges.tsv",
+        [
+            "source",
+            "target",
+            "combined_score",
+            "neighborhood_score",
+            "fusion_score",
+            "cooccurrence_score",
+            "coexpression_score",
+            "experimental_score",
+            "database_score",
+            "textmining_score",
+        ],
+        edge_rows,
+    )
     write_tsv(tables / f"string_{prefix}_nodes_displayed.tsv", NODE_FIELDS, display_nodes)
-    write_tsv(tables / f"string_{prefix}_edges_displayed.tsv", ["source", "target", "combined_score", "neighborhood_score", "fusion_score", "cooccurrence_score", "coexpression_score", "experimental_score", "database_score", "textmining_score"], display_edges)
+    write_tsv(
+        tables / f"string_{prefix}_edges_displayed.tsv",
+        [
+            "source",
+            "target",
+            "combined_score",
+            "neighborhood_score",
+            "fusion_score",
+            "cooccurrence_score",
+            "coexpression_score",
+            "experimental_score",
+            "database_score",
+            "textmining_score",
+        ],
+        display_edges,
+    )
 
     stem = figures / f"string_{prefix}_network"
     if not display_graph.number_of_edges():
         empty_plot(stem, f"STRING {prefix}regulated network", "No connected STRING subnetwork")
     else:
-        positions = nx.spring_layout(display_graph, seed=seed, weight="score", k=1.4 / math.sqrt(max(len(display_graph), 1)))
+        positions = nx.spring_layout(
+            display_graph, seed=seed, weight="score", k=1.4 / math.sqrt(max(len(display_graph), 1))
+        )
         values = [effect.get(node, 0.0) for node in display_graph]
         limit = max(max(abs(value) for value in values), 1e-6)
         figure, axis = plt.subplots(figsize=(8.2, 7.0))
-        nx.draw_networkx_edges(display_graph, positions, width=[0.4 + 2.6 * display_graph.edges[edge]["score"] for edge in display_graph.edges], alpha=0.32, edge_color="#6C92AE", ax=axis)
-        nodes = nx.draw_networkx_nodes(display_graph, positions, node_color=values, cmap="coolwarm", vmin=-limit, vmax=limit, node_size=[80 + 24 * display_graph.degree(node) for node in display_graph], edgecolors="white", linewidths=0.6, ax=axis)
-        labels = sorted(display_graph, key=lambda node: (-display_graph.degree(node), node))[: min(15, len(display_graph))]
+        nx.draw_networkx_edges(
+            display_graph,
+            positions,
+            width=[0.4 + 2.6 * display_graph.edges[edge]["score"] for edge in display_graph.edges],
+            alpha=0.32,
+            edge_color="#6C92AE",
+            ax=axis,
+        )
+        nodes = nx.draw_networkx_nodes(
+            display_graph,
+            positions,
+            node_color=values,
+            cmap="coolwarm",
+            vmin=-limit,
+            vmax=limit,
+            node_size=[80 + 24 * display_graph.degree(node) for node in display_graph],
+            edgecolors="white",
+            linewidths=0.6,
+            ax=axis,
+        )
+        labels = sorted(display_graph, key=lambda node: (-display_graph.degree(node), node))[
+            : min(15, len(display_graph))
+        ]
         label_positions = repelled_label_positions(positions, labels)
         for node in labels:
             axis.annotate(
-                node, xy=positions[node], xytext=label_positions[node], fontsize=6.5,
-                color="#183B56", ha="center", va="center",
+                node,
+                xy=positions[node],
+                xytext=label_positions[node],
+                fontsize=6.5,
+                color="#183B56",
+                ha="center",
+                va="center",
                 arrowprops={"arrowstyle": "-", "color": "#9FB4C3", "lw": 0.35, "alpha": 0.7},
                 zorder=5,
             )
         figure.colorbar(nodes, ax=axis, shrink=0.55, label="log2 fold-change")
         figure.suptitle(
-            f"STRING {prefix}regulated interaction network", x=0.08, y=0.975,
-            ha="left", weight="bold", color="#183B56", fontsize=15,
+            f"STRING {prefix}regulated interaction network",
+            x=0.08,
+            y=0.975,
+            ha="left",
+            weight="bold",
+            color="#183B56",
+            fontsize=15,
         )
         figure.text(
-            0.08, 0.935,
+            0.08,
+            0.935,
             f"Full graph: {graph.number_of_nodes()} nodes, {graph.number_of_edges()} edges; "
             f"display: {display_graph.number_of_nodes()} nodes; 15 highest-degree labels",
-            ha="left", color="#697783", fontsize=8,
+            ha="left",
+            color="#697783",
+            fontsize=8,
         )
         axis.margins(0.14)
         axis.axis("off")
@@ -386,35 +490,55 @@ def network_for_direction(
         figure.savefig(stem.with_suffix(".png"), dpi=300, bbox_inches="tight")
         plt.close(figure)
     return {
-        "direction": direction, "input_genes": len(input_rows), "mapped": len(input_rows) - len(unmapped),
-        "unmapped": len(unmapped), "unconnected": len(unconnected), "nodes": graph.number_of_nodes(),
-        "edges": graph.number_of_edges(), "communities": len(set(communities.values())),
-        "display_nodes": len(display_graph), "network_api_calls": network_api_calls,
+        "direction": direction,
+        "input_genes": len(input_rows),
+        "mapped": len(input_rows) - len(unmapped),
+        "unmapped": len(unmapped),
+        "unconnected": len(unconnected),
+        "nodes": graph.number_of_nodes(),
+        "edges": graph.number_of_edges(),
+        "communities": len(set(communities.values())),
+        "display_nodes": len(display_graph),
+        "network_api_calls": network_api_calls,
         "network_batch_size": STRING_NETWORK_BATCH_SIZE,
     }
 
 
-def enrichment_panel(genes: list[str], taxonomy: int, cache_dir: Path, offline: bool, refresh: bool, tables: Path, figures: Path) -> int:
+def enrichment_panel(
+    genes: list[str], taxonomy: int, cache_dir: Path, offline: bool, refresh: bool, tables: Path, figures: Path
+) -> int:
     """Run STRING functional enrichment on ``genes`` and render the term dot plot.
 
     Normalise FDR to -log10, write the full and displayed enrichment tables, plot a
     deterministic category-balanced, de-duplicated set of up to 24 terms, and return
     the count of returned terms."""
-    rows = parse_response(cached_post(
-        "enrichment", {"identifiers": "\r".join(genes), "species": taxonomy}, cache_dir, offline, refresh
-    )) if genes else []
+    rows = (
+        parse_response(
+            cached_post(
+                "enrichment", {"identifiers": "\r".join(genes), "species": taxonomy}, cache_dir, offline, refresh
+            )
+        )
+        if genes
+        else []
+    )
     normalized = []
     for row in rows:
         try:
             fdr = float(row.get("fdr", "nan"))
         except ValueError:
             continue
-        normalized.append({
-            "category": row.get("category", ""), "term": row.get("term", ""),
-            "description": row.get("description", ""), "gene_count": row.get("number_of_genes", ""),
-            "background_count": row.get("number_of_genes_in_background", ""), "fdr": fdr,
-            "negative_log10_fdr": -math.log10(max(fdr, 1e-300)), "input_genes": row.get("inputGenes", ""),
-        })
+        normalized.append(
+            {
+                "category": row.get("category", ""),
+                "term": row.get("term", ""),
+                "description": row.get("description", ""),
+                "gene_count": row.get("number_of_genes", ""),
+                "background_count": row.get("number_of_genes_in_background", ""),
+                "fdr": fdr,
+                "negative_log10_fdr": -math.log10(max(fdr, 1e-300)),
+                "input_genes": row.get("inputGenes", ""),
+            }
+        )
     normalized.sort(key=lambda row: (row["category"], row["fdr"]))
     displayed = []
     by_category: dict[str, list[dict[str, Any]]] = {}
@@ -444,7 +568,16 @@ def enrichment_panel(genes: list[str], taxonomy: int, cache_dir: Path, offline: 
         if len(displayed) == 24:
             break
     displayed.sort(key=lambda row: (row["category"], row["fdr"]))
-    fields = ["category", "term", "description", "gene_count", "background_count", "fdr", "negative_log10_fdr", "input_genes"]
+    fields = [
+        "category",
+        "term",
+        "description",
+        "gene_count",
+        "background_count",
+        "fdr",
+        "negative_log10_fdr",
+        "input_genes",
+    ]
     write_tsv(tables / "string_enrichment.tsv", fields, normalized)
     write_tsv(tables / "string_enrichment_displayed.tsv", fields, displayed)
     stem = figures / "string_enrichment"
@@ -590,9 +723,17 @@ def select_string_seed_symbols(
 
 
 ENRICHMENT_FIELDS = [
-    "category", "term", "number_of_genes", "number_of_genes_in_background",
-    "ncbiTaxonId", "inputGenes", "preferredNames", "p_value", "fdr",
-    "description", "seed_group",
+    "category",
+    "term",
+    "number_of_genes",
+    "number_of_genes_in_background",
+    "ncbiTaxonId",
+    "inputGenes",
+    "preferredNames",
+    "p_value",
+    "fdr",
+    "description",
+    "seed_group",
 ]
 
 SEED_FIELDS = ["gene_symbol", "seed_group", "leading_edge_frequency"]
@@ -604,11 +745,15 @@ def map_symbols_to_ids(
     """Map gene symbols to STRING identifiers via the cached ``get_string_ids`` endpoint."""
     if not symbols:
         return []
-    return parse_response(cached_post(
-        "get_string_ids",
-        {"identifiers": "\r".join(symbols), "species": taxonomy, "limit": 1, "echo_query": 1},
-        cache_dir, offline, refresh,
-    ))
+    return parse_response(
+        cached_post(
+            "get_string_ids",
+            {"identifiers": "\r".join(symbols), "species": taxonomy, "limit": 1, "echo_query": 1},
+            cache_dir,
+            offline,
+            refresh,
+        )
+    )
 
 
 def directional_enrichment(
@@ -629,9 +774,15 @@ def directional_enrichment(
     """
     mapping = map_symbols_to_ids(seed_symbols, taxonomy, cache_dir, offline, refresh)
     string_ids = list(dict.fromkeys(row.get("stringId", "") for row in mapping if row.get("stringId")))
-    rows = parse_response(cached_post(
-        "enrichment", {"identifiers": "\r".join(string_ids), "species": taxonomy}, cache_dir, offline, refresh
-    )) if string_ids else []
+    rows = (
+        parse_response(
+            cached_post(
+                "enrichment", {"identifiers": "\r".join(string_ids), "species": taxonomy}, cache_dir, offline, refresh
+            )
+        )
+        if string_ids
+        else []
+    )
     for row in rows:
         row["seed_group"] = seed_group
     write_tsv(tables / f"string_{seed_group}_enrichment.tsv", ENRICHMENT_FIELDS, rows)
@@ -699,23 +850,51 @@ def main() -> None:
     summaries = []
     for seed_group, direction in (("up", "up_in_numerator"), ("down", "down_in_numerator")):
         genes = [de_by_symbol[symbol] for symbol in seeds[seed_group] if symbol in de_by_symbol]
-        summaries.append(network_for_direction(seed_group, direction, genes, taxonomy, seed_required_score, max_nodes, seed, cache_dir, offline, refresh, tables, figures))
-    all_genes = list(dict.fromkeys(row["gene_symbol"] for row in de if row.get("direction") != "not_significant" and row.get("gene_symbol")))
+        summaries.append(
+            network_for_direction(
+                seed_group,
+                direction,
+                genes,
+                taxonomy,
+                seed_required_score,
+                max_nodes,
+                seed,
+                cache_dir,
+                offline,
+                refresh,
+                tables,
+                figures,
+            )
+        )
+    all_genes = list(
+        dict.fromkeys(
+            row["gene_symbol"] for row in de if row.get("direction") != "not_significant" and row.get("gene_symbol")
+        )
+    )
     enrichment_terms = enrichment_panel(all_genes, taxonomy, cache_dir, offline, refresh, tables, figures)
 
     # Directional STRING enrichment on the same seed sets, emitted per group in
     # the bespoke schema for the R renderer.
     seed_summaries = [
         directional_enrichment(
-            seeds[group], seeds["leading_edge_frequency"] if group == "leading_edge" else {},
-            group, taxonomy, cache_dir, offline, refresh, tables,
+            seeds[group],
+            seeds["leading_edge_frequency"] if group == "leading_edge" else {},
+            group,
+            taxonomy,
+            cache_dir,
+            offline,
+            refresh,
+            tables,
         )
         for group in ("up", "down", "leading_edge")
     ]
 
     summary = {
-        "schema_version": 3, "contrast_id": args.contrast_id, "taxonomy_id": taxonomy,
-        "required_score": required_score, "network_required_score": seed_required_score,
+        "schema_version": 3,
+        "contrast_id": args.contrast_id,
+        "taxonomy_id": taxonomy,
+        "required_score": required_score,
+        "network_required_score": seed_required_score,
         "display_node_limit": max_nodes,
         "selection_policy": (
             f"up/down STRING networks are induced on the top-{seed_max} directional seed sets "
@@ -728,11 +907,15 @@ def main() -> None:
             f"significant DE genes (adjusted_p_value < {seed_fdr}) by padj then |log2FC|; "
             "leading_edge = union of leading edges of the six most significant GMT fgsea pathways, frequency-ranked"
         ),
-        "seed_fdr": seed_fdr, "seed_max_nodes": seed_max,
-        "directions": summaries, "enrichment_terms": enrichment_terms,
+        "seed_fdr": seed_fdr,
+        "seed_max_nodes": seed_max,
+        "directions": summaries,
+        "enrichment_terms": enrichment_terms,
         "seed_enrichment": seed_summaries,
         "random_seed": seed,
-        "warnings": ["STRING edges represent functional/physical association evidence and are not regulatory or causal edges."],
+        "warnings": [
+            "STRING edges represent functional/physical association evidence and are not regulatory or causal edges."
+        ],
     }
     (outdir / "networks_summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
 

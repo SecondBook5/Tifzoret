@@ -7,15 +7,7 @@ import sys
 from pathlib import Path
 
 
-SCRIPT = (
-    Path(__file__).parents[2]
-    / "src"
-    / "tifzoret"
-    / "workflow"
-    / "scripts"
-    / "07_networks"
-    / "multilayer.py"
-)
+SCRIPT = Path(__file__).parents[2] / "src" / "tifzoret" / "workflow" / "scripts" / "07_networks" / "multilayer.py"
 
 
 def write_tsv(path: Path, fields: list[str], rows: list[dict[str, object]]) -> None:

@@ -39,9 +39,7 @@ def test_figures_init_scaffolds_programs_and_constructor_recipe(tmp_path):
     assert main(["figures", "init", str(project_path)]) == 0
     project = load_project(project_path)
     assert "publication" in project.modules
-    assert project.panel_config["programs"]["program_1"]["genes"] == [
-        "REPLACE_WITH_GENE_SYMBOLS"
-    ]
+    assert project.panel_config["programs"]["program_1"]["genes"] == ["REPLACE_WITH_GENE_SYMBOLS"]
     panel = project.recipe_config["figure_sets"]["primary"]["panels"][2]
     assert panel["constructor"] == "de_heatmap"
     assert panel["variant"] == "global_clustered"
@@ -115,13 +113,20 @@ def test_gallery_and_assembly_stage_auditable_panel_artifacts(tmp_path):
     command = [
         sys.executable,
         str(ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "10_figures" / "assemble.py"),
-        "--project-config", str(project_path),
-        "--results", str(project.result_root),
-        "--figure-set", "primary",
-        "--pdf", str(assembled / "assembled" / "primary.pdf"),
-        "--png", str(assembled / "assembled" / "primary.png"),
-        "--metadata", str(assembled / "assembled" / "assembly.json"),
-        "--panel-index", str(assembled / "panels" / "index.json"),
+        "--project-config",
+        str(project_path),
+        "--results",
+        str(project.result_root),
+        "--figure-set",
+        "primary",
+        "--pdf",
+        str(assembled / "assembled" / "primary.pdf"),
+        "--png",
+        str(assembled / "assembled" / "primary.png"),
+        "--metadata",
+        str(assembled / "assembled" / "assembly.json"),
+        "--panel-index",
+        str(assembled / "panels" / "index.json"),
     ]
     subprocess.run(command, check=True)
     index = json.loads((assembled / "panels" / "index.json").read_text())

@@ -104,8 +104,7 @@ def test_bam_adapters_run_featurecounts(tmp_path, kind):
             ]
         )
     (tmp_path / "contrasts.tsv").write_text(
-        "contrast_id\tfactor\tnumerator\tdenominator\n"
-        "treated_vs_control\tcondition\ttreated\tcontrol\n"
+        "contrast_id\tfactor\tnumerator\tdenominator\n" "treated_vs_control\tcondition\ttreated\tcontrol\n"
     )
     (tmp_path / "sets.gmt").write_text("fixture\tfixture\tGeneOne\tUnusedGene\n")
     inputs = {

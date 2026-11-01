@@ -3,6 +3,7 @@ line in its frozen lock. This guards the invariant the locks/README states:
 "if a YAML pin and its lock disagree, the YAML was changed without refreshing
 the lock" — exactly the loose end that opt-in module deps introduced.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -60,6 +61,5 @@ def test_root_environment_is_a_superset_of_the_per_rule_envs():
             missing[spec_name] = absent
     assert not missing, (
         "environment.yaml is missing per-rule dependencies (the --no-conda union "
-        "env must be a superset):\n  "
-        + "\n  ".join(f"{k}: {', '.join(v)}" for k, v in missing.items())
+        "env must be a superset):\n  " + "\n  ".join(f"{k}: {', '.join(v)}" for k, v in missing.items())
     )

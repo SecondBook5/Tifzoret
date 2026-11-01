@@ -36,9 +36,7 @@ def _resolve(base: Path, value: str) -> Path:
     unresolved = re.findall(r"\$\{([^}]+)\}|\$([A-Za-z_][A-Za-z0-9_]*)", expanded)
     if unresolved:
         names = sorted({left or right for left, right in unresolved})
-        raise ProjectValidationError(
-            f"required environment variable(s) are not set: {', '.join(names)}"
-        )
+        raise ProjectValidationError(f"required environment variable(s) are not set: {', '.join(names)}")
     candidate = Path(expanded)
     return (candidate if candidate.is_absolute() else base / candidate).resolve()
 

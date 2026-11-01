@@ -12,15 +12,34 @@ PROFILE_MODULES: dict[str, frozenset[str]] = {
     "standard": frozenset({"qc", "de", "pathways", "ontology", "report"}),
     "publication": frozenset(
         {
-            "qc", "de", "pathways", "ontology", "composition", "regulators",
-            "networks", "hypotheses", "publication", "report",
+            "qc",
+            "de",
+            "pathways",
+            "ontology",
+            "composition",
+            "regulators",
+            "networks",
+            "hypotheses",
+            "publication",
+            "report",
         }
     ),
     "full": frozenset(
         {
-            "qc", "de", "pathways", "ontology", "composition", "regulators",
-            "networks", "hypotheses", "publication", "report", "sva", "wgcna",
-            "mediation", "multilayer",
+            "qc",
+            "de",
+            "pathways",
+            "ontology",
+            "composition",
+            "regulators",
+            "networks",
+            "hypotheses",
+            "publication",
+            "report",
+            "sva",
+            "wgcna",
+            "mediation",
+            "multilayer",
         }
     ),
 }
@@ -32,10 +51,19 @@ PROFILE_MODULES: dict[str, frozenset[str]] = {
 # direction consensus; spia: signed pathway-topology impact; variance_partition:
 # variance explained per design covariate; enrichment_map: term-similarity map;
 # factorial: interaction views (effect-vs-effect, profile, four-group expression).
-OPT_IN_MODULES = frozenset({
-    "batch", "de_confirm", "deconvolution", "curvature",
-    "consensus", "spia", "variance_partition", "enrichment_map", "factorial",
-})
+OPT_IN_MODULES = frozenset(
+    {
+        "batch",
+        "de_confirm",
+        "deconvolution",
+        "curvature",
+        "consensus",
+        "spia",
+        "variance_partition",
+        "enrichment_map",
+        "factorial",
+    }
+)
 ALL_MODULES = frozenset().union(*PROFILE_MODULES.values()) | OPT_IN_MODULES
 
 

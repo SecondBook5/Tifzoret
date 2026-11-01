@@ -1,4 +1,5 @@
 """Exercise the RSEM boundary, normalization preservation, and failure gates."""
+
 from __future__ import annotations
 
 import csv
@@ -32,11 +33,18 @@ def prepare_boundary(study: Path) -> None:
     project = load_project(study)
     out = project.result_root / "inputs"
     args = [sys.executable, str(MATERIALIZE), "--project-config", str(study)]
-    for argument, filename in [("counts", "counts.tsv"), ("samples", "samples.tsv"),
-                               ("annotation", "annotation.tsv"), ("contrasts", "contrasts.tsv"),
-                               ("families", "families.tsv"), ("estimands", "estimands.tsv"),
-                               ("cell-weights", "estimand_cell_weights.tsv"), ("term-tests", "term_tests.tsv"),
-                               ("manifest", "input_manifest.json"), ("tximport", "tximport.rds")]:
+    for argument, filename in [
+        ("counts", "counts.tsv"),
+        ("samples", "samples.tsv"),
+        ("annotation", "annotation.tsv"),
+        ("contrasts", "contrasts.tsv"),
+        ("families", "families.tsv"),
+        ("estimands", "estimands.tsv"),
+        ("cell-weights", "estimand_cell_weights.tsv"),
+        ("term-tests", "term_tests.tsv"),
+        ("manifest", "input_manifest.json"),
+        ("tximport", "tximport.rds"),
+    ]:
         args.extend(["--" + argument, str(out / filename)])
     subprocess.run(args, check=True, capture_output=True, text=True)
 
@@ -50,7 +58,9 @@ def test_rsem_validation_preserves_order_and_sources(study: Path) -> None:
     assert [path.stem for path in project.rsem_paths] == [row["sample_id"] + ".genes" for row in project.sample_rows]
 
 
-@pytest.mark.parametrize("corruption", ["duplicate_path", "negative_count", "missing_column", "gene_order", "missing_file"])
+@pytest.mark.parametrize(
+    "corruption", ["duplicate_path", "negative_count", "missing_column", "gene_order", "missing_file"]
+)
 def test_rsem_rejects_malformed_sources(study: Path, corruption: str) -> None:
     """Fail on source identity and numeric defects before any downstream work."""
     project = load_project(study)
@@ -143,10 +153,22 @@ def test_rsem_dag_declares_bundle_dependency(study: Path) -> None:
     if shutil.which("snakemake") is None:
         pytest.skip("Snakemake unavailable")
     env = dict(os.environ, PYTHONPATH=str(ROOT / "src"))
-    result = subprocess.run(["snakemake", "--snakefile", str(ROOT / "src/tifzoret/workflow/Snakefile"),
-                             "--configfile", str(study), "--cores", "1", "--dry-run",
-                             str(load_project(study).result_root / "manifest.json")],
-                            capture_output=True, text=True, env=env)
+    result = subprocess.run(
+        [
+            "snakemake",
+            "--snakefile",
+            str(ROOT / "src/tifzoret/workflow/Snakefile"),
+            "--configfile",
+            str(study),
+            "--cores",
+            "1",
+            "--dry-run",
+            str(load_project(study).result_root / "manifest.json"),
+        ],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
     assert result.returncode == 0, result.stdout + result.stderr
     assert "tximport.rds" in result.stdout
     assert "rsem_effective_lengths.tsv" in result.stdout
@@ -212,8 +234,9 @@ def test_count_threshold_comparator_is_exact(study: Path, operator: str, retaine
             writer.writeheader()
             writer.writerows(rows)
     cfg = yaml.safe_load(study.read_text())
-    cfg["inputs"].update(min_total_count=len(project.sample_rows), count_threshold_operator=operator,
-                          exclude_gene_regex="^g002$")
+    cfg["inputs"].update(
+        min_total_count=len(project.sample_rows), count_threshold_operator=operator, exclude_gene_regex="^g002$"
+    )
     study.write_text(yaml.safe_dump(cfg))
     prepare_boundary(study)
     with (project.result_root / "inputs/counts.tsv").open() as handle:
@@ -226,10 +249,15 @@ def test_boundary_only_resources_and_explicit_families(study: Path) -> None:
     """Preparation needs no invented pathways or duplicate legacy contrasts."""
     cfg = yaml.safe_load(study.read_text())
     cfg["analysis"]["modules"] = {"pathways": False, "ontology": False, "de": False, "report": False}
-    cfg["analysis"]["families"] = {"response": {
-        "design": "~ condition", "cells": ["condition"], "filter": "none", "shrinkage": "none",
-        "estimands": [{"id": "response", "role": "primary", "expression": "(treatment_a) - (control)"}],
-    }}
+    cfg["analysis"]["families"] = {
+        "response": {
+            "design": "~ condition",
+            "cells": ["condition"],
+            "filter": "none",
+            "shrinkage": "none",
+            "estimands": [{"id": "response", "role": "primary", "expression": "(treatment_a) - (control)"}],
+        }
+    }
     study.write_text(yaml.safe_dump(cfg))
     (study.parent / "gene_sets.gmt").write_text("")
     (study.parent / "contrasts.tsv").write_text("contrast_id\tfactor\tnumerator\tdenominator\n")
@@ -250,12 +278,15 @@ def test_provider_backed_study_allows_empty_custom_gmt(study: Path) -> None:
 def test_declared_pairwise_labels_survive_materialization(study: Path) -> None:
     """The enrichment seam must retain levels, type and family design."""
     cfg = yaml.safe_load(study.read_text())
-    cfg["analysis"]["families"] = {"response": {
-        "design": "~ batch + condition", "cells": ["condition"],
-        "filter": "none", "shrinkage": "none",
-        "estimands": [{"id": "response", "role": "primary",
-                       "expression": "(treatment_a) - (control)"}],
-    }}
+    cfg["analysis"]["families"] = {
+        "response": {
+            "design": "~ batch + condition",
+            "cells": ["condition"],
+            "filter": "none",
+            "shrinkage": "none",
+            "estimands": [{"id": "response", "role": "primary", "expression": "(treatment_a) - (control)"}],
+        }
+    }
     (study.parent / "contrasts.tsv").write_text("contrast_id\tfactor\tnumerator\tdenominator\n")
     study.write_text(yaml.safe_dump(cfg))
     prepare_boundary(study)

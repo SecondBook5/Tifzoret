@@ -63,9 +63,7 @@ def test_large_network_requests_cover_all_chunk_pairs_without_pruning(tmp_path, 
 
     monkeypatch.setattr(NETWORKS, "cached_post", fake_cached_post)
     identifiers = [f"protein_{index}" for index in range(7)]
-    rows, api_calls = NETWORKS.fetch_induced_network(
-        identifiers, 10090, 700, tmp_path, False, False, batch_size=3
-    )
+    rows, api_calls = NETWORKS.fetch_induced_network(identifiers, 10090, 700, tmp_path, False, False, batch_size=3)
 
     assert api_calls == 6  # three chunks: all i <= j combinations
     assert all(len(call) <= 6 for call in calls)
@@ -109,6 +107,7 @@ def test_cached_post_retries_on_transient_failures(tmp_path, monkeypatch):
 
 def test_cached_post_fails_with_provider_named_error_after_max_attempts(tmp_path, monkeypatch):
     """Verify that cached_post raises a STRING-named error after exhausting retries."""
+
     def fake_urlopen(request, timeout):
         raise NETWORKS.urllib.error.URLError("Persistent network error")
 
@@ -127,7 +126,9 @@ def test_cached_post_fails_with_provider_named_error_after_max_attempts(tmp_path
 
 def test_cached_post_success_path_unchanged(tmp_path, monkeypatch):
     """Verify that successful calls return identical results (behavior preservation)."""
-    payload = b"stringId_A\tstringId_B\tpreferredName_A\tpreferredName_B\tscore\n10090.P1\t10090.P2\tGene1\tGene2\t0.95\n"
+    payload = (
+        b"stringId_A\tstringId_B\tpreferredName_A\tpreferredName_B\tscore\n10090.P1\t10090.P2\tGene1\tGene2\t0.95\n"
+    )
     calls = []
 
     def fake_urlopen(request, timeout):

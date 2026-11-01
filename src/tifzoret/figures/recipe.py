@@ -150,7 +150,14 @@ def initialize_figure_workflow(project_path: str | Path, *, force: bool = False)
                 "panels": [
                     {"id": "A", "constructor": "pca_correlation", "row": 1, "column": 1, "column_span": 2},
                     {"id": "B", "constructor": "volcano", "contrast": first_contrast, "row": 2, "column": 1},
-                    {"id": "C", "constructor": "de_heatmap", "variant": "global_clustered", "contrast": first_contrast, "row": 2, "column": 2},
+                    {
+                        "id": "C",
+                        "constructor": "de_heatmap",
+                        "variant": "global_clustered",
+                        "contrast": first_contrast,
+                        "row": 2,
+                        "column": 2,
+                    },
                 ],
             }
         }

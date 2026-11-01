@@ -9,13 +9,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 TEMPLATE = ROOT / "src" / "tifzoret" / "templates" / "minimal"
-SCRIPT = (
-    ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "01_inputs" / "materialize_inputs.py"
-)
+SCRIPT = ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "01_inputs" / "materialize_inputs.py"
 
 
 def _read(path: Path) -> list[dict[str, str]]:
@@ -31,17 +28,28 @@ def _run(tmp_path: Path) -> Path:
     outputs.mkdir()
     subprocess.run(
         [
-            sys.executable, str(SCRIPT),
-            "--project-config", str(config_path),
-            "--counts", str(outputs / "counts.tsv"),
-            "--samples", str(outputs / "samples.tsv"),
-            "--annotation", str(outputs / "annotation.tsv"),
-            "--contrasts", str(outputs / "contrasts.tsv"),
-            "--families", str(outputs / "families.tsv"),
-            "--estimands", str(outputs / "estimands.tsv"),
-            "--cell-weights", str(outputs / "estimand_cell_weights.tsv"),
-            "--term-tests", str(outputs / "term_tests.tsv"),
-            "--manifest", str(outputs / "input_manifest.json"),
+            sys.executable,
+            str(SCRIPT),
+            "--project-config",
+            str(config_path),
+            "--counts",
+            str(outputs / "counts.tsv"),
+            "--samples",
+            str(outputs / "samples.tsv"),
+            "--annotation",
+            str(outputs / "annotation.tsv"),
+            "--contrasts",
+            str(outputs / "contrasts.tsv"),
+            "--families",
+            str(outputs / "families.tsv"),
+            "--estimands",
+            str(outputs / "estimands.tsv"),
+            "--cell-weights",
+            str(outputs / "estimand_cell_weights.tsv"),
+            "--term-tests",
+            str(outputs / "term_tests.tsv"),
+            "--manifest",
+            str(outputs / "input_manifest.json"),
         ],
         check=True,
         cwd=ROOT,
@@ -52,9 +60,7 @@ def _run(tmp_path: Path) -> Path:
 
 def test_all_four_artifacts_are_written(tmp_path):
     outputs = _run(tmp_path)
-    for name in (
-        "families.tsv", "estimands.tsv", "estimand_cell_weights.tsv", "term_tests.tsv"
-    ):
+    for name in ("families.tsv", "estimands.tsv", "estimand_cell_weights.tsv", "term_tests.tsv"):
         assert (outputs / name).is_file(), name
 
 
@@ -67,8 +73,14 @@ def test_families_table_has_the_documented_header(tmp_path):
     with (outputs / "families.tsv").open(encoding="utf-8") as handle:
         header = handle.readline().strip().split("\t")
     assert header == [
-        "family_id", "design", "cells", "reference_levels",
-        "replicate_unit", "shrinkage", "filter", "declared",
+        "family_id",
+        "design",
+        "cells",
+        "reference_levels",
+        "replicate_unit",
+        "shrinkage",
+        "filter",
+        "declared",
     ]
 
 

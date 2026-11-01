@@ -65,9 +65,7 @@ def load_collection(config_path: str | Path) -> ResolvedCollection:
             errors.append(f"study {study['id']}: {error}")
             continue
         if study["contrast"] not in {row["contrast_id"] for row in project.contrast_rows}:
-            errors.append(
-                f"study {study['id']}: contrast {study['contrast']!r} is absent from project"
-            )
+            errors.append(f"study {study['id']}: contrast {study['contrast']!r} is absent from project")
         projects.append(project)
     if errors:
         raise ProjectValidationError("\n".join(errors))
@@ -90,9 +88,7 @@ def collection_report(collection: ResolvedCollection) -> str:
                 "project": str(project.config_path),
                 "contrast": study["contrast"],
             }
-            for study, project in zip(
-                collection.config["studies"], collection.projects, strict=True
-            )
+            for study, project in zip(collection.config["studies"], collection.projects, strict=True)
         ],
         "output": str(collection.result_root),
     }

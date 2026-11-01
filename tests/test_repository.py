@@ -92,8 +92,8 @@ def test_all_figure_contracts_declare_pdf_and_png():
         "gsva_heatmap",
         "gsea_curves",
     ):
-        assert f'{stem}.pdf' in snakefile
-        assert f'{stem}.png' in snakefile
+        assert f"{stem}.pdf" in snakefile
+        assert f"{stem}.png" in snakefile
 
 
 def test_r_scripts_parse():

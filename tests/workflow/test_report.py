@@ -13,8 +13,6 @@ import json
 import re
 from pathlib import Path
 
-import pytest
-
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "src" / "tifzoret" / "workflow" / "scripts" / "10_figures" / "report.py"
@@ -85,7 +83,7 @@ def test_report_is_self_contained_and_offline():
 
 def test_report_escapes_html_in_title():
     """A title with angle brackets/quotes is escaped, never injected as raw markup."""
-    doc = report.render(_minimal_payload(), '</title><script>alert(1)</script>')
+    doc = report.render(_minimal_payload(), "</title><script>alert(1)</script>")
     assert "<script>alert(1)</script>" not in doc
     assert "&lt;script&gt;alert(1)" in doc
 

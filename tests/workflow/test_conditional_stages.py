@@ -43,7 +43,9 @@ def _has_rscript_package(package: str) -> bool | str:
     try:
         subprocess.run(
             ["Rscript", "-e", f"library({package})"],
-            check=True, capture_output=True, timeout=120,
+            check=True,
+            capture_output=True,
+            timeout=120,
         )
         return True
     except subprocess.TimeoutExpired:
@@ -58,29 +60,41 @@ def _run_family_de_factorial(tmp_path: Path, estimand_id: str, scenario: str = "
     Returns the output directory containing de_results.tsv.
     """
     # Use stage_family to get a proper family fit with the factorial fixture.
-    family_dir = stage_family(
-        tmp_path,
-        FAMILY_FIT_R,
-        TEMPLATE,
-        scenario=scenario
-    )
+    family_dir = stage_family(tmp_path, FAMILY_FIT_R, TEMPLATE, scenario=scenario)
 
     # Extract the specified estimand.
     fixture = tmp_path / "fx"
     de_outdir = tmp_path / "de"
     result = subprocess.run(
-        ["Rscript", "--vanilla", str(ESTIMAND_R),
-         "--project-config", str(tmp_path / "project" / "project.yaml"),
-         "--counts", str(fixture / "counts.tsv"),
-         "--samples", str(fixture / "samples.tsv"),
-         "--annotation", str(fixture / "annotation.tsv"),
-         "--families", str(tmp_path / "families.tsv"),
-         "--estimands", str(tmp_path / "estimands.tsv"),
-         "--cell-weights", str(tmp_path / "estimand_cell_weights.tsv"),
-         "--family-dir", str(family_dir),
-         "--estimand-id", estimand_id,
-         "--outdir", str(de_outdir)],
-        capture_output=True, text=True, cwd=tmp_path)
+        [
+            "Rscript",
+            "--vanilla",
+            str(ESTIMAND_R),
+            "--project-config",
+            str(tmp_path / "project" / "project.yaml"),
+            "--counts",
+            str(fixture / "counts.tsv"),
+            "--samples",
+            str(fixture / "samples.tsv"),
+            "--annotation",
+            str(fixture / "annotation.tsv"),
+            "--families",
+            str(tmp_path / "families.tsv"),
+            "--estimands",
+            str(tmp_path / "estimands.tsv"),
+            "--cell-weights",
+            str(tmp_path / "estimand_cell_weights.tsv"),
+            "--family-dir",
+            str(family_dir),
+            "--estimand-id",
+            estimand_id,
+            "--outdir",
+            str(de_outdir),
+        ],
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+    )
     assert result.returncode == 0, result.stderr
 
     return de_outdir
@@ -99,52 +113,101 @@ def _run_family_de_minimal(tmp_path: Path, estimand_id: str) -> tuple[Path, Path
     # The minimal template's pairwise contrasts all desugar into a single family named "main".
     inputs_dir = tmp_path / "inputs"
     result = subprocess.run(
-        ["python", str(MATERIALIZE_INPUTS),
-         "--project-config", str(project_dir / "project.yaml"),
-         "--counts", str(inputs_dir / "counts.tsv"),
-         "--samples", str(inputs_dir / "samples.tsv"),
-         "--annotation", str(inputs_dir / "annotation.tsv"),
-         "--contrasts", str(inputs_dir / "contrasts.tsv"),
-         "--families", str(inputs_dir / "families.tsv"),
-         "--estimands", str(inputs_dir / "estimands.tsv"),
-         "--cell-weights", str(inputs_dir / "estimand_cell_weights.tsv"),
-         "--term-tests", str(inputs_dir / "term_tests.tsv"),
-         "--manifest", str(inputs_dir / "input_manifest.json"),
-         "--threads", "1"],
-        capture_output=True, text=True, cwd=tmp_path)
+        [
+            "python",
+            str(MATERIALIZE_INPUTS),
+            "--project-config",
+            str(project_dir / "project.yaml"),
+            "--counts",
+            str(inputs_dir / "counts.tsv"),
+            "--samples",
+            str(inputs_dir / "samples.tsv"),
+            "--annotation",
+            str(inputs_dir / "annotation.tsv"),
+            "--contrasts",
+            str(inputs_dir / "contrasts.tsv"),
+            "--families",
+            str(inputs_dir / "families.tsv"),
+            "--estimands",
+            str(inputs_dir / "estimands.tsv"),
+            "--cell-weights",
+            str(inputs_dir / "estimand_cell_weights.tsv"),
+            "--term-tests",
+            str(inputs_dir / "term_tests.tsv"),
+            "--manifest",
+            str(inputs_dir / "input_manifest.json"),
+            "--threads",
+            "1",
+        ],
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+    )
     assert result.returncode == 0, result.stderr
 
     # Run family_fit.R on the desugared family (family_id is "main" for the minimal template)
     family_id = "main"
     family_dir = tmp_path / "families" / family_id
     result = subprocess.run(
-        ["Rscript", "--vanilla", str(FAMILY_FIT_R),
-         "--project-config", str(project_dir / "project.yaml"),
-         "--counts", str(inputs_dir / "counts.tsv"),
-         "--samples", str(inputs_dir / "samples.tsv"),
-         "--families", str(inputs_dir / "families.tsv"),
-         "--estimands", str(inputs_dir / "estimands.tsv"),
-         "--cell-weights", str(inputs_dir / "estimand_cell_weights.tsv"),
-         "--family-id", family_id,
-         "--outdir", str(family_dir)],
-        capture_output=True, text=True, cwd=tmp_path)
+        [
+            "Rscript",
+            "--vanilla",
+            str(FAMILY_FIT_R),
+            "--project-config",
+            str(project_dir / "project.yaml"),
+            "--counts",
+            str(inputs_dir / "counts.tsv"),
+            "--samples",
+            str(inputs_dir / "samples.tsv"),
+            "--families",
+            str(inputs_dir / "families.tsv"),
+            "--estimands",
+            str(inputs_dir / "estimands.tsv"),
+            "--cell-weights",
+            str(inputs_dir / "estimand_cell_weights.tsv"),
+            "--family-id",
+            family_id,
+            "--outdir",
+            str(family_dir),
+        ],
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+    )
     assert result.returncode == 0, result.stderr
 
     # Run estimand.R to produce de_results.tsv
     de_outdir = tmp_path / "de"
     result = subprocess.run(
-        ["Rscript", "--vanilla", str(ESTIMAND_R),
-         "--project-config", str(project_dir / "project.yaml"),
-         "--counts", str(inputs_dir / "counts.tsv"),
-         "--samples", str(inputs_dir / "samples.tsv"),
-         "--annotation", str(inputs_dir / "annotation.tsv"),
-         "--families", str(inputs_dir / "families.tsv"),
-         "--estimands", str(inputs_dir / "estimands.tsv"),
-         "--cell-weights", str(inputs_dir / "estimand_cell_weights.tsv"),
-         "--family-dir", str(family_dir),
-         "--estimand-id", estimand_id,
-         "--outdir", str(de_outdir)],
-        capture_output=True, text=True, cwd=tmp_path)
+        [
+            "Rscript",
+            "--vanilla",
+            str(ESTIMAND_R),
+            "--project-config",
+            str(project_dir / "project.yaml"),
+            "--counts",
+            str(inputs_dir / "counts.tsv"),
+            "--samples",
+            str(inputs_dir / "samples.tsv"),
+            "--annotation",
+            str(inputs_dir / "annotation.tsv"),
+            "--families",
+            str(inputs_dir / "families.tsv"),
+            "--estimands",
+            str(inputs_dir / "estimands.tsv"),
+            "--cell-weights",
+            str(inputs_dir / "estimand_cell_weights.tsv"),
+            "--family-dir",
+            str(family_dir),
+            "--estimand-id",
+            estimand_id,
+            "--outdir",
+            str(de_outdir),
+        ],
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+    )
     assert result.returncode == 0, result.stderr
 
     return de_outdir, project_dir
@@ -178,7 +241,8 @@ def test_deseq2_edger_concordance(tmp_path):
     # Create an R script to run edgeR on the same data and contrast
     fixture = tmp_path / "fx"
     edger_script = tmp_path / "run_edger.R"
-    edger_script.write_text("""
+    edger_script.write_text(
+        """
 library(edgeR)
 
 # Read inputs
@@ -210,16 +274,25 @@ results$gene_id <- rownames(results)
 # Write results
 write.table(results[, c("gene_id", "logFC", "PValue", "FDR")],
             file=outfile, sep="\\t", quote=FALSE, row.names=FALSE)
-""", encoding="utf-8")
+""",
+        encoding="utf-8",
+    )
 
     # Run the edgeR script
     edger_outfile = tmp_path / "edger_results.tsv"
     result = subprocess.run(
-        ["Rscript", "--vanilla", str(edger_script),
-         str(fixture / "counts.tsv"),
-         str(fixture / "samples.tsv"),
-         str(edger_outfile)],
-        capture_output=True, text=True, cwd=tmp_path)
+        [
+            "Rscript",
+            "--vanilla",
+            str(edger_script),
+            str(fixture / "counts.tsv"),
+            str(fixture / "samples.tsv"),
+            str(edger_outfile),
+        ],
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+    )
     assert result.returncode == 0, f"edgeR script failed: {result.stderr}"
 
     # Read edgeR results
@@ -259,9 +332,7 @@ write.table(results[, c("gene_id", "logFC", "PValue", "FDR")],
 
     # Assert that we tested some genes and that concordance is high
     total_tested = lfc_concordant + lfc_discordant
-    assert total_tested > 0, (
-        "No genes with |logFC| > 0.1 in both engines found for concordance test"
-    )
+    assert total_tested > 0, "No genes with |logFC| > 0.1 in both engines found for concordance test"
 
     concordance_rate = lfc_concordant / total_tested if total_tested > 0 else 0
     assert concordance_rate >= 0.8, (
@@ -317,13 +388,21 @@ def test_spia_pathway_topology_analysis(tmp_path):
     spia_outdir = tmp_path / "spia"
     subprocess.run(
         [
-            "Rscript", "--vanilla", str(SPIA_R),
-            "--project-config", str(config_path),
-            "--de", str(de_outdir / "tables" / "de_results.tsv"),
-            "--contrast-id", estimand_id,
-            "--outdir", str(spia_outdir),
+            "Rscript",
+            "--vanilla",
+            str(SPIA_R),
+            "--project-config",
+            str(config_path),
+            "--de",
+            str(de_outdir / "tables" / "de_results.tsv"),
+            "--contrast-id",
+            estimand_id,
+            "--outdir",
+            str(spia_outdir),
         ],
-        check=True, capture_output=True, text=True,
+        check=True,
+        capture_output=True,
+        text=True,
     )
 
     # Assert that the stage produced well-formed outputs (either real results or
@@ -411,27 +490,44 @@ def test_batch_corrected_pca_and_distance(tmp_path):
     qc_outdir = tmp_path / "qc"
     subprocess.run(
         [
-            "Rscript", "--vanilla", str(qc_r),
-            "--project-config", str(config_path),
-            "--counts", str(project_dir / "counts.tsv"),
-            "--samples", str(samples_path),
-            "--annotation", str(project_dir / "annotation.tsv"),
-            "--outdir", str(qc_outdir),
+            "Rscript",
+            "--vanilla",
+            str(qc_r),
+            "--project-config",
+            str(config_path),
+            "--counts",
+            str(project_dir / "counts.tsv"),
+            "--samples",
+            str(samples_path),
+            "--annotation",
+            str(project_dir / "annotation.tsv"),
+            "--outdir",
+            str(qc_outdir),
         ],
-        check=True, capture_output=True, text=True,
+        check=True,
+        capture_output=True,
+        text=True,
     )
 
     # Run batch.R.
     batch_outdir = tmp_path / "batch"
     subprocess.run(
         [
-            "Rscript", "--vanilla", str(BATCH_R),
-            "--project-config", str(config_path),
-            "--vst", str(qc_outdir / "objects" / "vst.rds"),
-            "--samples", str(samples_path),
-            "--outdir", str(batch_outdir),
+            "Rscript",
+            "--vanilla",
+            str(BATCH_R),
+            "--project-config",
+            str(config_path),
+            "--vst",
+            str(qc_outdir / "objects" / "vst.rds"),
+            "--samples",
+            str(samples_path),
+            "--outdir",
+            str(batch_outdir),
         ],
-        check=True, capture_output=True, text=True,
+        check=True,
+        capture_output=True,
+        text=True,
     )
 
     # Assert batch-corrected expression table is produced.

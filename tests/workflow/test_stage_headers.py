@@ -4,6 +4,7 @@ Fields make each file self-locating: its phase, what it does, WHY (the science),
 how, its data in/out, its rule, and its conda env — without reading the body.
 Uses rglob so it is agnostic to whether scripts are flat or already foldered.
 """
+
 from pathlib import Path
 
 SCRIPTS = Path(__file__).resolve().parents[2] / "src" / "tifzoret" / "workflow" / "scripts"

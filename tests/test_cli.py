@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import subprocess
-from pathlib import Path
 from types import SimpleNamespace
 
 from tifzoret.cli import main
@@ -46,9 +45,7 @@ def test_prepare_targets_only_the_canonical_input_manifest(tmp_path, monkeypatch
 
     monkeypatch.setattr("tifzoret.cli.subprocess.run", fake_run)
     assert main(["prepare", str(destination / "project.yaml"), "--no-conda"]) == 0
-    assert observed["command"][-1].endswith(
-        "results/synthetic_demo/all/inputs/input_manifest.json"
-    )
+    assert observed["command"][-1].endswith("results/synthetic_demo/all/inputs/input_manifest.json")
     assert "--dry-run" not in observed["command"]
 
 
@@ -71,16 +68,23 @@ def test_migrate_config_writes_valid_v2(tmp_path):
     assert main(["init", str(destination)]) == 0
     v2 = yaml.safe_load((destination / "project.yaml").read_text())
     v1 = {
-        "version": 1, "project": v2["project"], "inputs": v2["inputs"],
-        "design": {"formula": v2["analysis"]["design"]}, "contrasts": v2["analysis"]["contrasts"],
+        "version": 1,
+        "project": v2["project"],
+        "inputs": v2["inputs"],
+        "design": {"formula": v2["analysis"]["design"]},
+        "contrasts": v2["analysis"]["contrasts"],
         "gene_sets": v2["resources"]["gene_sets"],
         "modules": {"qc": True, "de": True, "pathways": True},
-        "figures": v2["figures"], "output": v2["output"],
+        "figures": v2["figures"],
+        "output": v2["output"],
     }
     source = destination / "v1.yaml"
     source.write_text(yaml.safe_dump(v1, sort_keys=False))
     output = destination / "v2.yaml"
-    assert main(["migrate-config", str(source), "--output", str(output), "--species", "mouse", "--genome-build", "GRCm39"]) == 0
+    assert (
+        main(["migrate-config", str(source), "--output", str(output), "--species", "mouse", "--genome-build", "GRCm39"])
+        == 0
+    )
     assert yaml.safe_load(output.read_text())["version"] == 2
 
 
@@ -96,10 +100,19 @@ def test_verify_uses_project_result_as_candidate(tmp_path):
     (candidate / "counts.tsv").write_text(content)
     (reference / "counts.tsv").write_text(content)
     output = tmp_path / "verification.json"
-    assert main([
-        "verify", str(destination / "project.yaml"), "--reference", str(reference),
-        "--output", str(output),
-    ]) == 0
+    assert (
+        main(
+            [
+                "verify",
+                str(destination / "project.yaml"),
+                "--reference",
+                str(reference),
+                "--output",
+                str(output),
+            ]
+        )
+        == 0
+    )
     assert output.is_file()
 
 

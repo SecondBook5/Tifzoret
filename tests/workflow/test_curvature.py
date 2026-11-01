@@ -70,12 +70,18 @@ def test_curvature_flags_the_bridge_edge_as_negative(tmp_path: Path) -> None:
 
     subprocess.run(
         [
-            sys.executable, str(SCRIPT),
-            "--project-config", str(PROJECT),
-            "--edges", str(edges),
-            "--nodes", str(nodes),
-            "--contrast-id", "treated_vs_control",
-            "--outdir", str(outdir),
+            sys.executable,
+            str(SCRIPT),
+            "--project-config",
+            str(PROJECT),
+            "--edges",
+            str(edges),
+            "--nodes",
+            str(nodes),
+            "--contrast-id",
+            "treated_vs_control",
+            "--outdir",
+            str(outdir),
         ],
         check=True,
     )
