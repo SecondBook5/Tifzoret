@@ -2,7 +2,7 @@
 
 ## 0.1.1
 
-- Code style: `ruff check` is clean on `src/`. One-line `a; b` statements were split onto separate lines (verified by comparing the parsed syntax tree before and after), unused imports and variables were removed, and two lambda assignments became functions; behaviour is unchanged.
+- Code style: `src/` and `tests/` are `ruff check` clean and `ruff format` formatted, configured in `pyproject.toml` (line length 120) and enforced in CI. One-line `a; b` statements were split onto separate lines (verified by comparing the parsed syntax tree before and after), unused imports and variables were removed, and two lambda assignments became functions; behaviour is unchanged.
 - `analysis.settings.de.shrinkage` and the new `analysis.settings.de.filter` now reach the families desugared from `contrasts.tsv`; since the `de.R` retirement nothing read `shrinkage`, and `normal` was accepted by the schema but rejected by the compiler.
 - An estimand that is already a single coefficient of the canonical fit is shrunk in place. Re-deriving it through a releveled refit failed the identity assertion on real data (genes with zero counts in a group have no unique MLE), which silently replaced apeglm with ashr for the whole table.
 - DE summaries and `de_results.tsv` record FDR-significant genes whose displayed (shrunken) effect lies outside their unshrunk 95% interval (`shrinkage_outside_ci`), the signature of an apeglm optimiser failure on zero-count genes, and surface the count as a caveat.
