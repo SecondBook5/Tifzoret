@@ -199,8 +199,11 @@ def main() -> None:
     parser.add_argument("--outdir", required=True)
     args = parser.parse_args()
     project = load_project(args.project_config)
-    outdir = Path(args.outdir).resolve(); tables = outdir / "tables"; figures = outdir / "figures"
-    tables.mkdir(parents=True, exist_ok=True); figures.mkdir(parents=True, exist_ok=True)
+    outdir = Path(args.outdir).resolve()
+    tables = outdir / "tables"
+    figures = outdir / "figures"
+    tables.mkdir(parents=True, exist_ok=True)
+    figures.mkdir(parents=True, exist_ok=True)
     edges = [row for row in read_tsv(Path(args.edges)) if row.get("measured", "").lower() in {"true", "1", "t"}]
     regulator_rows = read_tsv(Path(args.regulators))
     de_rows = read_tsv(Path(args.de))
@@ -331,7 +334,8 @@ def main() -> None:
             program_colors[shared_label] = ((curation or {}).get("shared") or {}).get("colour", "#9A7B43")
             program_colors[peripheral_label] = ((curation or {}).get("peripheral") or {}).get("colour", "#7F8C96")
             for node in main_graph.nodes:
-                a = score_a.get(node, 0.0); b = score_b.get(node, 0.0)
+                a = score_a.get(node, 0.0)
+                b = score_b.get(node, 0.0)
                 probability = a / (a + b) if (a + b) > 0 else 0.5
                 probs[node] = probability
                 if probability >= threshold:
@@ -403,10 +407,12 @@ def main() -> None:
     else:
         observed = program_modularity(undirected, labels)
         rng = random.Random(project.config["analysis"].get("random_seed", 1))
-        nodes = list(undirected); values = [labels.get(node, "Unassigned") for node in nodes]
+        nodes = list(undirected)
+        values = [labels.get(node, "Unassigned") for node in nodes]
         permutations = []
         for _ in range(1000):
-            shuffled = values[:]; rng.shuffle(shuffled)
+            shuffled = values[:]
+            rng.shuffle(shuffled)
             permutations.append(program_modularity(undirected, dict(zip(nodes, shuffled))))
         p_value = (1 + sum(value >= observed for value in permutations)) / (len(permutations) + 1)
         separation = [{"observed_program_modularity": observed, "permutation_p_value": p_value, "permutations": len(permutations), "communities": len(community_members)}]
@@ -440,8 +446,11 @@ def main() -> None:
     nx.draw_networkx_nodes(graph, positions, nodelist=regulators, node_shape="s", node_color=[color_of(labels.get(node, "Unassigned")) for node in regulators], node_size=140, edgecolors="white", ax=axis)
     nx.draw_networkx_nodes(graph, positions, nodelist=targets, node_shape="o", node_color=[color_of(labels.get(node, "Unassigned")) for node in targets], node_size=75, edgecolors="white", ax=axis)
     nx.draw_networkx_labels(graph, positions, font_size=6.2, font_color="#183B56", ax=axis)
-    axis.set_title("Regulator–target network", loc="left", weight="bold", color="#183B56"); axis.axis("off")
-    figure.savefig(figures / "grn_rectangular.pdf", bbox_inches="tight"); figure.savefig(figures / "grn_rectangular.png", dpi=300, bbox_inches="tight"); plt.close(figure)
+    axis.set_title("Regulator–target network", loc="left", weight="bold", color="#183B56")
+    axis.axis("off")
+    figure.savefig(figures / "grn_rectangular.pdf", bbox_inches="tight")
+    figure.savefig(figures / "grn_rectangular.png", dpi=300, bbox_inches="tight")
+    plt.close(figure)
 
     # Legacy compact radial (matplotlib); the publication radial is grn_radial.R.
     ordered_for_radial = [row["program"] for row in sector_rows] or ["Unassigned"]
@@ -467,8 +476,12 @@ def main() -> None:
     nx.draw_networkx_labels(graph, radial_positions, labels={node: node for node in label_nodes}, font_size=6, font_color="#183B56", ax=axis)
     for program, angle in sector_angles.items():
         axis.text(1.22 * math.cos(angle), 1.22 * math.sin(angle), program.replace("_", " "), ha="center", va="center", color=color_of(program), weight="bold", fontsize=8)
-    axis.set_title("Program-aware radial regulator network", loc="left", weight="bold", color="#183B56"); axis.axis("off"); axis.set_aspect("equal")
-    figure.savefig(figures / "grn_radial_legacy.pdf", bbox_inches="tight"); figure.savefig(figures / "grn_radial_legacy.png", dpi=300, bbox_inches="tight"); plt.close(figure)
+    axis.set_title("Program-aware radial regulator network", loc="left", weight="bold", color="#183B56")
+    axis.axis("off")
+    axis.set_aspect("equal")
+    figure.savefig(figures / "grn_radial_legacy.pdf", bbox_inches="tight")
+    figure.savefig(figures / "grn_radial_legacy.png", dpi=300, bbox_inches="tight")
+    plt.close(figure)
 
     (outdir / "grn_summary.json").write_text(json.dumps({
         "schema_version": 2, "contrast_id": args.contrast_id, "displayed_regulators": len(regulators),

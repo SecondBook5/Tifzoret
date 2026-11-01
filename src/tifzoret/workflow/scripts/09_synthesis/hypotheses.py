@@ -88,7 +88,10 @@ def main() -> None:
     claims = [claim for claim in project.hypothesis_config["hypotheses"] if claim["contrast"] == args.contrast_id]
     panels = project.panel_config
     gene_panels = normalized_gene_panels(panels)
-    de_rows = read_tsv(args.de); fgsea_rows = read_tsv(args.fgsea); gsva_rows = read_tsv(args.gsva); regulator_rows = read_tsv(args.regulators)
+    de_rows = read_tsv(args.de)
+    fgsea_rows = read_tsv(args.fgsea)
+    gsva_rows = read_tsv(args.gsva)
+    regulator_rows = read_tsv(args.regulators)
     de = {row.get("gene_symbol", "").upper(): row for row in de_rows}
     fgsea = {row.get("pathway", ""): row for row in fgsea_rows}
     gsva = {row.get("pathway", ""): row for row in gsva_rows}
@@ -118,7 +121,8 @@ def main() -> None:
                 fdr = number(matched.get("padj")) if matched else None
                 source = args.fgsea
                 if matched is None:
-                    matched = gsva.get(item); evidence_type = "gsva"
+                    matched = gsva.get(item)
+                    evidence_type = "gsva"
                     effect = number(matched.get("logFC")) if matched else None
                     fdr = number(matched.get("adj.P.Val")) if matched else None
                     source = args.gsva
@@ -139,7 +143,9 @@ def main() -> None:
                 "support": support(expected, effect), "source": str(Path(args.regulators).resolve()) if args.regulators else "",
             })
     fields = ["hypothesis_id", "evidence_type", "panel", "group", "item", "effect", "fdr", "direction", "support", "source"]
-    outdir = Path(args.outdir).resolve(); tables = outdir / "tables"; tables.mkdir(parents=True, exist_ok=True)
+    outdir = Path(args.outdir).resolve()
+    tables = outdir / "tables"
+    tables.mkdir(parents=True, exist_ok=True)
     write_tsv(tables / "hypothesis_evidence.tsv", fields, evidence)
     summaries = []
     for claim in claims:

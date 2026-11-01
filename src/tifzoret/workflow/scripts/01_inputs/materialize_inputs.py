@@ -16,7 +16,6 @@
 from __future__ import annotations
 
 import argparse
-import csv
 from contextlib import contextmanager
 from dataclasses import replace
 import hashlib

@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)
 ![Snakemake](https://img.shields.io/badge/snakemake-%E2%89%A58-039475.svg)
-![Version](https://img.shields.io/badge/version-0.1.0.dev0-orange.svg)
+![Version](https://img.shields.io/badge/version-0.1.1-blue.svg)
 ![Reproducibility](https://img.shields.io/badge/conda%20envs-pinned%20locks-8A2BE2.svg)
 
 <!--

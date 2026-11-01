@@ -85,14 +85,16 @@ def contig_mismatch_message(bam: Path, gtf: Path) -> str | None:
         bam_names, gtf_names = sorted(bam_main), gtf_main
     elif set(bam_names) & gtf_names:
         return None
-    strip = lambda values: {value[3:] if value.lower().startswith("chr") else value for value in values}
+    def strip(values):
+        return {value[3:] if value.lower().startswith("chr") else value for value in values}
     hint = (
         " They differ only in a 'chr' prefix: add or remove it in the GTF (or use an annotation "
         "built for the same reference as the BAMs)."
         if strip(bam_names) & strip(gtf_names)
         else " Use an annotation built for the same reference as the BAMs."
     )
-    example = lambda values: ", ".join(sorted(values, key=lambda v: (len(v), v))[:3])
+    def example(values):
+        return ", ".join(sorted(values, key=lambda v: (len(v), v))[:3])
     return (
         f"BAM and GTF share no chromosome names, so featureCounts would assign no reads: "
         f"{bam.name} uses {example(bam_names)} ... but {gtf.name} uses {example(gtf_names)} ...."

@@ -652,7 +652,6 @@ def build_payload(project, root: Path) -> dict:
     recipe = getattr(project, "recipe_config", None)
     figures = _collect_figures(root, recipe)
     groups = _collect_tables(root)
-    warnings = _provenance(root).get("warnings", [])
     row_total = sum(t["total"] for g in groups for t in g["tables"])
     try:
         import tifzoret

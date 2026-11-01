@@ -7,6 +7,6 @@ authors:
   - given-names: AJ
     family-names: Book
     orcid: https://orcid.org/0009-0004-7058-7510
-# TODO(before first tagged release): set `version:` + `date-released:` to the
-# tagged release. Kept in step with pyproject.toml.
-version: 0.1.0.dev0
+# `version:` is kept in step with pyproject.toml; update `date-released:` if the tag is cut on another day.
+version: 0.1.1
+date-released: 2026-10-31

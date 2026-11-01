@@ -35,16 +35,20 @@ def normalized_program_observations(expression: pd.DataFrame, annotation: pd.Dat
     ann=annotation[['gene_id','gene_symbol']].copy()
     if not ann.gene_id.is_unique:
         raise ValueError('Annotation gene IDs must be unique')
-    coverage=[];scores=[];seen=set()
+    coverage=[]
+    scores=[]
+    seen=set()
     for name,genes in programs.items():
         if not genes or len(set(genes))!=len(genes) or seen.intersection(genes):
             raise ValueError('Programs must be nonempty with distinct nonoverlapping genes')
-        seen.update(genes);ids=[]
+        seen.update(genes)
+        ids=[]
         for gene in genes:
             selected=ann[ann.gene_symbol.eq(gene)&ann.gene_id.isin(expression.index)]
             if len(selected)!=1:
                 raise ValueError(f'{name}/{gene}: expected exactly one measured mapping, found {len(selected)}')
-            gid=selected.gene_id.iloc[0];ids.append(gid)
+            gid=selected.gene_id.iloc[0]
+            ids.append(gid)
             coverage.append(dict(program=name,gene_symbol=gene,gene_id=gid,nonzero_libraries=int(expression.loc[gid].gt(0).sum()),libraries=len(expression.columns)))
         coordinate=np.log1p(expression.loc[ids].to_numpy(float)).mean(axis=0)
         for library,value in zip(expression.columns,coordinate):

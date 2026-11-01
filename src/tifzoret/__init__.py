@@ -13,7 +13,7 @@ from tifzoret.figures import (
     resolve_panel,
 )
 
-__version__ = "0.1.0.dev0"
+__version__ = "0.1.1"
 
 __all__ = [
     "ProjectValidationError", "ResolvedProject", "load_project", "validation_report",

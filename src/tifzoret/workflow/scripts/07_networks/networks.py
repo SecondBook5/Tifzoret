@@ -666,7 +666,8 @@ def main() -> None:
     project = load_project(args.project_config)
     outdir = Path(args.outdir).resolve()
     tables, figures = outdir / "tables", outdir / "figures"
-    tables.mkdir(parents=True, exist_ok=True); figures.mkdir(parents=True, exist_ok=True)
+    tables.mkdir(parents=True, exist_ok=True)
+    figures.mkdir(parents=True, exist_ok=True)
     de = read_tsv(Path(args.de))
     taxonomy = int(project.config["species"]["taxonomy_id"])
     settings = project.config["analysis"].get("settings", {}).get("networks", {})

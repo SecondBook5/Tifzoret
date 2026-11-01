@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tifzoret"
-version = "0.1.0.dev0"
+version = "0.1.1"
 description = "Configuration-driven bulk RNA-seq analysis and publication figure workflow"
 readme = "README.md"
 requires-python = ">=3.11"
